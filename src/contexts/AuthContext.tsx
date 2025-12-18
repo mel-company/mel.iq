@@ -5,32 +5,18 @@ import {
   useEffect,
   ReactNode,
 } from "react";
+import { useMe } from "@/api/wrappers/auth.wrappers";
 
 type Store = {
-  name?: string;
-  type?: "store" | "restaurant" | string;
-  url?: string;
-};
-
-type User = {
-  id: number;
-  email: string;
-  name: string;
-  phone?: string;
-  stores: Store[];
+  token: string;
+  username: string;
 };
 
 type AuthContextValue = {
-  user: User | null;
+  user: Store | null;
   loading: boolean;
-  login: (email: string, password: string) => { success: boolean; user: User };
-  signup: (
-    name: string,
-    email: string,
-    password: string
-  ) => { success: boolean; user: User };
+  login: (token: string, username: string) => { success: boolean; user: Store };
   logout: () => void;
-  addStore: (storeData: Store) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -40,67 +26,49 @@ type AuthProviderProps = {
 };
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Check if user is logged in from localStorage
-    const savedUser = localStorage.getItem("user");
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (error) {
-        console.error("Error parsing user data:", error);
-      }
-    }
-    setLoading(false);
-  }, []);
+  // جلب بيانات المستخدم من الباك إند إذا التوكن صالح
+  const { data: meData, isLoading: meLoading, isError } = useMe();
 
-  const login = (email: string, password: string) => {
+  useEffect(() => {
+    // لو ما زال طلب /auth/me شغّال، نبقي loading
+    if (meLoading) {
+      setLoading(true);
+      return;
+    }
+
+    if (meData) {
+      // توكن صحيح والباك إند رجّع يوزر
+        setUser(meData as Store);
+      setLoading(false);
+      return;
+    }
+
+    // في حالة ماكو يوزر من الباك إند (أو خطأ)، نرجع للفحص من localStorage
+
+
+    setLoading(false);
+  }, [meData, meLoading, isError]);
+
+  const login = (token: string, username: string) => {
     // Simulate login - in production, this would be an API call
     const userData = {
-      id: Date.now(),
-      email,
-      name: email.split("@")[0],
-      stores: [],
+      token,
+      username,
     };
     setUser(userData);
-    localStorage.setItem("user", JSON.stringify(userData));
-    return { success: true, user: userData };
-  };
-
-  const signup = (name: string, email: string, password: string) => {
-    // Simulate signup - in production, this would be an API call
-    const userData = {
-      id: Date.now(),
-      name,
-      email,
-      stores: [],
-    };
-    setUser(userData);
-    localStorage.setItem("user", JSON.stringify(userData));
     return { success: true, user: userData };
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem("user");
   };
-
-  const addStore = (storeData: Store) => {
-    if (user) {
-      const updatedUser = {
-        ...user,
-        stores: [...(user.stores || []), storeData],
-      };
-      setUser(updatedUser);
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-    }
-  };
-
+    
   return (
     <AuthContext.Provider
-      value={{ user, login, signup, logout, addStore, loading }}
+      value={{ user, login, logout, loading }}
     >
       {children}
     </AuthContext.Provider>

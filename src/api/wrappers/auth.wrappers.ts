@@ -17,7 +17,8 @@ export const authKeys = {
  */
 export const useLogin = () => {
   return useMutation<any, Error, any>({
-    mutationFn: (params: any) => authAPI.login(params),
+    // نستخدمه لإرسال / إعادة إرسال رمز الـ OTP
+    mutationFn: (params: any) => authAPI.sendOtp(params),
   });
 };
 

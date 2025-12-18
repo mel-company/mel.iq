@@ -7,10 +7,10 @@ import Contact from "./pages/Contact";
 import Checkout from "./pages/Checkout";
 import Templates from "./pages/Templates";
 import Login from "./pages/Login";
-import Otp from "./pages/Otp";
 import Dashboard from "./pages/Dashboard";
 import { useAuth } from "./contexts/AuthContext";
 import { ReactNode } from "react";
+import OTPVerification from "./pages/Otp";
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -47,8 +47,8 @@ function App() {
           path="/otp"
           element={
             <>
-              <Navbar />
-              <Otp />
+              
+              <OTPVerification />
             </>
           }
         />
