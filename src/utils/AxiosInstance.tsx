@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Create an axios instance with Vite environment variables
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api/v1",
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://192.168.10.164:3000/api/v1",
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",

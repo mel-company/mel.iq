@@ -7,6 +7,7 @@ import Contact from "./pages/Contact";
 import Checkout from "./pages/Checkout";
 import Templates from "./pages/Templates";
 import Login from "./pages/Login";
+import Otp from "./pages/Otp";
 import Dashboard from "./pages/Dashboard";
 import { useAuth } from "./contexts/AuthContext";
 import { ReactNode } from "react";
@@ -39,6 +40,15 @@ function App() {
             <>
               <Navbar />
               <Login />
+            </>
+          }
+        />
+        <Route
+          path="/otp"
+          element={
+            <>
+              <Navbar />
+              <Otp />
             </>
           }
         />
