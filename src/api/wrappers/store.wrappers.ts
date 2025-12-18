@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { storeAPI } from "../endpoints/store.endpoints";
 
 /**
@@ -19,5 +19,14 @@ export const useFetchStores = (params?: any) => {
   return useQuery<any>({
     queryKey: storeKeys.list(params),
     queryFn: () => storeAPI.fetchAll(params),
+  });
+};
+
+/**
+ * Check if a store name is available
+ */
+export const useCheckStoreNameAvailability = () => {
+  return useMutation<any, Error, any>({
+    mutationFn: (params: any) => storeAPI.checkAvailability(params),
   });
 };

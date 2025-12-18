@@ -14,4 +14,11 @@ export const storeAPI = {
     });
     return data;
   },
+
+  /**
+   * Check if a store name is available
+   */
+  checkAvailability: async (params?: any): Promise<any> => {
+    const { data } = await axiosInstance.post<any>("/store/check-availability", params);
+  },
 }
