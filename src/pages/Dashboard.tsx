@@ -1,13 +1,14 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { useMe } from "@/api/wrappers/auth.wrappers";
+import { useMe, useLogout } from "@/api/wrappers/auth.wrappers";
 import { useFetchStores } from "@/api/wrappers/store.wrappers";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout: logoutFromAuth } = useAuth();
   const navigate = useNavigate();
+  const logoutMutation = useLogout();
   const { data: me, isLoading: meLoading, isError } = useMe();
   const {
     data: storesData,
@@ -47,12 +48,24 @@ function Dashboard() {
   };
 
   const handleLogout = () => {
-    logout();
-    navigate("/");
+    // مسح الـ state المحلي
+    logoutFromAuth();
+    // مسح localStorage
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    // إرسال طلب logout للباك إند
+    logoutMutation.mutate(undefined, {
+      onSuccess: () => {
+        navigate("/");
+      },
+      onError: () => {
+        // حتى لو فشل الطلب، نرجع للصفحة الرئيسية
+        navigate("/");
+      },
+    });
   };
 
-  const isLoadingAll =
-    meLoading || storesLoading || (!displayUser && !isError);
+  const isLoadingAll = meLoading || storesLoading || (!displayUser && !isError);
 
   // لودنغ سكيلتون (shadcn)
   if (isLoadingAll) {
