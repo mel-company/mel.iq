@@ -1,0 +1,37 @@
+import axiosInstance from "@/utils/AxiosInstance";
+
+export const authAPI = {
+  login: async (params?: any): Promise<any> => {
+    const { data } = await axiosInstance.post<any>("/auth/login", {
+      phone: params?.phone,
+    });
+
+    return data;
+  },
+
+  verify: async (params?: any): Promise<any> => {
+    const { data } = await axiosInstance.post<any>("/auth/verify", {
+      phone: params?.phone,
+      code: params?.code,
+    });
+    return data;
+  },
+  
+  sendOtp: async (params?: any): Promise<any> => {
+    const { data } = await axiosInstance.post<any>("/auth/send-otp", {
+      phone: params?.phone,
+    });
+    return data;
+  },
+
+
+  me: async (): Promise<any> => {
+    const { data } = await axiosInstance.get<any>("/auth/me");
+    return data;
+  },
+
+  logout: async (): Promise<any> => {
+    const { data } = await axiosInstance.post<any>("/auth/logout");
+    return data;
+  },
+};

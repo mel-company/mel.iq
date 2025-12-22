@@ -8,8 +8,10 @@ import Checkout from "./pages/Checkout";
 import Templates from "./pages/Templates";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import StoreManagement from "./pages/StoreManagement";
 import { useAuth } from "./contexts/AuthContext";
 import { ReactNode } from "react";
+import OTPVerification from "./pages/Otp";
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -43,11 +45,36 @@ function App() {
           }
         />
         <Route
+          path="/otp"
+          element={
+            <>
+              <OTPVerification />
+            </>
+          }
+        />
+        <Route
           path="/dashboard"
           element={
             <ProtectedRoute>
               <Navbar />
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/:storeId/manage"
+          element={
+            <ProtectedRoute>
+              <StoreManagement />
+            </ProtectedRoute>
+          }
+        />
+        {/* Catch-all route for invalid store paths */}
+        <Route
+          path="/store/*"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/dashboard" replace />
             </ProtectedRoute>
           }
         />
