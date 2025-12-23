@@ -9,6 +9,16 @@ export const authAPI = {
     return data;
   },
 
+  register: async (params?: any): Promise<any> => {
+    const { data } = await axiosInstance.post<any>("/auth/register", {
+      phone: params?.phone,
+      name: params?.name,
+      email: params?.email,
+      password: params?.password,
+    });
+    return data;
+  },
+
   verify: async (params?: any): Promise<any> => {
     const { data } = await axiosInstance.post<any>("/auth/verify", {
       phone: params?.phone,

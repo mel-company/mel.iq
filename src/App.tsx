@@ -12,6 +12,7 @@ import StoreManagement from "./pages/StoreManagement";
 import { useAuth } from "./contexts/AuthContext";
 import { ReactNode } from "react";
 import OTPVerification from "./pages/Otp";
+import { Toaster } from "./components/ui/sonner";
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -34,6 +35,7 @@ function ProtectedRoute({ children }: ProtectedRouteProps) {
 function App() {
   return (
     <div className="min-h-screen bg-white dark:bg-black transition-colors duration-200">
+      <Toaster />
       <Routes>
         <Route
           path="/login"

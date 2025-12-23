@@ -23,11 +23,28 @@ export const useLogin = () => {
 };
 
 /**
+ * Register
+ */
+export const useRegister = () => {
+  return useMutation<any, Error, any>({
+    mutationFn: (params: any) => authAPI.register(params),
+  });
+};
+/**
  * Verify
  */
 export const useVerify = () => {
   return useMutation<any, Error, any>({
     mutationFn: (params: any) => authAPI.verify(params),
+  });
+};
+
+/**
+ * Send OTP
+ */
+export const useSendOtp = () => {
+  return useMutation<any, Error, any>({
+    mutationFn: (params: any) => authAPI.sendOtp(params),
   });
 };
 

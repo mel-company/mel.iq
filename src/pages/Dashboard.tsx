@@ -13,8 +13,8 @@ import { AlertCircle, ExternalLink, Settings } from "lucide-react";
 interface Store {
   id: string;
   name: string;
+  logo?: string;
   domain?: string;
-  url?: string;
   is_deleted?: boolean;
 }
 
@@ -205,6 +205,9 @@ const StoreCard = ({
         <h3 className="text-xl font-bold text-black dark:text-white truncate">
           {store.name}
         </h3>
+        {store.logo && (
+          <img src={"https://pub-f8707810144b47a6978976f94751bbc8.r2.dev/" + store.logo} alt={store.name} className="w-10 h-10 rounded-full" />
+        )}
         <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-gray-100 dark:bg-gray-900 text-black dark:text-white border-gray-200 dark:border-gray-800 shrink-0">
           متجر
         </span>
@@ -230,9 +233,9 @@ const StoreCard = ({
           إدارة
         </button>
 
-        {store.url && (
+        {store.domain && (
           <a
-            href={store.url}
+            href={store.domain}
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"

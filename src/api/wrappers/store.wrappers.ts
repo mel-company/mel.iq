@@ -30,3 +30,31 @@ export const useCheckStoreNameAvailability = () => {
     mutationFn: (params: any) => storeAPI.checkAvailability(params),
   });
 };
+
+
+/**
+ * Check if a store domain is available
+ */
+export const useCheckStoreDomainAvailability = () => {
+  return useMutation<any, Error, any>({
+    mutationFn: (params: any) => storeAPI.checkDomainAvailability(params),
+  });
+};
+
+/**
+ * Add a new store
+ */
+export const useAddStore = () => {
+  return useMutation<any, Error, any>({
+    mutationFn: (params: any) => storeAPI.add(params),
+  });
+};
+
+/**
+ * Update a store
+ */
+export const useUpdateStore = () => {
+  return useMutation<any, Error, { id: string; data: any }>({
+    mutationFn: ({ id, data }) => storeAPI.update(id, data),
+  });
+};

@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useFetchStores } from "@/api/wrappers/store.wrappers";
+import { useFetchStores, useUpdateStore } from "@/api/wrappers/store.wrappers";
 import {
   useFetchSubscriptions,
   useRenewSubscription,
@@ -16,6 +16,11 @@ interface Store {
   name: string;
   domain?: string;
   is_deleted?: boolean;
+  instagram?: string | null;
+  facebook?: string | null;
+  tiktok?: string | null;
+  x?: string | null;
+  logo?: string | null;
 }
 
 interface Subscription {
@@ -319,6 +324,7 @@ function StoreManagement() {
   const renewMutation = useRenewSubscription();
   const pauseMutation = usePauseSubscription();
   const resumeMutation = useResumeSubscription();
+  const updateStoreMutation = useUpdateStore();
 
   const stores = useMemo(() => {
     const normalized = normalizeApiResponse<Store>(storesData);
@@ -330,6 +336,14 @@ function StoreManagement() {
     [stores, storeId]
   );
 
+  // Social media form state
+  const [socialMedia, setSocialMedia] = useState({
+    instagram: "",
+    facebook: "",
+    tiktok: "",
+    x: "",
+  });
+
   const subscription = useMemo(() => {
     const normalized = normalizeApiResponse<Subscription>(subscriptionsData);
     return normalized[0] || null;
@@ -338,6 +352,18 @@ function StoreManagement() {
   const storeUrl = store?.domain;
   const isLoading = storesLoading || subscriptionsLoading;
   const isPlanBasic = isBasicPlan(subscription?.plan?.name);
+
+  // Update social media state when store changes
+  useEffect(() => {
+    if (store) {
+      setSocialMedia({
+        instagram: store.instagram || "",
+        facebook: store.facebook || "",
+        tiktok: store.tiktok || "",
+        x: store.x || "",
+      });
+    }
+  }, [store]);
 
   const handleRenew = () => {
     if (subscription?.id) {
@@ -354,6 +380,39 @@ function StoreManagement() {
   const handleResume = () => {
     if (subscription?.id) {
       resumeMutation.mutate(subscription.id);
+    }
+  };
+
+  const handleSocialMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSocialMedia({
+      ...socialMedia,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleSocialMediaSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (storeId) {
+      updateStoreMutation.mutate(
+        {
+          id: storeId,
+          data: {
+            instagram: socialMedia.instagram || null,
+            facebook: socialMedia.facebook || null,
+            tiktok: socialMedia.tiktok || null,
+            x: socialMedia.x || null,
+          },
+        },
+        {
+          onSuccess: () => {
+            alert("تم تحديث حسابات الوسائط الاجتماعية بنجاح");
+          },
+          onError: (error) => {
+            console.error("Error updating social media:", error);
+            alert("حدث خطأ في تحديث حسابات الوسائط الاجتماعية");
+          },
+        }
+      );
     }
   };
 
@@ -425,6 +484,74 @@ function StoreManagement() {
                 resume: resumeMutation.isPending,
               }}
             />
+
+            {/* Social Media */}
+            <div className="bg-white dark:bg-black rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6">
+              <h2 className="text-lg font-semibold text-black dark:text-white mb-4">
+                حسابات الوسائط الاجتماعية
+              </h2>
+              <form onSubmit={handleSocialMediaSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
+                    Instagram
+                  </label>
+                  <input
+                    type="url"
+                    name="instagram"
+                    value={socialMedia.instagram}
+                    onChange={handleSocialMediaChange}
+                    placeholder="https://instagram.com/username"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
+                    Facebook
+                  </label>
+                  <input
+                    type="url"
+                    name="facebook"
+                    value={socialMedia.facebook}
+                    onChange={handleSocialMediaChange}
+                    placeholder="https://facebook.com/username"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
+                    TikTok
+                  </label>
+                  <input
+                    type="url"
+                    name="tiktok"
+                    value={socialMedia.tiktok}
+                    onChange={handleSocialMediaChange}
+                    placeholder="https://tiktok.com/@username"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent outline-none transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
+                    X (Twitter)
+                  </label>
+                  <input
+                    type="url"
+                    name="x"
+                    value={socialMedia.x}
+                    onChange={handleSocialMediaChange}
+                    placeholder="https://x.com/username"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent outline-none transition"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={updateStoreMutation.isPending}
+                  className="w-full bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {updateStoreMutation.isPending ? "جاري الحفظ..." : "حفظ التغييرات"}
+                </button>
+              </form>
+            </div>
 
             {/* Plan Info */}
             <div className="bg-white dark:bg-black rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6">

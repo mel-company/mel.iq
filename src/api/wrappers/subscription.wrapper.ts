@@ -34,6 +34,17 @@ export const useFetchSubscription = (id: string, enabled: boolean = true) => {
 };
 
 /**
+ * Fetch subscription for the current store
+ */
+export const useFetchStoreSubscription = (enabled: boolean = true) => {
+  return useQuery<any>({
+    queryKey: [...subscriptionKeys.all, "store"],
+    queryFn: () => subscriptionAPI.fetchByStore(),
+    enabled,
+  });
+};
+
+/**
  * Create a new subscription mutation
  */
 export const useCreateSubscription = () => {
