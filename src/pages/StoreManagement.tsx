@@ -381,6 +381,11 @@ function StoreManagement() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
+  // Renew modal state
+  const [showRenewModal, setShowRenewModal] = useState(false);
+  const [selectedDuration, setSelectedDuration] = useState<number>(1);
+  const [customDuration, setCustomDuration] = useState<string>("");
+
   const stores = useMemo(() => {
     const normalized = normalizeApiResponse<Store>(storesData);
     return normalized.filter((store) => !store.is_deleted);
@@ -421,20 +426,40 @@ function StoreManagement() {
   }, [store]);
 
   const handleRenew = () => {
-    if (subscription?.id) {
-      renewMutation.mutate(
-        { id: subscription.id },
-        {
-          onSuccess: () => {
-            toast.success("تم تجديد الاشتراك بنجاح");
-          },
-          onError: (error: any) => {
-            toast.error("حدث خطأ في تجديد الاشتراك");
-            console.error("Error renewing subscription:", error);
-          },
-        }
-      );
+    setShowRenewModal(true);
+  };
+
+  const handleConfirmRenew = () => {
+    if (!subscription?.id) return;
+
+    const duration = customDuration
+      ? parseInt(customDuration)
+      : selectedDuration;
+
+    if (!duration || duration < 1) {
+      toast.error("الرجاء اختيار عدد أشهر صحيح");
+      return;
     }
+
+    renewMutation.mutate(
+      { id: subscription.id, durationMonths: duration },
+      {
+        onSuccess: () => {
+          toast.success(
+            `تم تجديد الاشتراك بنجاح لمدة ${duration} ${
+              duration === 1 ? "شهر" : "أشهر"
+            }`
+          );
+          setShowRenewModal(false);
+          setSelectedDuration(1);
+          setCustomDuration("");
+        },
+        onError: (error: any) => {
+          toast.error("حدث خطأ في تجديد الاشتراك");
+          console.error("Error renewing subscription:", error);
+        },
+      }
+    );
   };
 
   const handlePause = () => {
@@ -726,6 +751,166 @@ function StoreManagement() {
           </div>
         </div>
       </div>
+
+      {/* Renew Modal */}
+      {showRenewModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-black rounded-xl shadow-2xl max-w-md w-full border border-gray-200 dark:border-gray-800">
+            <div className="sticky top-0 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 p-6 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-black dark:text-white">
+                تجديد الاشتراك
+              </h2>
+              <button
+                onClick={() => {
+                  setShowRenewModal(false);
+                  setSelectedDuration(1);
+                  setCustomDuration("");
+                }}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-black dark:text-white" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                اختر مدة التجديد:
+              </p>
+              <div className="space-y-3 mb-6">
+                <button
+                  onClick={() => {
+                    setSelectedDuration(1);
+                    setCustomDuration("");
+                  }}
+                  className={`w-full p-4 rounded-lg border-2 transition-all ${
+                    selectedDuration === 1 && !customDuration
+                      ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/30"
+                      : "border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-black dark:text-white font-medium">
+                      1 شهر
+                    </span>
+                    {selectedDuration === 1 && !customDuration && (
+                      <svg
+                        className="w-5 h-5 text-green-600 dark:text-green-400"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedDuration(6);
+                    setCustomDuration("");
+                  }}
+                  className={`w-full p-4 rounded-lg border-2 transition-all ${
+                    selectedDuration === 6 && !customDuration
+                      ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/30"
+                      : "border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-black dark:text-white font-medium">
+                      6 أشهر
+                    </span>
+                    {selectedDuration === 6 && !customDuration && (
+                      <svg
+                        className="w-5 h-5 text-green-600 dark:text-green-400"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedDuration(12);
+                    setCustomDuration("");
+                  }}
+                  className={`w-full p-4 rounded-lg border-2 transition-all ${
+                    selectedDuration === 12 && !customDuration
+                      ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/30"
+                      : "border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-black dark:text-white font-medium">
+                      سنة (12 شهر)
+                    </span>
+                    {selectedDuration === 12 && !customDuration && (
+                      <svg
+                        className="w-5 h-5 text-green-600 dark:text-green-400"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
+                  أو أدخل عدد أشهر مخصص:
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={customDuration}
+                  onChange={(e) => {
+                    setCustomDuration(e.target.value);
+                    if (e.target.value) {
+                      setSelectedDuration(0);
+                    }
+                  }}
+                  placeholder="مثال: 3 أو 4"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent outline-none transition"
+                />
+              </div>
+              <div className="flex gap-4 justify-end">
+                <button
+                  onClick={() => {
+                    setShowRenewModal(false);
+                    setSelectedDuration(1);
+                    setCustomDuration("");
+                  }}
+                  className="px-6 py-2 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={handleConfirmRenew}
+                  disabled={
+                    renewMutation.isPending ||
+                    (!customDuration && selectedDuration === 0)
+                  }
+                  className="px-6 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {renewMutation.isPending ? "جاري..." : "تأكيد التجديد"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upgrade Modal */}
       {showUpgradeModal && (
