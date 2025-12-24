@@ -44,4 +44,9 @@ export const authAPI = {
     const { data } = await axiosInstance.post<any>("/auth/logout");
     return data;
   },
+
+  validateUser: async (): Promise<any> => {
+    const { data } = await axiosInstance.post<any>("/store-user-auth/validate-user");
+    return data;
+  },
 };

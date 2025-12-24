@@ -66,3 +66,12 @@ export const useLogout = () => {
     mutationFn: () => authAPI.logout(),
   });
 };
+
+/**
+ * Validate User
+ */
+export const useValidateUser = () => {
+  return useMutation<any, Error, any>({
+    mutationFn: () => authAPI.validateUser(),
+  });
+};

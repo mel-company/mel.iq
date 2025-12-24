@@ -60,7 +60,7 @@ export const subscriptionAPI = {
    * Pause a subscription (set status to INACTIVE)
    */
   pause: async (id: string): Promise<any> => {
-    const { data } = await axiosInstance.patch<any>(`/subscription/${id}/pause`);
+    const { data } = await axiosInstance.put<any>(`/subscription/${id}/pause`);
     return data;
   },
 
@@ -68,7 +68,7 @@ export const subscriptionAPI = {
    * Resume a subscription (set status to ACTIVE)
    */
   resume: async (id: string): Promise<any> => {
-    const { data } = await axiosInstance.patch<any>(`/subscription/${id}/resume`);
+    const { data } = await axiosInstance.put<any>(`/subscription/${id}/resume`);
     return data;
   },
 
@@ -76,7 +76,7 @@ export const subscriptionAPI = {
    * Cancel a subscription (set status to CANCELLED)
    */
   cancel: async (id: string): Promise<any> => {
-    const { data } = await axiosInstance.patch<any>(`/subscription/${id}/cancel`);
+    const { data } = await axiosInstance.put<any>(`/subscription/${id}/cancel`);
     return data;
   },
 
@@ -84,7 +84,7 @@ export const subscriptionAPI = {
    * Renew a subscription (extend end date)
    */
   renew: async (id: string, durationMonths?: number): Promise<any> => {
-    const { data } = await axiosInstance.patch<any>(`/subscription/${id}/renew`, {
+    const { data } = await axiosInstance.put<any>(`/subscription/${id}/renew`, {
       ...(durationMonths && { durationMonths }),
     });
     return data;
