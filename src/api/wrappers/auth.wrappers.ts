@@ -71,7 +71,7 @@ export const useLogout = () => {
  * Validate User
  */
 export const useValidateUser = () => {
-  return useMutation<any, Error, any>({
-    mutationFn: () => authAPI.validateUser(),
+  return useMutation<any, Error, { store: string }>({
+    mutationFn: ({ store }) => authAPI.validateUser(store),
   });
 };

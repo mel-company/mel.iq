@@ -45,8 +45,10 @@ export const authAPI = {
     return data;
   },
 
-  validateUser: async (): Promise<any> => {
-    const { data } = await axiosInstance.post<any>("/store-user-auth/validate-user");
+  validateUser: async (store: string): Promise<any> => {
+    const { data } = await axiosInstance.post<any>("/store-user-auth/validate-user", {
+      store,
+    });
     return data;
   },
 };

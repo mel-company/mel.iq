@@ -2,8 +2,13 @@ import { useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueries } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
-import { useMe, useLogout } from "@/api/wrappers/auth.wrappers";
+import {
+  useMe,
+  useLogout,
+  useValidateUser,
+} from "@/api/wrappers/auth.wrappers";
 import { useFetchStores } from "@/api/wrappers/store.wrappers";
+import { toast } from "sonner";
 import { subscriptionKeys } from "@/api/wrappers/subscription.wrapper";
 import { subscriptionAPI } from "@/api/endpoints/subscription.endpoint";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -194,10 +199,46 @@ const StoreCard = ({
   subscription: Subscription | null;
   onManage: () => void;
 }) => {
+  const validateUserMutation = useValidateUser();
   const timeRemaining = subscription?.end_at
     ? getTimeRemaining(subscription.end_at)
     : null;
   const statusBadge = subscription ? getStatusBadge(subscription.status) : null;
+
+  const handleOpenStore = () => {
+    if (store.domain) {
+      // استخراج الدومين فقط بدون https:// وبدون .mel.iq
+      let domainOnly = store.domain;
+
+      // إزالة https:// أو http://
+      domainOnly = domainOnly.replace(/^https?:\/\//, "");
+
+      // إزالة .mel.iq من النهاية
+      domainOnly = domainOnly.replace(/\.mel\.iq$/, "");
+
+      // إزالة أي مسار إضافي
+      domainOnly = domainOnly.split("/")[0];
+
+      validateUserMutation.mutate(
+        {
+          store: domainOnly,
+        },
+        {
+          onSuccess: () => {
+            toast.success("تم إرسال الدومين بنجاح");
+          },
+          onError: (error: any) => {
+            const errorMessage =
+              error?.response?.data?.message ||
+              error?.message ||
+              "حدث خطأ في إرسال الدومين";
+            toast.error(errorMessage);
+            console.error("Error sending domain:", error);
+          },
+        }
+      );
+    }
+  };
 
   return (
     <div className="bg-white dark:bg-black rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6 hover:shadow-xl transition-shadow">
@@ -206,7 +247,14 @@ const StoreCard = ({
           {store.name}
         </h3>
         {store.logo && (
-          <img src={"https://pub-f8707810144b47a6978976f94751bbc8.r2.dev/" + store.logo} alt={store.name} className="w-10 h-10 rounded-full" />
+          <img
+            src={
+              "https://pub-f8707810144b47a6978976f94751bbc8.r2.dev/" +
+              store.logo
+            }
+            alt={store.name}
+            className="w-10 h-10 rounded-full"
+          />
         )}
         <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-gray-100 dark:bg-gray-900 text-black dark:text-white border-gray-200 dark:border-gray-800 shrink-0">
           متجر
@@ -234,15 +282,14 @@ const StoreCard = ({
         </button>
 
         {store.domain && (
-          <a
-            href={store.domain}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+          <button
+            onClick={handleOpenStore}
+            disabled={validateUserMutation.isPending}
+            className="flex-1 bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ExternalLink className="w-4 h-4" />
-            فتح
-          </a>
+            {validateUserMutation.isPending ? "جاري..." : "فتح"}
+          </button>
         )}
       </div>
     </div>
