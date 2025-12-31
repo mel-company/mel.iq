@@ -386,6 +386,10 @@ function StoreManagement() {
   const [selectedDuration, setSelectedDuration] = useState<number>(1);
   const [customDuration, setCustomDuration] = useState<string>("");
 
+  // Cancel/Delete store modal state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [deleteStoreName, setDeleteStoreName] = useState<string>("");
+
   const stores = useMemo(() => {
     const normalized = normalizeApiResponse<Store>(storesData);
     return normalized.filter((store) => !store.is_deleted);
@@ -491,23 +495,34 @@ function StoreManagement() {
   };
 
   const handleCancel = () => {
-    if (subscription?.id) {
-      if (
-        window.confirm(
-          "هل أنت متأكد من إلغاء الاشتراك؟ هذا الإجراء لا يمكن التراجع عنه."
-        )
-      ) {
-        cancelMutation.mutate(subscription.id, {
-          onSuccess: () => {
-            toast.success("تم إلغاء الاشتراك بنجاح");
-          },
-          onError: (error: any) => {
-            toast.error("حدث خطأ في إلغاء الاشتراك");
-            console.error("Error cancelling subscription:", error);
-          },
-        });
-      }
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancel = () => {
+    if (!subscription?.id || !store) return;
+
+    if (deleteStoreName.trim() !== store.name.trim()) {
+      toast.error("اسم المتجر غير متطابق. الرجاء إدخال الاسم الصحيح.");
+      return;
     }
+
+    cancelMutation.mutate(subscription.id, {
+      onSuccess: () => {
+        toast.success(
+          "تم إلغاء الاشتراك وحذف المتجر بنجاح. يمكنك استرجاعه خلال 30 يوم."
+        );
+        setShowCancelModal(false);
+        setDeleteStoreName("");
+        // Redirect to dashboard after deletion
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 2000);
+      },
+      onError: (error: any) => {
+        toast.error("حدث خطأ في إلغاء الاشتراك");
+        console.error("Error cancelling subscription:", error);
+      },
+    });
   };
 
   const handleUpgrade = () => {
@@ -1037,6 +1052,99 @@ function StoreManagement() {
                   {updateSubscriptionMutation.isPending
                     ? "جاري..."
                     : "تأكيد الترقية"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel/Delete Store Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-black rounded-xl shadow-2xl max-w-md w-full border border-gray-200 dark:border-gray-800">
+            <div className="sticky top-0 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 p-6 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-red-600 dark:text-red-400">
+                إلغاء الاشتراك وحذف المتجر
+              </h2>
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setDeleteStoreName("");
+                }}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-black dark:text-white" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-red-800 dark:text-red-300 mb-2">
+                      تحذير: هذا الإجراء سيؤدي إلى إلغاء الاشتراك وحذف المتجر
+                    </p>
+                    <ul className="text-xs text-red-700 dark:text-red-400 space-y-1 list-disc list-inside">
+                      <li>سيتم إلغاء الاشتراك الحالي</li>
+                      <li>سيتم حذف المتجر (حذف ناعم)</li>
+                      <li>يمكنك استرجاع المتجر خلال 30 يوم</li>
+                      <li>بعد 30 يوم سيتم الحذف النهائي</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
+                  للتأكيد، يرجى كتابة اسم المتجر:{" "}
+                  <span className="font-bold text-black dark:text-white">
+                    {store?.name}
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  value={deleteStoreName}
+                  onChange={(e) => setDeleteStoreName(e.target.value)}
+                  placeholder="أدخل اسم المتجر هنا"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:border-transparent outline-none transition"
+                />
+              </div>
+
+              <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-sm text-blue-800 dark:text-blue-300">
+                  <strong>ملاحظة:</strong> إذا كنت تريد استرجاع المتجر خلال 30
+                  يوم، يمكنك التواصل مع{" "}
+                  <a
+                    href="mailto:support@mel.iq"
+                    className="underline hover:text-blue-600 dark:hover:text-blue-400"
+                  >
+                    دعم العملاء
+                  </a>
+                  .
+                </p>
+              </div>
+
+              <div className="flex gap-4 justify-end">
+                <button
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    setDeleteStoreName("");
+                  }}
+                  className="px-6 py-2 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={handleConfirmCancel}
+                  disabled={
+                    !deleteStoreName ||
+                    deleteStoreName.trim() !== store?.name?.trim() ||
+                    cancelMutation.isPending
+                  }
+                  className="px-6 py-2 bg-red-600 dark:bg-red-500 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {cancelMutation.isPending ? "جاري..." : "تأكيد الحذف"}
                 </button>
               </div>
             </div>
