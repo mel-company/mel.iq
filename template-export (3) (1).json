@@ -1,0 +1,744 @@
+{
+  "storeSettings": {
+    "logo": {},
+    "name": "",
+    "description": "",
+    "type": "e-commerce",
+    "colors": {
+      "primary": "#4272FF",
+      "secondary": "#ACBA12",
+      "text": "#1D293D"
+    },
+    "fonts": {
+      "heading": "Arial",
+      "body": "Arial"
+    },
+    "header": {
+      "logo": {},
+      "navigationLinks": [
+        {
+          "id": "6488047a-c70e-41c0-a69b-aa9eb3938f88",
+          "label": "الصفحة الرئيسية",
+          "url": "/home",
+          "pageId": "d90e7e2d-a31d-413a-9771-e4a8b4709115"
+        },
+        {
+          "id": "e92ca196-2dcc-4811-b2ed-4d46ceca4ce6",
+          "label": "حول المتجر",
+          "url": "/about",
+          "pageId": "2d09d873-234b-49a2-afe3-9aa36321d53b"
+        },
+        {
+          "id": "5def1cea-40f0-49a7-89a9-b070205fcd6b",
+          "label": "المنتجات",
+          "url": "/content",
+          "pageId": "2819ab8e-f292-4c84-a4ee-b4925afa3cce"
+        },
+        {
+          "id": "7e446b96-96d8-409c-a34a-cb3c0c1ccfff",
+          "label": "اتصل بنا",
+          "url": "/content",
+          "pageId": "9f08d663-0061-49e7-a1f1-0a3fef5c4528"
+        }
+      ]
+    },
+    "footer": {
+      "logo": {},
+      "text": "",
+      "links": [
+        {
+          "id": "3e2d943d-3b30-4c32-9667-2731d8d7b822",
+          "label": "",
+          "url": ""
+        },
+        {
+          "id": "c6e03b63-354a-4710-a47c-bacdfc3e4b0d",
+          "label": "حول المتجر",
+          "url": "/2d09d873-234b-49a2-afe3-9aa36321d53b"
+        },
+        {
+          "id": "23b339ea-c1b7-4229-831c-5b3f173c96c2",
+          "label": "المنتجات",
+          "url": "/2819ab8e-f292-4c84-a4ee-b4925afa3cce"
+        },
+        {
+          "id": "2369fcf6-67bd-48bc-b8af-2781986d7cba",
+          "label": "اتصل بنا",
+          "url": "/9f08d663-0061-49e7-a1f1-0a3fef5c4528"
+        }
+      ],
+      "socialLinks": []
+    }
+  },
+  "pages": [
+    {
+      "id": "d90e7e2d-a31d-413a-9771-e4a8b4709115",
+      "name": "الصفحة الرئيسية",
+      "type": "home",
+      "sections": [
+        {
+          "id": "9a5f6563-8ae3-4c7e-8cff-b92768331225",
+          "section_id": "1",
+          "type": "navigation",
+          "editable": false,
+          "options": [
+            {
+              "id": "1",
+              "title": "Navigation",
+              "photos": []
+            }
+          ],
+          "target_id": "06109fcb-1caa-47a4-bb68-2596767db555"
+        },
+        {
+          "id": "29d6e8cc-359c-4c18-8541-b64cab33366e",
+          "section_id": "3",
+          "type": "hero",
+          "view_all_link": "",
+          "editable": true,
+          "options": [
+            {
+              "id": "1",
+              "title": "Hero - نص فقط",
+              "description": "تصميم بسيط مع نص فقط في المنتصف",
+              "thumbnail": {
+                "url": "https://cdn.dribbble.com/userupload/17671963/file/original-3adc590720f59beeb44b8fa8876e4837.jpg?crop=107x0-2529x1816&format=webp&resize=400x300&vertical=center"
+              },
+              "content": [
+                {
+                  "id": "title",
+                  "label": "العنوان",
+                  "name": "title",
+                  "type": "text",
+                  "value": "مرحباً بك في متجرنا"
+                },
+                {
+                  "id": "description",
+                  "label": "الوصف",
+                  "name": "description",
+                  "type": "textarea",
+                  "value": "اكتشف مجموعتنا المميزة من المنتجات"
+                }
+              ]
+            },
+            {
+              "id": "2",
+              "title": "Hero - صورة ونص",
+              "description": "تصميم مع صورة ونص جنباً إلى جنب",
+              "thumbnail": {
+                "url": "https://cdn.dribbble.com/userupload/17671963/file/original-3adc590720f59beeb44b8fa8876e4837.jpg?crop=107x0-2529x1816&format=webp&resize=400x300&vertical=center"
+              },
+              "photos": [],
+              "content": [
+                {
+                  "id": "title",
+                  "label": "العنوان",
+                  "name": "title",
+                  "type": "text",
+                  "value": "منتجات مميزة"
+                },
+                {
+                  "id": "description",
+                  "label": "الوصف",
+                  "name": "description",
+                  "type": "textarea",
+                  "value": "اكتشف مجموعتنا الواسعة من المنتجات عالية الجودة"
+                }
+              ]
+            },
+            {
+              "id": "3",
+              "title": "Hero - Carousel",
+              "description": "سلايدر مع عدة صور ونص",
+              "thumbnail": {
+                "url": "https://cdn.dribbble.com/userupload/17671963/file/original-3adc590720f59beeb44b8fa8876e4837.jpg?crop=107x0-2529x1816&format=webp&resize=400x300&vertical=center"
+              },
+              "photos": [
+                {
+                  "id": "d3b30257-8c98-4ac5-b47c-fa9dea139e49",
+                  "label": "صورة 1",
+                  "url": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200"
+                },
+                {
+                  "id": "1dcf1827-7b75-41af-8039-bb51043a0fe0",
+                  "label": "صورة 2",
+                  "url": "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1200"
+                }
+              ],
+              "content": [
+                {
+                  "id": "title",
+                  "label": "العنوان",
+                  "name": "title",
+                  "type": "text",
+                  "value": "مرحباً بك في متجرنا"
+                },
+                {
+                  "id": "description",
+                  "label": "الوصف",
+                  "name": "description",
+                  "type": "textarea",
+                  "value": "اكتشف مجموعتنا المميزة من المنتجات عالية الجودة"
+                }
+              ]
+            }
+          ],
+          "target_id": "d4aeb5a0-e3c8-46e6-81f5-49c9c4021eee"
+        },
+        {
+          "id": "aa93767a-f2d0-46da-905b-2da9d3c2643a",
+          "section_id": "1",
+          "type": "categories",
+          "view_all_link": "",
+          "options": [
+            {
+              "id": "1",
+              "title": "Categories",
+              "thumbnail": {
+                "url": "https://cdn.shopify.com/s/files/1/0817/7988/4088/articles/fashion-ecommerce.jpg?v=1738095976"
+              },
+              "categories": [
+                {
+                  "id": "1",
+                  "name": "ملابس",
+                  "thumbnail": {
+                    "url": "https://images.unsplash.com/photo-1445205170230-053b83016050?w=200"
+                  }
+                },
+                {
+                  "id": "2",
+                  "name": "أحذية",
+                  "thumbnail": {
+                    "url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200"
+                  }
+                },
+                {
+                  "id": "3",
+                  "name": "إلكترونيات",
+                  "thumbnail": {
+                    "url": "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=200"
+                  }
+                },
+                {
+                  "id": "4",
+                  "name": "إكسسوارات",
+                  "thumbnail": {
+                    "url": "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=200"
+                  }
+                },
+                {
+                  "id": "5",
+                  "name": "عطور",
+                  "thumbnail": {
+                    "url": "https://images.unsplash.com/photo-1541643600914-78b084683601?w=200"
+                  }
+                }
+              ]
+            }
+          ],
+          "editable": true,
+          "target_id": "19edc4fd-23bb-42dc-9dcd-a7e1dfdbb9fc"
+        },
+        {
+          "id": "2d8fbadd-cb36-4b3a-9d4b-7247a2fc2274",
+          "section_id": "2",
+          "type": "recentProducts",
+          "view_all_link": "",
+          "editable": true,
+          "options": [
+            {
+              "id": "1",
+              "title": "Recent Products",
+              "thumbnail": {
+                "url": "https://cdn.dribbble.com/userupload/43792476/file/original-2dc4c0056ba1870f72cc179f989655b4.jpg?resize=400x0"
+              },
+              "content": [
+                {
+                  "id": "title",
+                  "label": "Title",
+                  "name": "title",
+                  "type": "text",
+                  "value": "Recent Products"
+                }
+              ],
+              "products": [],
+              "view_all_link": ""
+            },
+            {
+              "id": "2",
+              "title": "Recent Products",
+              "thumbnail": {
+                "url": "https://cdn.dribbble.com/userupload/43792476/file/original-2dc4c0056ba1870f72cc179f989655b4.jpg?resize=400x0"
+              },
+              "content": [
+                {
+                  "id": "title",
+                  "label": "Title",
+                  "name": "title",
+                  "type": "text",
+                  "value": "منتجات مميزة"
+                }
+              ],
+              "products": [
+                {
+                  "id": "1",
+                  "name": "قميص قطني كلاسيكي",
+                  "price": 150,
+                  "discount": 20,
+                  "stock": 25,
+                  "category": "ملابس",
+                  "description": "قميص قطني عالي الجودة، مريح ومناسب للارتداء اليومي",
+                  "photos": [
+                    {
+                      "name": "قميص قطني كلاسيكي",
+                      "url": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "قميص قطني كلاسيكي",
+                    "url": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500"
+                  }
+                },
+                {
+                  "id": "2",
+                  "name": "حذاء رياضي مريح",
+                  "price": 299,
+                  "discount": 15,
+                  "stock": 18,
+                  "category": "أحذية",
+                  "description": "حذاء رياضي متين ومريح للمشي والجري، مناسب للاستخدام اليومي",
+                  "photos": [
+                    {
+                      "name": "حذاء رياضي مريح",
+                      "url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "حذاء رياضي مريح",
+                    "url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500"
+                  }
+                },
+                {
+                  "id": "3",
+                  "name": "ساعة ذكية حديثة",
+                  "price": 599,
+                  "discount": 0,
+                  "stock": 12,
+                  "category": "إلكترونيات",
+                  "description": "ساعة ذكية متطورة مع شاشة كبيرة وميزات صحية متعددة",
+                  "photos": [
+                    {
+                      "name": "ساعة ذكية حديثة",
+                      "url": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "ساعة ذكية حديثة",
+                    "url": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500"
+                  }
+                },
+                {
+                  "id": "4",
+                  "name": "حقيبة يد أنيقة",
+                  "price": 199,
+                  "discount": 25,
+                  "stock": 30,
+                  "category": "إكسسوارات",
+                  "description": "حقيبة يد عصرية مع جيوب متعددة، مناسبة للاستخدام اليومي والمناسبات",
+                  "photos": [
+                    {
+                      "name": "حقيبة يد أنيقة",
+                      "url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "حقيبة يد أنيقة",
+                    "url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500"
+                  }
+                },
+                {
+                  "id": "5",
+                  "name": "نظارة شمسية كلاسيكية",
+                  "price": 120,
+                  "discount": 10,
+                  "stock": 45,
+                  "category": "إكسسوارات",
+                  "description": "نظارة شمسية أنيقة مع حماية من الأشعة فوق البنفسجية",
+                  "photos": [
+                    {
+                      "name": "نظارة شمسية كلاسيكية",
+                      "url": "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "نظارة شمسية كلاسيكية",
+                    "url": "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=500"
+                  }
+                },
+                {
+                  "id": "6",
+                  "name": "قميص بولو عصري",
+                  "price": 180,
+                  "discount": 0,
+                  "stock": 22,
+                  "category": "ملابس",
+                  "description": "قميص بولو أنيق بألوان متنوعة، مناسب للمناسبات والعمل",
+                  "photos": [
+                    {
+                      "name": "قميص بولو عصري",
+                      "url": "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "قميص بولو عصري",
+                    "url": "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=500"
+                  }
+                },
+                {
+                  "id": "7",
+                  "name": "سماعات لاسلكية",
+                  "price": 349,
+                  "discount": 30,
+                  "stock": 15,
+                  "category": "إلكترونيات",
+                  "description": "سماعات لاسلكية عالية الجودة مع إلغاء الضوضاء النشط",
+                  "photos": [
+                    {
+                      "name": "سماعات لاسلكية",
+                      "url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "سماعات لاسلكية",
+                    "url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
+                  }
+                },
+                {
+                  "id": "8",
+                  "name": "بنطال جينز كلاسيكي",
+                  "price": 220,
+                  "discount": 20,
+                  "stock": 28,
+                  "category": "ملابس",
+                  "description": "بنطال جينز مريح وقوي، مناسب للارتداء اليومي",
+                  "photos": [
+                    {
+                      "name": "بنطال جينز كلاسيكي",
+                      "url": "https://images.unsplash.com/photo-1542272604-787c3835535d?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "بنطال جينز كلاسيكي",
+                    "url": "https://images.unsplash.com/photo-1542272604-787c3835535d?w=500"
+                  }
+                }
+              ],
+              "view_all_link": ""
+            }
+          ],
+          "target_id": "b171f542-6a5a-453f-b63d-7a78dcf29acb"
+        }
+      ]
+    },
+    {
+      "id": "2819ab8e-f292-4c84-a4ee-b4925afa3cce",
+      "name": "المنتجات",
+      "type": "content",
+      "sections": [
+        {
+          "id": "b002b3d4-47a3-4dbc-b5cd-eed75e4d493e",
+          "section_id": "1",
+          "type": "recentProducts",
+          "view_all_link": "",
+          "editable": true,
+          "options": [
+            {
+              "id": "1",
+              "title": "Recent Products",
+              "thumbnail": {
+                "url": "https://cdn.dribbble.com/userupload/43792476/file/original-2dc4c0056ba1870f72cc179f989655b4.jpg?resize=400x0"
+              },
+              "content": [
+                {
+                  "id": "title",
+                  "label": "Title",
+                  "name": "title",
+                  "type": "text",
+                  "value": "جميع المنتجات"
+                }
+              ],
+              "products": [
+                {
+                  "id": "1",
+                  "name": "قميص قطني كلاسيكي",
+                  "price": 150,
+                  "discount": 20,
+                  "stock": 25,
+                  "category": "ملابس",
+                  "description": "قميص قطني عالي الجودة، مريح ومناسب للارتداء اليومي",
+                  "photos": [
+                    {
+                      "name": "قميص قطني كلاسيكي",
+                      "url": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "قميص قطني كلاسيكي",
+                    "url": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500"
+                  }
+                },
+                {
+                  "id": "2",
+                  "name": "حذاء رياضي مريح",
+                  "price": 299,
+                  "discount": 15,
+                  "stock": 18,
+                  "category": "أحذية",
+                  "description": "حذاء رياضي متين ومريح للمشي والجري، مناسب للاستخدام اليومي",
+                  "photos": [
+                    {
+                      "name": "حذاء رياضي مريح",
+                      "url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "حذاء رياضي مريح",
+                    "url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500"
+                  }
+                },
+                {
+                  "id": "3",
+                  "name": "ساعة ذكية حديثة",
+                  "price": 599,
+                  "discount": 0,
+                  "stock": 12,
+                  "category": "إلكترونيات",
+                  "description": "ساعة ذكية متطورة مع شاشة كبيرة وميزات صحية متعددة",
+                  "photos": [
+                    {
+                      "name": "ساعة ذكية حديثة",
+                      "url": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "ساعة ذكية حديثة",
+                    "url": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500"
+                  }
+                },
+                {
+                  "id": "4",
+                  "name": "حقيبة يد أنيقة",
+                  "price": 199,
+                  "discount": 25,
+                  "stock": 30,
+                  "category": "إكسسوارات",
+                  "description": "حقيبة يد عصرية مع جيوب متعددة، مناسبة للاستخدام اليومي والمناسبات",
+                  "photos": [
+                    {
+                      "name": "حقيبة يد أنيقة",
+                      "url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "حقيبة يد أنيقة",
+                    "url": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500"
+                  }
+                },
+                {
+                  "id": "5",
+                  "name": "نظارة شمسية كلاسيكية",
+                  "price": 120,
+                  "discount": 10,
+                  "stock": 45,
+                  "category": "إكسسوارات",
+                  "description": "نظارة شمسية أنيقة مع حماية من الأشعة فوق البنفسجية",
+                  "photos": [
+                    {
+                      "name": "نظارة شمسية كلاسيكية",
+                      "url": "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "نظارة شمسية كلاسيكية",
+                    "url": "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=500"
+                  }
+                },
+                {
+                  "id": "6",
+                  "name": "قميص بولو عصري",
+                  "price": 180,
+                  "discount": 0,
+                  "stock": 22,
+                  "category": "ملابس",
+                  "description": "قميص بولو أنيق بألوان متنوعة، مناسب للمناسبات والعمل",
+                  "photos": [
+                    {
+                      "name": "قميص بولو عصري",
+                      "url": "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "قميص بولو عصري",
+                    "url": "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=500"
+                  }
+                },
+                {
+                  "id": "7",
+                  "name": "سماعات لاسلكية",
+                  "price": 349,
+                  "discount": 30,
+                  "stock": 15,
+                  "category": "إلكترونيات",
+                  "description": "سماعات لاسلكية عالية الجودة مع إلغاء الضوضاء النشط",
+                  "photos": [
+                    {
+                      "name": "سماعات لاسلكية",
+                      "url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "سماعات لاسلكية",
+                    "url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"
+                  }
+                },
+                {
+                  "id": "8",
+                  "name": "بنطال جينز كلاسيكي",
+                  "price": 220,
+                  "discount": 20,
+                  "stock": 28,
+                  "category": "ملابس",
+                  "description": "بنطال جينز مريح وقوي، مناسب للارتداء اليومي",
+                  "photos": [
+                    {
+                      "name": "بنطال جينز كلاسيكي",
+                      "url": "https://images.unsplash.com/photo-1542272604-787c3835535d?w=500"
+                    }
+                  ],
+                  "thumbnail": {
+                    "name": "بنطال جينز كلاسيكي",
+                    "url": "https://images.unsplash.com/photo-1542272604-787c3835535d?w=500"
+                  }
+                }
+              ],
+              "view_all_link": ""
+            },
+            {
+              "id": "2",
+              "title": "Recent Products",
+              "thumbnail": {
+                "url": "https://cdn.dribbble.com/userupload/43792476/file/original-2dc4c0056ba1870f72cc179f989655b4.jpg?resize=400x0"
+              },
+              "content": [
+                {
+                  "id": "title",
+                  "label": "Title",
+                  "name": "title",
+                  "type": "text",
+                  "value": "Recent Products"
+                }
+              ],
+              "products": [],
+              "view_all_link": ""
+            }
+          ],
+          "target_id": "78645bde-0566-4af9-9fa9-963f88b56eb4"
+        }
+      ]
+    },
+    {
+      "id": "9f08d663-0061-49e7-a1f1-0a3fef5c4528",
+      "name": "اتصل بنا",
+      "type": "content",
+      "sections": [
+        {
+          "id": "6f3d1af1-0f6a-4a06-9903-99f3fa97f0b0",
+          "section_id": "1",
+          "type": "hero",
+          "view_all_link": "",
+          "editable": true,
+          "options": [
+            {
+              "id": "1",
+              "title": "Hero - نص فقط",
+              "description": "تصميم بسيط مع نص فقط في المنتصف",
+              "thumbnail": {
+                "url": "https://cdn.dribbble.com/userupload/17671963/file/original-3adc590720f59beeb44b8fa8876e4837.jpg?crop=107x0-2529x1816&format=webp&resize=400x300&vertical=center"
+              },
+              "content": [
+                {
+                  "id": "title",
+                  "label": "العنوان",
+                  "name": "title",
+                  "type": "text",
+                  "value": "اتصل بنا"
+                },
+                {
+                  "id": "description",
+                  "label": "الوصف",
+                  "name": "description",
+                  "type": "textarea",
+                  "value": "نحن هنا لمساعدتك. تواصل معنا عبر البريد الإلكتروني أو الهاتف"
+                }
+              ]
+            },
+            {
+              "id": "2",
+              "title": "Hero - صورة ونص",
+              "description": "تصميم مع صورة ونص جنباً إلى جنب",
+              "thumbnail": {
+                "url": "https://cdn.dribbble.com/userupload/17671963/file/original-3adc590720f59beeb44b8fa8876e4837.jpg?crop=107x0-2529x1816&format=webp&resize=400x300&vertical=center"
+              },
+              "photos": [],
+              "content": [
+                {
+                  "id": "title",
+                  "label": "العنوان",
+                  "name": "title",
+                  "type": "text",
+                  "value": "منتجات مميزة"
+                },
+                {
+                  "id": "description",
+                  "label": "الوصف",
+                  "name": "description",
+                  "type": "textarea",
+                  "value": "اكتشف مجموعتنا الواسعة من المنتجات عالية الجودة"
+                }
+              ]
+            },
+            {
+              "id": "3",
+              "title": "Hero - Carousel",
+              "description": "سلايدر مع عدة صور ونص",
+              "thumbnail": {
+                "url": "https://cdn.dribbble.com/userupload/17671963/file/original-3adc590720f59beeb44b8fa8876e4837.jpg?crop=107x0-2529x1816&format=webp&resize=400x300&vertical=center"
+              },
+              "photos": [],
+              "content": [
+                {
+                  "id": "title",
+                  "label": "العنوان",
+                  "name": "title",
+                  "type": "text",
+                  "value": "عروض مميزة"
+                },
+                {
+                  "id": "description",
+                  "label": "الوصف",
+                  "name": "description",
+                  "type": "textarea",
+                  "value": "استمتع بأفضل العروض والخصومات الحصرية"
+                }
+              ]
+            }
+          ],
+          "target_id": "e82c466c-36c3-403e-86be-3430a3fabca5"
+        }
+      ]
+    }
+  ],
+  "currentPageId": "d90e7e2d-a31d-413a-9771-e4a8b4709115",
+  "exportedAt": "2025-12-29T06:29:33.132Z",
+  "version": "1.0.0"
+}
