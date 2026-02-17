@@ -105,7 +105,7 @@ function Checkout() {
             onError: (error) => {
               console.error("Error sending OTP:", error);
             },
-          }
+          },
         );
       }
     }
@@ -155,7 +155,7 @@ function Checkout() {
     // Send domain with type to API
     checkDomainAvailabilityMutation.mutate(
       {
-        domain: fullDomain,
+        domain: formData.domain,
         domainType: formData.domainType, // Send domain type to distinguish between subdomain and custom
       },
       {
@@ -184,7 +184,7 @@ function Checkout() {
             "حدث خطأ في التحقق من الدومين";
           toast.error(errorMessage);
         },
-      }
+      },
     );
   };
 
@@ -206,11 +206,11 @@ function Checkout() {
             },
             onError: (error) => {
               toast.error(
-                "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى."
+                "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
               );
               console.error("Error sending OTP:", error);
             },
-          }
+          },
         );
       } else {
         toast.error("الرجاء إدخال رقم الهاتف");
@@ -231,11 +231,11 @@ function Checkout() {
             },
             onError: (error) => {
               toast.error(
-                "حدث خطأ في التسجيل وإرسال رمز OTP. الرجاء المحاولة مرة أخرى."
+                "حدث خطأ في التسجيل وإرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
               );
               console.error("Error registering:", error);
             },
-          }
+          },
         );
       } else {
         toast.error("الرجاء إدخال جميع المعلومات المطلوبة");
@@ -279,7 +279,7 @@ function Checkout() {
             toast.error("رمز OTP غير صحيح. الرجاء المحاولة مرة أخرى.");
             console.error("Error verifying OTP:", error);
           },
-        }
+        },
       );
     } else {
       toast.error("الرجاء إدخال رمز OTP صحيح (4 أرقام)");
@@ -378,7 +378,7 @@ function Checkout() {
         storeFormData.append("name", formData.storeName || formData.domain);
         storeFormData.append(
           "type",
-          formData.websiteType === "store" ? "ECOMMERCE" : "RESTAURANT"
+          formData.websiteType === "store" ? "ECOMMERCE" : "RESTAURANT",
         );
         storeFormData.append("domain", finalUrl);
         if (formData.logoFile) {
@@ -433,7 +433,7 @@ function Checkout() {
                   onError: (error) => {
                     console.error("Error creating subscription:", error);
                     toast.warning(
-                      "تم إنشاء المتجر بنجاح، لكن حدث خطأ في إنشاء الاشتراك. الرجاء المحاولة مرة أخرى."
+                      "تم إنشاء المتجر بنجاح، لكن حدث خطأ في إنشاء الاشتراك. الرجاء المحاولة مرة أخرى.",
                     );
                     // Still navigate even if subscription creation fails
                     navigate("/templates", {
@@ -444,7 +444,7 @@ function Checkout() {
                       },
                     });
                   },
-                }
+                },
               );
             } else {
               // If storeId or planId is missing, show error and don't navigate
@@ -454,10 +454,10 @@ function Checkout() {
                   storeId,
                   planId,
                   plan: formData.plan,
-                }
+                },
               );
               toast.error(
-                "حدث خطأ: لم يتم العثور على معرف المتجر أو الخطة. الرجاء المحاولة مرة أخرى."
+                "حدث خطأ: لم يتم العثور على معرف المتجر أو الخطة. الرجاء المحاولة مرة أخرى.",
               );
               // Don't navigate - user should stay on the page
             }
@@ -494,7 +494,7 @@ function Checkout() {
           toast.error("حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.");
           console.error("Error resending OTP:", error);
         },
-      }
+      },
     );
   };
 
@@ -571,11 +571,11 @@ function Checkout() {
                             },
                             onError: (error) => {
                               toast.error(
-                                "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى."
+                                "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
                               );
                               console.error("Error sending OTP:", error);
                             },
-                          }
+                          },
                         );
                       }
                     }}
@@ -717,7 +717,7 @@ function Checkout() {
                         <p className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">
                           {formData.plan.monthly_price
                             ? formData.plan.monthly_price.toLocaleString(
-                                "en-IQ"
+                                "en-IQ",
                               )
                             : "0"}{" "}
                           <span className="text-lg font-normal text-slate-600 dark:text-slate-400">
@@ -790,7 +790,7 @@ function Checkout() {
                       : `دفع ${
                           formData.plan?.monthly_price
                             ? formData.plan.monthly_price.toLocaleString(
-                                "en-IQ"
+                                "en-IQ",
                               )
                             : "0"
                         } د.ع /شهرياً`}
@@ -1062,7 +1062,6 @@ function Checkout() {
                         "التحقق من توفر الدومين"
                       )}
                     </button>
-                  
                   </div>
                 </div>
 

@@ -4,6 +4,7 @@ import { parsePhoneNumberFromString } from "libphonenumber-js";
 import iqFlag from "@/assets/icon/iq.png";
 import { authAPI } from "@/api/endpoints/auth.endpoints";
 import { ArrowLeftIcon } from "lucide-react";
+import { useLogin } from "@/api/wrappers/auth.wrappers";
 
 type LoginFormData = {
   phone: string;
@@ -40,6 +41,8 @@ function Login() {
     setError("");
   };
 
+  const { mutate: login, isPending } = useLogin();
+
   const handleSubmit = async () => {
     setError("");
     setLoading(true);
@@ -53,17 +56,25 @@ function Login() {
         return;
       }
 
-
-
-      await authAPI.login({ phone: parsed.number });
-      console.log("Login success");
-      navigate("/otp", { state: { phone: parsed.number } });
+      login(
+        { phone: parsed.number },
+        {
+          onSuccess: () => {
+            console.log("Login success");
+            navigate("/otp", { state: { phone: parsed.number } });
+          },
+          onError: (err) => {
+            console.error("Login error:", err);
+          },
+          onSettled: () => {
+            setLoading(false);
+          },
+        },
+      );
     } catch (err) {
       console.error("Login error:", err);
       setError("حدث خطأ أثناء إرسال رمز التحقق. يرجى المحاولة مرة أخرى.");
-    } finally {
-      setLoading(false);
-    } 
+    }
   };
 
   return (
@@ -234,7 +245,6 @@ function Login() {
                     ? "bg-gray-300 dark:bg-gray-700 cursor-not-allowed"
                     : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg hover:shadow-xl"
                 }`}
-               
               >
                 <div className="flex items-center justify-center space-x-2">
                   {loading ? (
@@ -245,7 +255,7 @@ function Login() {
                   ) : (
                     <>
                       <span>إرسال رمز التحقق</span>
-                     <ArrowLeftIcon className="w-5 h-5" />
+                      <ArrowLeftIcon className="w-5 h-5" />
                     </>
                   )}
                 </div>

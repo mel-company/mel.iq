@@ -36,7 +36,10 @@ export const subscriptionAPI = {
    * Create a new subscription
    */
   create: async (subscription: any): Promise<any> => {
-    const { data } = await axiosInstance.post<any>("/subscription", subscription);
+    const { data } = await axiosInstance.post<any>(
+      "/subscription",
+      subscription,
+    );
     return data;
   },
 
@@ -44,7 +47,10 @@ export const subscriptionAPI = {
    * Update an existing subscription
    */
   update: async (id: string, subscription: any): Promise<any> => {
-    const { data } = await axiosInstance.put<any>(`/subscription/${id}`, subscription);
+    const { data } = await axiosInstance.put<any>(
+      `/subscription/${id}`,
+      subscription,
+    );
     return data;
   },
 
