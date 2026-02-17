@@ -204,6 +204,7 @@ const StoreCard = ({
     ? getTimeRemaining(subscription.end_at)
     : null;
   const statusBadge = subscription ? getStatusBadge(subscription.status) : null;
+  const navigate = useNavigate();
 
   const handleOpenStore = () => {
     if (store.domain) {
@@ -224,8 +225,12 @@ const StoreCard = ({
           store: domainOnly,
         },
         {
-          onSuccess: () => {
-            toast.success("تم إرسال الدومين بنجاح");
+          onSuccess: (data: any) => {
+            console.log(data);
+            // toast.success("تم إرسال الدومين بنجاح");
+            if (data.redirectUrl) {
+              window.open(data.redirectUrl, "_blank", "noopener,noreferrer");
+            }
           },
           onError: (error: any) => {
             const errorMessage =
@@ -235,7 +240,7 @@ const StoreCard = ({
             toast.error(errorMessage);
             console.error("Error sending domain:", error);
           },
-        }
+        },
       );
     }
   };
@@ -336,7 +341,7 @@ function Dashboard() {
     (store: Store): Subscription | null => {
       return subscriptions.find((s) => s.storeId === store.id) || null;
     },
-    [subscriptions]
+    [subscriptions],
   );
 
   // Redirect to login if not authenticated
@@ -426,7 +431,7 @@ function Dashboard() {
                   onManage={() => {
                     // التأكد من أن الرابط صحيح
                     const path = `/store/${encodeURIComponent(
-                      store.id
+                      store.id,
                     )}/manage`;
                     navigate(path);
                   }}
