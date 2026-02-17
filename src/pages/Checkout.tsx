@@ -54,6 +54,7 @@ function Checkout() {
       phone: initialPhone,
       plan: initialPlan,
       otp: "",
+      
       paymentMethod: "card",
       websiteType: "store",
       logo: null as string | null,
@@ -264,13 +265,15 @@ function Checkout() {
               formData.plan?.id ||
               formData.plan?.name?.toLowerCase() ||
               "basic";
-            const websiteUrl = `https://${planId}.mel.iq/${username}`;
+            const websiteUrl = `https://${formData.domain}.mel.iq/${username}`;
 
             setFormData({
               ...formData,
               username,
               password,
               websiteUrl,
+              domain: formData.domain,
+
             });
             // Go to plan selection step after OTP verification
             setCurrentStep(3);
@@ -380,17 +383,19 @@ function Checkout() {
           "type",
           formData.websiteType === "store" ? "ECOMMERCE" : "RESTAURANT",
         );
-        storeFormData.append("domain", finalUrl);
+        storeFormData.append("domain", formData.domain);
         if (formData.logoFile) {
           storeFormData.append("logo", formData.logoFile);
         }
         storeFormData.append("createdAt", new Date().toISOString());
+storeFormData.append("planId", formData.plan.id);
 
         console.log(storeFormData.get("logo"));
         console.log(storeFormData.get("name"));
         console.log(storeFormData.get("type"));
         console.log(storeFormData.get("domain"));
         console.log(storeFormData.get("createdAt"));
+        console.log(formData.plan);
 
         addStoreMutation(storeFormData, {
           onSuccess: (storeData: any) => {
@@ -426,7 +431,7 @@ function Checkout() {
                       state: {
                         websiteType: formData.websiteType,
                         domain: formData.domain,
-                        url: finalUrl,
+                        url: formData.domain,
                       },
                     });
                   },
@@ -440,7 +445,7 @@ function Checkout() {
                       state: {
                         websiteType: formData.websiteType,
                         domain: formData.domain,
-                        url: finalUrl,
+                        url: formData.domain,
                       },
                     });
                   },
@@ -473,7 +478,7 @@ function Checkout() {
           state: {
             websiteType: formData.websiteType,
             domain: formData.domain,
-            url: finalUrl,
+            url: formData.domain,
           },
         });
       }
