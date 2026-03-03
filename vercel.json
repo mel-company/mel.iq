@@ -1,0 +1,9 @@
+{
+    "redirects": [
+      {
+        "source": "https://www.mel.iq/:path*",
+        "destination": "https://mel.iq/:path*",
+        "permanent": true
+      }
+    ]
+  }
