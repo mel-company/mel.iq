@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+
+# منع الزحف للداشبورد
+Disallow: /dashboard/
+Disallow: /admin/
+Disallow: /owner/
+Disallow: /employee/
+Disallow: /support/
+
+# منع API
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://mel.iq/sitemap.xml
