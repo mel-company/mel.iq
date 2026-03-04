@@ -51,13 +51,20 @@ function OTPVerification() {
 
       // نتوقع من الباك إند { token, username }
       const token = (result as any)?.token;
-      const username = (result as any)?.username;
+      const username = (result as any)?.username || phone;
 
-      
+      // حفظ التوكن واليوزر في localStorage حتى يشتغل /auth/me و axios
+      if (token) {
+        window.localStorage.setItem("token", token);
+        window.localStorage.setItem(
+          "user",
+          JSON.stringify({ token, username }),
+        );
+      }
 
       // نحدد مستخدم داخل AuthContext حتى يمر ProtectedRoute
-      if (username || phone) {
-        login(username || phone, ""); // الباسوورد غير مهم هنا
+      if (token && username) {
+        login(token, username);
       }
 
       // نجاح التحقق - الانتقال للرئيسية

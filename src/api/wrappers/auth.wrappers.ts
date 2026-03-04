@@ -55,6 +55,10 @@ export const useMe = () => {
   return useQuery<any, Error, any>({
     queryKey: authKeys.all,
     queryFn: () => authAPI.me(),
+    // لا نستدعي /auth/me إذا ماكو توكن
+    enabled:
+      typeof window !== "undefined" &&
+      !!window.localStorage.getItem("token"),
   });
 };
 

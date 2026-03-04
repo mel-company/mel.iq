@@ -6,15 +6,16 @@ function Pricing() {
   const plans = useFetchAllPlans();
   if (plans.isLoading)
     return (
-      <div>
+  <div>
         <Skeleton className="w-full h-full" />
       </div>
     );
-  if (plans.isError) return <div>Error: {plans.error.message}</div>;
+    if (plans.isError) return <div>Error: {plans.error.message}</div>;
   // Handle different response structures
   const plansData = Array.isArray(plans.data)
     ? plans.data
     : plans.data?.data || plans.data?.plans || [];
+
 
   return (
     <div className="w-full py-20">
@@ -85,7 +86,8 @@ function Pricing() {
                   {plan.features &&
                     Array.isArray(plan.features) &&
                     plan.features
-                      .filter((feature: any) => feature.enabled !== false)
+                      .map((item: any) => item?.feature ?? item)
+                      .filter((feature: any) => feature && feature.enabled !== false)
                       .map((feature: any) => (
                         <li key={feature.id} className="flex items-start">
                           <svg
