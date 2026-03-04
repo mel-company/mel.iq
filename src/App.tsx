@@ -13,6 +13,7 @@ import { useAuth } from "./contexts/AuthContext";
 import { ReactNode } from "react";
 import OTPVerification from "./pages/Otp";
 import { Toaster } from "./components/ui/sonner";
+import NotFound from "./pages/NotFound";
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -131,6 +132,15 @@ function App() {
             <>
               <Navbar />
               <Templates />
+            </>
+          }
+        />
+        <Route
+          path="*"
+          element={
+            <>
+              <Navbar />
+              <NotFound />
             </>
           }
         />
