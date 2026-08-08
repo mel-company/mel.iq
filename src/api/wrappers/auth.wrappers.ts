@@ -52,13 +52,17 @@ export const useSendOtp = () => {
  * Me
  */
 export const useMe = () => {
+  const token =
+    typeof window !== "undefined" ? window.localStorage.getItem("token") : null;
+  const hasValidToken = Boolean(
+    token && token !== "undefined" && token !== "null",
+  );
+
   return useQuery<any, Error, any>({
-    queryKey: authKeys.all,
+    queryKey: [...authKeys.all, token],
     queryFn: () => authAPI.me(),
-    // لا نستدعي /auth/me إذا ماكو توكن
-    enabled:
-      typeof window !== "undefined" &&
-      !!window.localStorage.getItem("token"),
+    enabled: hasValidToken,
+    retry: false,
   });
 };
 

@@ -6,6 +6,7 @@ import {
   useRegister,
   useVerify,
   useSendOtp,
+  useLogin,
 } from "@/api/wrappers/auth.wrappers";
 import {
   useAddStore,
@@ -14,11 +15,52 @@ import {
 import { useCreateSubscription } from "@/api/wrappers/subscription.wrapper";
 import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 import { toast } from "sonner";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
+import {
+  extractDevOtp,
+  getApiErrorMessage,
+  showDevOtpToast,
+  isPhoneTakenError,
+} from "@/utils/otp";
+
+/** Normalize Iraqi mobile input to E.164 (+964…) for the API. */
+function normalizeToIqE164(input: string): string | null {
+  const raw = input.trim().replace(/\s/g, "");
+  if (!raw) return null;
+
+  let parsed = parsePhoneNumberFromString(raw, "IQ");
+  if (parsed?.isValid()) return parsed.number;
+
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("964") && digits.length >= 12) {
+    parsed = parsePhoneNumberFromString(`+${digits}`, "IQ");
+    if (parsed?.isValid()) return parsed.number;
+  }
+  if (digits.length === 10) {
+    parsed = parsePhoneNumberFromString(`+964${digits}`, "IQ");
+    if (parsed?.isValid()) return parsed.number;
+  }
+  if (digits.length === 11 && digits.startsWith("0")) {
+    parsed = parsePhoneNumberFromString(`+964${digits.slice(1)}`, "IQ");
+    if (parsed?.isValid()) return parsed.number;
+  }
+  return null;
+}
+
+/** Phone used for OTP (logged-in user object or checkout form), always IQ E.164 when possible. */
+function resolveOtpPhone(user: unknown, formPhone: string): string | null {
+  const raw =
+    (user as { phone?: string; user?: { phone?: string } })?.phone ||
+    (user as { user?: { phone?: string } })?.user?.phone ||
+    formPhone;
+  if (raw == null || String(raw).trim() === "") return null;
+  return normalizeToIqE164(String(raw));
+}
 
 function Checkout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, login } = useAuth();
 
   // Fetch plans first
   const plans = useFetchAllPlans();
@@ -33,6 +75,7 @@ function Checkout() {
   const initialStep = location.state?.skipToStep || 1;
   const [currentStep, setCurrentStep] = useState(initialStep);
   const { mutate: registerMutation, isPending: isRegistering } = useRegister();
+  const { mutate: loginMutation, isPending: isLoggingIn } = useLogin();
   const { mutate: sendOtpMutation, isPending: isSendingOtp } = useSendOtp();
   const { mutate: verifyOtpMutation, isPending: isVerifyingOtp } = useVerify();
   const { mutate: addStoreMutation } = useAddStore();
@@ -69,6 +112,7 @@ function Checkout() {
   });
 
   const [otpSent, setOtpSent] = useState(false);
+  const [devOtp, setDevOtp] = useState("");
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [domainChecked, setDomainChecked] = useState(false);
@@ -92,19 +136,30 @@ function Checkout() {
   // If user is logged in and on step 2, send OTP automatically
   useEffect(() => {
     if (user && currentStep === 2 && !otpSent) {
-      // Get phone from user data or location state
-      const phone =
-        (user as any)?.phone || (user as any)?.user?.phone || formData.phone;
+      const phone = resolveOtpPhone(user, formData.phone);
       if (phone) {
         sendOtpMutation(
           { phone },
           {
-            onSuccess: () => {
+            onSuccess: (data) => {
+              const code = extractDevOtp(data);
+              if (code) {
+                setDevOtp(code);
+                setFormData((prev) => ({ ...prev, phone, otp: code }));
+                showDevOtpToast(code);
+              } else {
+                setFormData((prev) => ({ ...prev, phone }));
+              }
               setOtpSent(true);
-              setFormData((prev) => ({ ...prev, phone }));
             },
             onError: (error) => {
               console.error("Error sending OTP:", error);
+              toast.error(
+                getApiErrorMessage(
+                  error,
+                  "تعذر إرسال رمز التحقق. حاول مرة أخرى.",
+                ),
+              );
             },
           },
         );
@@ -189,50 +244,106 @@ function Checkout() {
     );
   };
 
+  const proceedToOtpStep = (phone: string, data?: unknown) => {
+    const code = extractDevOtp(data);
+    if (code) {
+      setDevOtp(code);
+      showDevOtpToast(code);
+    }
+    setFormData((prev) => ({
+      ...prev,
+      phone,
+      otp: code || prev.otp || "",
+    }));
+    setOtpSent(true);
+    setCurrentStep(2);
+  };
+
+  const continueWithExistingPhone = (phoneE164: string) => {
+    // الرقم مسجّل مسبقاً (حتى لو ما اكتمل verify) → نعيد إرسال OTP عبر login
+    loginMutation(
+      { phone: phoneE164 },
+      {
+        onSuccess: (data) => {
+          toast.success(
+            "هذا الرقم مسجّل مسبقاً. أرسلنا رمز تحقق جديد لإكمال الحساب.",
+          );
+          proceedToOtpStep(phoneE164, data);
+        },
+        onError: (loginError) => {
+          // لا تستخدم /auth/send-otp هنا — يحتاج JWT والضيف ما عنده توكن بعد
+          toast.error(
+            getApiErrorMessage(
+              loginError,
+              "الرقم مسجّل لكن تعذر إرسال رمز التحقق. جرّب تسجيل الدخول من /login.",
+            ),
+          );
+        },
+      },
+    );
+  };
+
   const handleStep1Submit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     // If user is logged in, just proceed to OTP step
     if (user) {
       // Send OTP for logged in user
-      const phone =
-        (user as any)?.phone || (user as any)?.user?.phone || formData.phone;
+      const phone = resolveOtpPhone(user, formData.phone);
       if (phone) {
         sendOtpMutation(
           { phone },
           {
-            onSuccess: () => {
-              setOtpSent(true);
-              setCurrentStep(2);
+            onSuccess: (data) => {
+              proceedToOtpStep(phone, data);
             },
             onError: (error) => {
               toast.error(
-                "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
+                getApiErrorMessage(
+                  error,
+                  "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
+                ),
               );
               console.error("Error sending OTP:", error);
             },
           },
         );
       } else {
-        toast.error("الرجاء إدخال رقم الهاتف");
+        toast.error("لم يُعثر على رقم هاتف صالح في حسابك");
       }
     } else {
-      // If user is not logged in, register and send OTP
+      // If user is not logged in, register then send OTP (same flow as login)
       if (formData.name && formData.email && formData.phone) {
+        const phoneE164 = normalizeToIqE164(formData.phone);
+        if (!phoneE164) {
+          toast.error(
+            "رقم الجوال غير صحيح. أدخل رقم عراقي صالح (مثال: 7xx xxx xxxx).",
+          );
+          return;
+        }
+
         registerMutation(
           {
-            phone: formData.phone,
+            phone: phoneE164,
             name: formData.name,
             email: formData.email,
           },
           {
-            onSuccess: () => {
-              setOtpSent(true);
-              setCurrentStep(2);
+            onSuccess: (data: { message?: string; codeOnlyOnDev?: number }) => {
+              if (data?.message) toast.success(data.message);
+              proceedToOtpStep(phoneE164, data);
             },
             onError: (error) => {
+              // الرقم صار بالداتابيس قبل ما تكمل verify → نكمّل عبر login/OTP
+              if (isPhoneTakenError(error)) {
+                continueWithExistingPhone(phoneE164);
+                return;
+              }
               toast.error(
-                "حدث خطأ في التسجيل وإرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
+                getApiErrorMessage(
+                  error,
+                  "حدث خطأ في التسجيل. الرجاء المحاولة مرة أخرى.",
+                ),
               );
               console.error("Error registering:", error);
             },
@@ -247,39 +358,54 @@ function Checkout() {
   const handleOTPVerify = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (formData.otp && formData.otp.length === 4) {
-      // Get phone from user data or formData
-      const phone =
-        (user as any)?.phone || (user as any)?.user?.phone || formData.phone;
-      // Verify OTP - send phone and code
+      const phone = resolveOtpPhone(user, formData.phone);
+      if (!phone) {
+        toast.error("رقم الهاتف غير صالح. ارجع للخطوة السابقة وأعد المحاولة.");
+        return;
+      }
       verifyOtpMutation(
         {
           phone,
           code: formData.otp,
         },
         {
-          onSuccess: () => {
-            // Generate credentials
-            const username = `user_${Math.random().toString(36).substr(2, 9)}`;
+          onSuccess: (result: {
+            token?: string;
+            accessToken?: string;
+            username?: string;
+          }) => {
+            const token = result?.token || result?.accessToken;
+            const username = result?.username || formData.name || phone;
+            if (token) {
+              window.localStorage.setItem("token", token);
+              window.localStorage.setItem(
+                "user",
+                JSON.stringify({ token, username, phone }),
+              );
+              login(token, username);
+            }
+
+            const genUsername = `user_${Math.random().toString(36).substr(2, 9)}`;
             const password = Math.random().toString(36).substr(2, 12);
-            const planId =
-              formData.plan?.id ||
-              formData.plan?.name?.toLowerCase() ||
-              "basic";
-            const websiteUrl = `https://${formData.domain}.mel.iq/${username}`;
+            const websiteUrl = `https://${formData.domain}.mel.iq/${genUsername}`;
 
             setFormData({
               ...formData,
-              username,
+              username: genUsername,
               password,
               websiteUrl,
               domain: formData.domain,
-
             });
-            // Go to plan selection step after OTP verification
+            toast.success("تم التحقق بنجاح");
             setCurrentStep(3);
           },
           onError: (error) => {
-            toast.error("رمز OTP غير صحيح. الرجاء المحاولة مرة أخرى.");
+            toast.error(
+              getApiErrorMessage(
+                error,
+                "رمز OTP غير صحيح. الرجاء المحاولة مرة أخرى.",
+              ),
+            );
             console.error("Error verifying OTP:", error);
           },
         },
@@ -486,21 +612,45 @@ storeFormData.append("planId", formData.plan.id);
   };
 
   const resendOTP = () => {
-    // Get phone from user data or formData
-    const phone =
-      (user as any)?.phone || (user as any)?.user?.phone || formData.phone;
-    sendOtpMutation(
-      { phone },
-      {
-        onSuccess: () => {
-          toast.success("تم إرسال رمز OTP جديد إلى رقمك");
-        },
-        onError: (error) => {
-          toast.error("حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.");
-          console.error("Error resending OTP:", error);
-        },
-      },
-    );
+    const phone = resolveOtpPhone(user, formData.phone);
+    if (!phone) {
+      toast.error("رقم الهاتف غير صالح لإعادة الإرسال");
+      return;
+    }
+
+    // /auth/send-otp يحتاج JWT — قبل اكتمال verify نستخدم /auth/login
+    const hasToken =
+      typeof window !== "undefined" &&
+      Boolean(
+        window.localStorage.getItem("token") &&
+          window.localStorage.getItem("token") !== "undefined",
+      );
+
+    const onResendSuccess = (data: unknown) => {
+      const code = extractDevOtp(data);
+      if (code) {
+        setDevOtp(code);
+        setFormData((prev) => ({ ...prev, otp: code }));
+        showDevOtpToast(code);
+      }
+      toast.success("تم إرسال رمز OTP جديد إلى رقمك");
+    };
+
+    const onResendError = (error: unknown) => {
+      toast.error(
+        getApiErrorMessage(
+          error,
+          "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
+        ),
+      );
+      console.error("Error resending OTP:", error);
+    };
+
+    if (hasToken) {
+      sendOtpMutation({ phone }, { onSuccess: onResendSuccess, onError: onResendError });
+    } else {
+      loginMutation({ phone }, { onSuccess: onResendSuccess, onError: onResendError });
+    }
   };
 
   return (
@@ -562,25 +712,41 @@ storeFormData.append("planId", formData.plan.id);
                   </p>
                   <button
                     onClick={() => {
-                      const phone =
-                        (user as any)?.phone ||
-                        (user as any)?.user?.phone ||
-                        formData.phone;
+                      const phone = resolveOtpPhone(user, formData.phone);
                       if (phone) {
                         sendOtpMutation(
                           { phone },
                           {
-                            onSuccess: () => {
+                            onSuccess: (data) => {
+                              const code = extractDevOtp(data);
+                              if (code) {
+                                setDevOtp(code);
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  phone,
+                                  otp: code,
+                                }));
+                                showDevOtpToast(code);
+                              } else {
+                                setFormData((prev) => ({ ...prev, phone }));
+                              }
                               setOtpSent(true);
                               setCurrentStep(2);
                             },
                             onError: (error) => {
                               toast.error(
-                                "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
+                                getApiErrorMessage(
+                                  error,
+                                  "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
+                                ),
                               );
                               console.error("Error sending OTP:", error);
                             },
                           },
+                        );
+                      } else {
+                        toast.error(
+                          "لم يُعثر على رقم هاتف صالح في حسابك. تواصل مع الدعم.",
                         );
                       }
                     }}
@@ -633,19 +799,102 @@ storeFormData.append("planId", formData.plan.id);
                       onChange={handleInputChange}
                       required
                       className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white500 focus:border-transparent outline-none transition"
-                      placeholder="+966xxxxxxxxx"
+                      placeholder="7xx xxx xxxx (عراقي)"
                     />
                   </div>
 
                   <button
                     type="submit"
-                    disabled={isRegistering}
+                    disabled={isRegistering || isLoggingIn || isSendingOtp}
                     className="w-full bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white py-3 px-6 rounded-lg font-semibold text-lg transition-colors mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isRegistering ? "جاري التسجيل..." : "المتابعة إلى التحقق"}
+                    {isRegistering || isLoggingIn || isSendingOtp
+                      ? "جاري المتابعة..."
+                      : "المتابعة إلى التحقق"}
                   </button>
                 </form>
               )}
+            </div>
+          )}
+
+          {/* Step 2: OTP Verification */}
+          {currentStep === 2 && (
+            <div>
+              <h2 className="text-3xl font-bold text-black dark:text-white mb-2 text-center">
+                التحقق من الرمز
+              </h2>
+              <p className="text-center text-gray-500 dark:text-gray-400 mb-8">
+                أدخل رمز التحقق المرسل إلى واتساب
+                {formData.phone ? (
+                  <span dir="ltr" className="block mt-1 font-medium text-black dark:text-white">
+                    {formData.phone}
+                  </span>
+                ) : null}
+              </p>
+
+              {devOtp && (
+                <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700 p-4 text-center">
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mb-1">
+                    رمز الاختبار (للتطوير)
+                  </p>
+                  <p
+                    dir="ltr"
+                    className="text-3xl font-bold tracking-[0.35em] text-amber-800 dark:text-amber-200"
+                  >
+                    {devOtp}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({ ...prev, otp: devOtp }))
+                    }
+                    className="mt-2 text-sm text-violet-600 dark:text-violet-400 hover:underline"
+                  >
+                    املأ الرمز تلقائياً
+                  </button>
+                </div>
+              )}
+
+              <form onSubmit={handleOTPVerify} className="max-w-sm mx-auto space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2 text-center">
+                    رمز OTP (4 أرقام)
+                  </label>
+                  <input
+                    type="text"
+                    name="otp"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={4}
+                    value={formData.otp}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "").slice(0, 4);
+                      setFormData((prev) => ({ ...prev, otp: value }));
+                    }}
+                    dir="ltr"
+                    className="w-full px-4 py-4 text-center text-2xl tracking-[0.5em] border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white outline-none"
+                    placeholder="••••"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isVerifyingOtp || formData.otp.length !== 4}
+                  className="w-full bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black py-3 px-6 rounded-lg font-semibold text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isVerifyingOtp ? "جاري التحقق..." : "تأكيد الرمز"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={resendOTP}
+                  disabled={isSendingOtp}
+                  className="w-full text-sm text-gray-500 hover:text-black dark:hover:text-white transition-colors disabled:opacity-50"
+                >
+                  {isSendingOtp ? "جاري إعادة الإرسال..." : "إعادة إرسال الرمز"}
+                </button>
+              </form>
             </div>
           )}
 

@@ -1,19 +1,107 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --font-setar: "Setar XS", "Cairo", ui-sans-serif, sans-serif;
+}
+
+@font-face {
+  font-family: "Setar XS";
+  src: url("/fonts/Setar XS/SetarXSTrial-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Setar XS";
+  src: url("/fonts/Setar XS/SetarXSTrial-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Setar XS";
+  src: url("/fonts/Setar XS/SetarXSTrial-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Setar XS";
+  src: url("/fonts/Setar XS/SetarXSTrial-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Setar XS";
+  src: url("/fonts/Setar XS/SetarXSTrial-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 body {
   margin: 0;
-  font-family: "Cairo", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    sans-serif;
+  font-family: var(--font-setar);
+  font-weight: 300;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 * {
-  font-family: "Cairo", sans-serif;
+  box-sizing: border-box;
 }
 
-* {
-  box-sizing: border-box;
+/* Typography — hero tagline gradient */
+.text-hero-tagline {
+  font-family: var(--font-setar);
+  font-weight: 600;
+  font-size: clamp(1.25rem, 3vw, 2rem);
+  line-height: 1.4;
+  letter-spacing: 0;
+  background: linear-gradient(to left, #a855f7, #06b6d4, #22d3ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.text-hero-sub {
+  font-family: var(--font-setar);
+  font-weight: 300;
+  font-size: clamp(0.95rem, 2vw, 1.125rem);
+  line-height: 1.75;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+}
+
+.text-hero-cta {
+  font-family: var(--font-setar);
+  font-weight: 600;
+  font-size: 1.125rem;
+  line-height: 1.5;
+}
+
+.text-hero-title {
+  font-family: var(--font-setar);
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.text-nav {
+  font-family: var(--font-setar);
+  font-weight: 300;
+  font-size: 18px;
+  line-height: 24px;
+  letter-spacing: 0;
+  text-align: right;
 }

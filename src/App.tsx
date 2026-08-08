@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
+import { MarketingShell } from "./components/LandingNavbar";
 import Landing from "./pages/Landing";
 import Pricing from "./pages/Pricing";
 import About from "./pages/About";
@@ -81,40 +82,29 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/"
-          element={
-            <>
-              <Navbar />
-              <Landing />
-            </>
-          }
-        />
+        <Route path="/" element={<Landing />} />
         <Route
           path="/pricing"
           element={
-            <>
-              <Navbar />
+            <MarketingShell>
               <Pricing />
-            </>
+            </MarketingShell>
           }
         />
         <Route
           path="/about"
           element={
-            <>
-              <Navbar />
+            <MarketingShell>
               <About />
-            </>
+            </MarketingShell>
           }
         />
         <Route
           path="/contact"
           element={
-            <>
-              <Navbar />
+            <MarketingShell>
               <Contact />
-            </>
+            </MarketingShell>
           }
         />
         <Route

@@ -1,13 +1,13 @@
 function About() {
   return (
-    <div className="w-full py-20 bg-white dark:bg-black">
+    <div className="w-full py-12 text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Hero Section */}
         <div className="text-center mb-16">
-          <h1 className="text-4xl sm:text-5xl font-extrabold text-black dark:text-white mb-4">
+          <h1 className="text-4xl sm:text-5xl font-extrabold text-white mb-4">
             حول ميل.IQ
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+          <p className="text-xl text-gray-400 max-w-3xl mx-auto">
             نحن ملتزمون بتقديم حلول مبتكرة تساعد الشركات والأفراد على تحقيق أهدافهم.
           </p>
         </div>

@@ -18,14 +18,14 @@ function Pricing() {
 
 
   return (
-    <div className="w-full py-20">
+    <div className="w-full py-12 text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-16">
-          <h1 className="text-4xl sm:text-5xl font-extrabold text-black dark:text-white mb-4">
+          <h1 className="text-4xl sm:text-5xl font-extrabold text-white mb-4">
             اختر خطتك
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+          <p className="text-xl text-gray-400 max-w-2xl mx-auto">
             اختر خطة الاشتراك المثالية التي تناسب احتياجاتك. جميع الخطط تشمل
             فترة تجريبية مجانية لمدة 14 يوماً.
           </p>

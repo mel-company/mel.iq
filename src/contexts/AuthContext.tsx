@@ -21,6 +21,14 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function clearBadToken() {
+  const token = window.localStorage.getItem("token");
+  if (!token || token === "undefined" || token === "null") {
+    window.localStorage.removeItem("token");
+    window.localStorage.removeItem("user");
+  }
+}
+
 type AuthProviderProps = {
   children: ReactNode;
 };
@@ -29,47 +37,52 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // جلب بيانات المستخدم من الباك إند إذا التوكن صالح
+  useEffect(() => {
+    clearBadToken();
+  }, []);
+
   const { data: meData, isLoading: meLoading, isError } = useMe();
 
   useEffect(() => {
-    // لو ما زال طلب /auth/me شغّال، نبقي loading
     if (meLoading) {
       setLoading(true);
       return;
     }
 
     if (meData) {
-      // توكن صحيح والباك إند رجّع يوزر
-        setUser(meData as Store);
+      setUser(meData as Store);
       setLoading(false);
       return;
     }
 
-    // في حالة ماكو يوزر من الباك إند (أو خطأ)، نرجع للفحص من localStorage
-
+    // /auth/me فشل أو ماكو توكن → اعتبر المستخدم غير مسجل
+    if (isError) {
+      clearBadToken();
+      setUser(null);
+    }
 
     setLoading(false);
   }, [meData, meLoading, isError]);
 
   const login = (token: string, username: string) => {
-    // Simulate login - in production, this would be an API call
     const userData = {
       token,
       username,
     };
+    window.localStorage.setItem("token", token);
+    window.localStorage.setItem("user", JSON.stringify(userData));
     setUser(userData);
     return { success: true, user: userData };
   };
 
   const logout = () => {
+    window.localStorage.removeItem("token");
+    window.localStorage.removeItem("user");
     setUser(null);
   };
-    
+
   return (
-    <AuthContext.Provider
-      value={{ user, login, logout, loading }}
-    >
+    <AuthContext.Provider value={{ user, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

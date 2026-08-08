@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { useLogin, useVerify } from "@/api/wrappers/auth.wrappers";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -8,6 +9,11 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { ArrowLeftIcon } from "lucide-react";
+import {
+  extractDevOtp,
+  getApiErrorMessage,
+  showDevOtpToast,
+} from "@/utils/otp";
 
 function OTPVerification() {
   const location = useLocation();
@@ -16,68 +22,89 @@ function OTPVerification() {
   const resendOtpMutation = useLogin();
   const { login } = useAuth();
 
-  const { phone } = location.state || { phone: "" };
-  const maskedPhone = phone.replace(/(^\+?964)/, "+964 ");
+  const phone = (location.state as { phone?: string } | null)?.phone || "";
+  const initialOtp =
+    (location.state as { otpCode?: string } | null)?.otpCode || "";
+  const maskedPhone = phone
+    ? phone.replace(/(^\+?964)/, "+964 ")
+    : "—";
 
-  const [otp, setOtp] = useState("");
+  const [otp, setOtp] = useState(initialOtp);
+  const [devOtp, setDevOtp] = useState(initialOtp);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(60);
   const [canResend, setCanResend] = useState(false);
 
-  // العد التنازلي لإعادة الإرسال
+  useEffect(() => {
+    if (!phone) {
+      toast.error("رقم الهاتف غير موجود. أعد تسجيل الدخول.");
+      navigate("/login", { replace: true });
+    }
+  }, [phone, navigate]);
+
   useEffect(() => {
     if (resendCooldown > 0) {
       const timer = setTimeout(() => {
         setResendCooldown(resendCooldown - 1);
       }, 1000);
       return () => clearTimeout(timer);
-    } else {
-      setCanResend(true);
     }
+    setCanResend(true);
   }, [resendCooldown]);
 
+  const persistAuth = (result: unknown) => {
+    const data = result as {
+      token?: string;
+      accessToken?: string;
+      username?: string;
+      user?: { phone?: string; name?: string };
+    };
+    const token = data?.token || data?.accessToken;
+    const username =
+      data?.username || data?.user?.phone || data?.user?.name || phone;
+
+    if (token) {
+      window.localStorage.setItem("token", token);
+      window.localStorage.setItem(
+        "user",
+        JSON.stringify({ token, username, phone }),
+      );
+      login(token, username);
+    }
+    return Boolean(token);
+  };
+
   const autoSubmit = async (otpValue: string) => {
-    if (loading) return;
+    if (loading || !phone) return;
 
     setLoading(true);
     setError("");
 
     try {
       const result = await verifyOtpMutation.mutateAsync({
-        phone: phone,
+        phone,
         code: otpValue,
       });
 
-      // نتوقع من الباك إند { token, username }
-      const token = (result as any)?.token;
-      const username = (result as any)?.username || phone;
-
-      // حفظ التوكن واليوزر في localStorage حتى يشتغل /auth/me و axios
-      if (token) {
-        window.localStorage.setItem("token", token);
-        window.localStorage.setItem(
-          "user",
-          JSON.stringify({ token, username }),
+      const ok = persistAuth(result);
+      if (!ok) {
+        toast.warning(
+          "تم التحقق لكن لم يُرجع التوكن. حاول تسجيل الدخول مرة أخرى إن لزم.",
         );
+      } else {
+        toast.success("تم التحقق بنجاح");
       }
 
-      // نحدد مستخدم داخل AuthContext حتى يمر ProtectedRoute
-      if (token && username) {
-        login(token, username);
-      }
-
-      // نجاح التحقق - الانتقال للرئيسية
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 500);
-    } catch (err: any) {
-      setError(err.message || "رمز التحقق غير صحيح. يرجى المحاولة مرة أخرى.");
-
-      // مسح الحقول في حالة الخطأ
-      setTimeout(() => {
-        setOtp("");
-      }, 300);
+      navigate("/dashboard", { replace: true });
+    } catch (err: unknown) {
+      setError(
+        getApiErrorMessage(
+          err,
+          "رمز التحقق غير صحيح. يرجى المحاولة مرة أخرى.",
+        ),
+      );
+      setTimeout(() => setOtp(""), 300);
     } finally {
       setLoading(false);
     }
@@ -88,25 +115,40 @@ function OTPVerification() {
       setError("يرجى إدخال جميع الأرقام");
       return;
     }
-
     await autoSubmit(otp);
   };
 
   const handleResendOtp = () => {
-    if (!canResend) return;
+    if (!canResend || !phone) return;
 
     setResendCooldown(60);
     setCanResend(false);
     setError("");
 
-    // استدعاء نفس endpoint /auth/send-otp لإعادة إرسال الكود
-    resendOtpMutation.mutate({ phone });
+    resendOtpMutation.mutate(
+      { phone },
+      {
+        onSuccess: (data) => {
+          const code = extractDevOtp(data);
+          if (code) {
+            setDevOtp(code);
+            setOtp(code);
+            showDevOtpToast(code);
+          }
+          toast.success(data?.message || "تم إرسال رمز جديد");
+        },
+        onError: (err) => {
+          toast.error(
+            getApiErrorMessage(err, "تعذر إعادة إرسال الرمز. حاول مرة أخرى."),
+          );
+        },
+      },
+    );
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 p-4">
       <div className="w-full max-w-md space-y-8">
-        {/* Header Section */}
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">
             MEL.IQ
@@ -116,34 +158,35 @@ function OTPVerification() {
           </p>
         </div>
 
-        {/* Main Card */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-800">
-          {/* Progress Bar */}
           <div className="h-1 w-full bg-gray-100 dark:bg-gray-800">
-            <div className="h-full w-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-500"></div>
+            <div className="h-full w-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-500" />
           </div>
 
           <div className="p-8 space-y-6">
-            {/* Steps Indicator */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-2 opacity-50">
-                <div className="flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 dark:border-gray-700 text-gray-400 text-xs font-medium">
-                  1
-                </div>
-                <span className="text-sm font-medium text-gray-400 dark:text-gray-500">
-                  رقم الهاتف
-                </span>
+            {devOtp && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700 p-4 text-center">
+                <p className="text-xs text-amber-700 dark:text-amber-300 mb-1">
+                  رمز الاختبار (يظهر لأن الواتساب قد لا يصل أثناء التطوير)
+                </p>
+                <p
+                  dir="ltr"
+                  className="text-3xl font-bold tracking-[0.35em] text-amber-800 dark:text-amber-200"
+                >
+                  {devOtp}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtp(devOtp);
+                    void autoSubmit(devOtp);
+                  }}
+                  className="mt-3 text-sm font-medium text-violet-600 dark:text-violet-400 hover:underline"
+                >
+                  استخدم هذا الرمز تلقائياً
+                </button>
               </div>
-              <div className="flex-1 h-px mx-4 bg-gradient-to-r from-gray-300 via-gray-300 to-transparent dark:from-gray-700 dark:via-gray-700 dark:to-transparent"></div>
-              <div className="flex items-center space-x-2">
-                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 text-white text-xs font-bold">
-                  2
-                </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  التحقق
-                </span>
-              </div>
-            </div>
+            )}
 
             <div className="space-y-1">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -154,25 +197,28 @@ function OTPVerification() {
               </p>
               <p
                 dir="ltr"
-                className="text-sm  text-right font-medium text-violet-600 dark:text-violet-400"
+                className="text-sm text-right font-medium text-violet-600 dark:text-violet-400"
               >
                 {maskedPhone}
               </p>
             </div>
 
-            <form className="space-y-6">
-              {/* OTP Inputs */}
+            <form
+              className="space-y-6"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleSubmit();
+              }}
+            >
               <div className="space-y-4">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   رمز التحقق
                 </label>
-                {/* نخلي حقل الـ OTP من اليسار لليمين حتى يكون ترتيب الأرقام واضح */}
                 <div dir="ltr">
                   <InputOTP
                     maxLength={4}
                     value={otp}
                     onChange={(value) => {
-                      // نسمح فقط بالأرقام (لاتينية من اليسار لليمين)
                       if (!/^\d*$/.test(value)) return;
                       setOtp(value);
                       setError("");
@@ -192,28 +238,15 @@ function OTPVerification() {
                 </p>
               </div>
 
-              {/* Error Message */}
               {error && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg animate-shake">
-                  <p className="text-sm text-red-600 dark:text-red-400 flex items-center space-x-2">
-                    <svg
-                      className="w-4 h-4"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    <span>{error}</span>
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    {error}
                   </p>
                 </div>
               )}
 
-              {/* Resend OTP */}
-              <div className="flex items-center justify-center space-x-2">
+              <div className="flex items-center justify-center gap-2">
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   لم تصلك الرسالة؟
                 </p>
@@ -223,8 +256,8 @@ function OTPVerification() {
                   disabled={!canResend || loading}
                   className={`text-sm font-medium transition-colors ${
                     canResend
-                      ? "text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300"
-                      : "text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                      ? "text-violet-600 dark:text-violet-400 hover:text-violet-700"
+                      : "text-gray-400 cursor-not-allowed"
                   }`}
                 >
                   {canResend
@@ -233,21 +266,19 @@ function OTPVerification() {
                 </button>
               </div>
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={loading || otp.length !== 4}
-                onClick={handleSubmit}
-                className={`w-full py-4 px-4 rounded-xl font-medium text-white transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] ${
+                className={`w-full py-4 px-4 rounded-xl font-medium text-white transition-all ${
                   loading || otp.length !== 4
                     ? "bg-gray-300 dark:bg-gray-700 cursor-not-allowed"
-                    : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg hover:shadow-xl"
+                    : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg"
                 }`}
               >
-                <div className="flex items-center justify-center space-x-2">
+                <div className="flex items-center justify-center gap-2">
                   {loading ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       <span>جاري التحقق...</span>
                     </>
                   ) : (
@@ -260,58 +291,18 @@ function OTPVerification() {
               </button>
             </form>
 
-            {/* Back to Login */}
             <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
               <button
-                onClick={() => navigate(-1)}
-                className="w-full text-center text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors flex items-center justify-center space-x-2"
+                type="button"
+                onClick={() => navigate("/login")}
+                className="w-full text-center text-sm text-gray-500 hover:text-gray-700"
               >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                  />
-                </svg>
-                <span>تغيير رقم الهاتف</span>
+                تغيير رقم الهاتف
               </button>
             </div>
           </div>
         </div>
-
-        {/* Security Info */}
-        <div className="text-center space-y-2">
-          <p className="text-xs text-gray-400 dark:text-gray-500">
-            هذا الرمز ساري لمدة 10 دقائق فقط
-          </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500">
-            لا تشارك هذا الرمز مع أي شخص
-          </p>
-        </div>
       </div>
-
-      {/* Add animation keyframes for shake */}
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-          20%, 40%, 60%, 80% { transform: translateX(5px); }
-        }
-        
-        .animate-shake {
-          animation: shake 0.5s ease-in-out;
-        }
-      `,
-        }}
-      />
     </div>
   );
 }

@@ -1,59 +1,49 @@
 import axios from "axios";
 
-// Create an axios instance with Vite environment variables
-// const axiosInstance = axios.create({
-//   baseURL:
-//     import.meta.env.VITE_API_BASE_URL || "http://192.168.10.164:3000/api/v1",
-//   timeout: 10000,
-//   headers: {
-//     "Content-Type": "application/json",
-//     Authorization: `Bearer ${import.meta.env.VITE_API_KEY}`,
-//   },
-//   // Needed so the browser will store/send httpOnly cookies (e.g. `sat`)
-//   withCredentials: true,
-// });
-
-// const baseURL = "/api/v1";
-
 const axiosInstance = axios.create({
-  // baseURL,
   baseURL:
-    import.meta.env.VITE_API_BASE_URL || "http://192.168.10.164:3000/api/v1",
-  timeout: 10000,
+    import.meta.env.VITE_API_BASE_URL || "https://api.mel.iq/api/v1",
+  timeout: 15000,
   headers: {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${import.meta.env.VITE_API_KEY}`,
-    // "domain-name": parsed.subdomain,
   },
-  // Needed so the browser will store/send httpOnly cookies (e.g. `sat`)
   withCredentials: true,
 });
 
-// Interceptors
 axiosInstance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
-    if (token) {
+    // فقط أرسل Authorization إذا في توكن حقيقي (لا ترسل Bearer undefined)
+    if (token && token !== "undefined" && token !== "null") {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      delete config.headers.Authorization;
     }
-    // If FormData, let browser set Content-Type automatically (with boundary)
+
     if (config.data instanceof FormData) {
       delete config.headers["Content-Type"];
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  },
+  (error) => Promise.reject(error),
 );
 
 axiosInstance.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // window.location.href = "/login";
+    if (error.response?.status === 401) {
+      const url = String(error.config?.url || "");
+      // امسح التوكن التالف فقط على طلبات تحتاج تسجيل دخول (مو login/register/otp)
+      const isPublicAuth =
+        url.includes("/auth/login") ||
+        url.includes("/auth/register") ||
+        url.includes("/auth/send-otp") ||
+        url.includes("/auth/verify");
+
+      if (!isPublicAuth) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      }
     }
     return Promise.reject(error);
   },

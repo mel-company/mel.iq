@@ -1,10 +1,15 @@
-import { ChangeEvent, FormEvent, useState, useEffect } from "react";
+import { ChangeEvent, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import iqFlag from "@/assets/icon/iq.png";
-import { authAPI } from "@/api/endpoints/auth.endpoints";
 import { ArrowLeftIcon } from "lucide-react";
+import { toast } from "sonner";
 import { useLogin } from "@/api/wrappers/auth.wrappers";
+import {
+  extractDevOtp,
+  getApiErrorMessage,
+  showDevOtpToast,
+} from "@/utils/otp";
 
 type LoginFormData = {
   phone: string;
@@ -59,12 +64,22 @@ function Login() {
       login(
         { phone: parsed.number },
         {
-          onSuccess: () => {
-            console.log("Login success");
-            navigate("/otp", { state: { phone: parsed.number } });
+          onSuccess: (data) => {
+            const otpCode = extractDevOtp(data);
+            showDevOtpToast(otpCode);
+            if (data?.message) toast.success(data.message);
+            navigate("/otp", {
+              state: { phone: parsed.number, otpCode },
+            });
           },
           onError: (err) => {
             console.error("Login error:", err);
+            setError(
+              getApiErrorMessage(
+                err,
+                "حدث خطأ أثناء إرسال رمز التحقق. يرجى المحاولة مرة أخرى.",
+              ),
+            );
           },
           onSettled: () => {
             setLoading(false);
@@ -267,11 +282,14 @@ function Login() {
               <p className="text-center text-sm text-gray-500 dark:text-gray-400">
                 ليس لديك حساب؟{" "}
                 <a
-                  href="#"
+                  href="/checkout"
                   className="text-violet-600 dark:text-violet-400 font-medium hover:underline"
                 >
-                  سجل الآن
+                  سجّل الآن
                 </a>
+                <span className="block mt-2 text-xs text-gray-400">
+                  إذا سجّلت سابقاً وما أكملت التحقق، استخدم نفس الرقم هنا
+                </span>
               </p>
             </div>
           </div>
