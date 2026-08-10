@@ -1,12 +1,16 @@
 {
-    "redirects": [
-      {
-        "source": "/:path*",
-        "has": [
-          { "type": "host", "value": "mel.iq" }
-        ],
-        "destination": "https://www.mel.iq/:path*",
-        "permanent": true
-      }
-    ]
-  }
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "mel.iq" }],
+      "destination": "https://www.mel.iq/:path*",
+      "permanent": true
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!assets/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
