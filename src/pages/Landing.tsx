@@ -4,6 +4,8 @@ import { MarketingShell } from "../components/LandingNavbar";
 import TrustBadge from "../components/TrustBadge";
 import CustomerReviewsCard from "../components/CustomerReviewsCard";
 import DashboardPreview from "../components/DashboardPreview";
+import PromptComposer from "../components/ai/PromptComposer";
+import GenerationHistory from "../components/ai/GenerationHistory";
 
 function Landing() {
   return (
@@ -45,12 +47,7 @@ function Landing() {
               {" "}بدون أي تعقيدات برمجية وبأقل وقت إعدادات
             </p>
 
-            <Link
-              to="/checkout"
-              className="text-hero-cta inline-flex items-center justify-center min-w-[260px] px-12 py-4 rounded-full bg-[#00c8ff] text-white hover:bg-[#33d4ff] transition-colors shadow-[0_0_40px_rgba(0,200,255,0.4)]"
-            >
-              أنشئ متجرك الآن
-            </Link>
+            <PromptComposer />
 
             <div className="mt-16 sm:mt-20 flex flex-col items-center gap-3">
               <span className="text-sm text-white/35 font-light">
@@ -75,6 +72,9 @@ function Landing() {
             <CustomerReviewsCard />
           </div>
         </section>
+
+        {/* سجل الإنشاء — يظهر فقط لمن لديه متاجر سابقة */}
+        <GenerationHistory />
 
         {/* المميزات — معاينة لوحة التحكم */}
         <section
