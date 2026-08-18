@@ -98,12 +98,21 @@ function OTPVerification() {
         accessToken?: string;
         redirectUrl?: string;
         fallbackUrl?: string;
+        data?: {
+          token?: string;
+          accessToken?: string;
+          redirectUrl?: string;
+          fallbackUrl?: string;
+        };
       };
       const ok = persistAuth(result);
       const token = verifyResult?.token || verifyResult?.accessToken || "";
       const fallbackUrl =
-        verifyResult?.fallbackUrl || "https://mel-iq.vercel.app/";
-      const verifyRedirectUrl = verifyResult?.redirectUrl;
+        verifyResult?.fallbackUrl ||
+        verifyResult?.data?.fallbackUrl ||
+        "https://mel-iq.vercel.app/";
+      const verifyRedirectUrl =
+        verifyResult?.redirectUrl || verifyResult?.data?.redirectUrl;
 
       if (verifyRedirectUrl) {
         window.location.assign(verifyRedirectUrl);
@@ -116,7 +125,17 @@ function OTPVerification() {
             store: storeSlug,
             token,
           });
-          const redirectUrl = (validated as { redirectUrl?: string })?.redirectUrl;
+          const validateResponse = validated as {
+            redirectUrl?: string;
+            data?: { redirectUrl?: string };
+          };
+          const redirectUrl =
+            validateResponse?.redirectUrl ||
+            validateResponse?.data?.redirectUrl;
+          // Temporary debugging: remove after confirming production behavior.
+          console.log("VALIDATE RESPONSE:", validateResponse);
+          console.log("VALIDATE DATA:", validateResponse?.data);
+          console.log("REDIRECT URL:", redirectUrl);
           if (redirectUrl) {
             window.location.assign(redirectUrl);
             return;
