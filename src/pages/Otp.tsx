@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { useLogin, useVerify } from "@/api/wrappers/auth.wrappers";
+import { useLogin, useValidateUser, useVerify } from "@/api/wrappers/auth.wrappers";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   InputOTP,
@@ -20,9 +20,15 @@ function OTPVerification() {
   const navigate = useNavigate();
   const verifyOtpMutation = useVerify();
   const resendOtpMutation = useLogin();
+  const validateUserMutation = useValidateUser();
   const { login } = useAuth();
 
   const phone = (location.state as { phone?: string } | null)?.phone || "";
+  const storeFromState =
+    (location.state as { store?: string } | null)?.store?.trim() || "";
+  const storeFromQuery =
+    new URLSearchParams(window.location.search).get("store")?.trim() || "";
+  const storeSlug = storeFromState || storeFromQuery;
   const initialOtp =
     (location.state as { otpCode?: string } | null)?.otpCode || "";
   const maskedPhone = phone
@@ -87,7 +93,42 @@ function OTPVerification() {
         code: otpValue,
       });
 
+      const verifyResult = result as {
+        token?: string;
+        accessToken?: string;
+        redirectUrl?: string;
+        fallbackUrl?: string;
+      };
       const ok = persistAuth(result);
+      const token = verifyResult?.token || verifyResult?.accessToken || "";
+      const fallbackUrl =
+        verifyResult?.fallbackUrl || "https://mel-iq.vercel.app/";
+      const verifyRedirectUrl = verifyResult?.redirectUrl;
+
+      if (verifyRedirectUrl) {
+        window.location.assign(verifyRedirectUrl);
+        return;
+      }
+
+      if (token && storeSlug) {
+        try {
+          const validated = await validateUserMutation.mutateAsync({
+            store: storeSlug,
+            token,
+          });
+          const redirectUrl = (validated as { redirectUrl?: string })?.redirectUrl;
+          if (redirectUrl) {
+            window.location.assign(redirectUrl);
+            return;
+          }
+          window.location.assign(fallbackUrl);
+          return;
+        } catch {
+          window.location.assign(fallbackUrl);
+          return;
+        }
+      }
+
       if (!ok) {
         toast.warning(
           "تم التحقق لكن لم يُرجع التوكن. حاول تسجيل الدخول مرة أخرى إن لزم.",
