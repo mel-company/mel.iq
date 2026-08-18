@@ -63,4 +63,14 @@ export const authAPI = {
     );
     return data;
   },
+
+  validateToStorefront: async (params?: { store: string }): Promise<any> => {
+    const { data } = await axiosInstance.post<any>(
+      "/store-user-auth/validate-to-storefront",
+      {
+        store: params?.store,
+      },
+    );
+    return data;
+  },
 };

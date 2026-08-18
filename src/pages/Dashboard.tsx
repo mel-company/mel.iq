@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import {
   useMe,
   useLogout,
-  useValidateUser,
+  useValidateToStorefront,
 } from "@/api/wrappers/auth.wrappers";
 import { useFetchStores } from "@/api/wrappers/store.wrappers";
 import { toast } from "sonner";
@@ -199,7 +199,7 @@ const StoreCard = ({
   subscription: Subscription | null;
   onManage: () => void;
 }) => {
-  const validateUserMutation = useValidateUser();
+  const openStoreMutation = useValidateToStorefront();
   const timeRemaining = subscription?.end_at
     ? getTimeRemaining(subscription.end_at)
     : null;
@@ -209,32 +209,38 @@ const StoreCard = ({
   const handleOpenStore = () => {
     if (!store.domain) return;
 
-    let domainOnly = store.domain
+    const domainOnly = store.domain
       .replace(/^https?:\/\//, "")
-      .replace(/\.mel\.iq$/, "")
+      .replace(/\.mel\.iq$/i, "")
       .split("/")[0];
 
-    validateUserMutation.mutate(
-      {
-        store: domainOnly,
-      },
+    // Open immediately on click so Safari treats it as a user gesture.
+    const newWindow = window.open("", "_blank");
+
+    openStoreMutation.mutate(
+      { store: domainOnly },
       {
         onSuccess: (data: any) => {
           const redirectUrl = data?.redirectUrl || data?.data?.redirectUrl;
           if (!redirectUrl) {
+            newWindow?.close();
             toast.error("تعذر فتح المتجر. حاول مرة أخرى.");
             return;
           }
-          // Safari blocks window.open after async API calls.
+          if (newWindow) {
+            newWindow.location.href = redirectUrl;
+            return;
+          }
           window.location.href = redirectUrl;
         },
         onError: (error: any) => {
+          newWindow?.close();
           const errorMessage =
             error?.response?.data?.message ||
             error?.message ||
-            "حدث خطأ في إرسال الدومين";
+            "حدث خطأ في فتح المتجر";
           toast.error(errorMessage);
-          console.error("Error sending domain:", error);
+          console.error("Error opening store:", error);
         },
       },
     );
@@ -284,11 +290,11 @@ const StoreCard = ({
         {store.domain && (
           <button
             onClick={handleOpenStore}
-            disabled={validateUserMutation.isPending}
+            disabled={openStoreMutation.isPending}
             className="flex-1 bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ExternalLink className="w-4 h-4" />
-            {validateUserMutation.isPending ? "جاري..." : "فتح"}
+            {openStoreMutation.isPending ? "جاري..." : "فتح"}
           </button>
         )}
       </div>

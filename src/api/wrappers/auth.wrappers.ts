@@ -83,3 +83,9 @@ export const useValidateUser = () => {
     mutationFn: (params) => authAPI.validateUser(params),
   });
 };
+
+export const useValidateToStorefront = () => {
+  return useMutation<any, Error, { store: string }>({
+    mutationFn: (params) => authAPI.validateToStorefront(params),
+  });
+};
