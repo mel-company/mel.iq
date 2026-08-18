@@ -42,6 +42,17 @@ function OTPVerification() {
   const [resendCooldown, setResendCooldown] = useState(60);
   const [canResend, setCanResend] = useState(false);
 
+  const goToRedirectError = (params?: { token?: string; store?: string }) => {
+    navigate("/auth/redirect-error", {
+      replace: true,
+      state: {
+        errorCode: "AUTH_REDIRECT_FAILED",
+        token: params?.token || "",
+        store: params?.store || "",
+      },
+    });
+  };
+
   useEffect(() => {
     if (!phone) {
       toast.error("رقم الهاتف غير موجود. أعد تسجيل الدخول.");
@@ -107,10 +118,6 @@ function OTPVerification() {
       };
       const ok = persistAuth(result);
       const token = verifyResult?.token || verifyResult?.accessToken || "";
-      const fallbackUrl =
-        verifyResult?.fallbackUrl ||
-        verifyResult?.data?.fallbackUrl ||
-        "https://mel-iq.vercel.app/";
       const verifyRedirectUrl =
         verifyResult?.redirectUrl || verifyResult?.data?.redirectUrl;
 
@@ -140,20 +147,24 @@ function OTPVerification() {
             window.location.assign(redirectUrl);
             return;
           }
-          window.location.assign(fallbackUrl);
+          goToRedirectError({ token, store: storeSlug });
           return;
-        } catch {
-          window.location.assign(fallbackUrl);
+        } catch (validateError) {
+          console.error("AUTH REDIRECT FAILED", validateError);
+          goToRedirectError({ token, store: storeSlug });
           return;
         }
+      }
+
+      if (ok) {
+        goToRedirectError({ token, store: storeSlug });
+        return;
       }
 
       if (!ok) {
         toast.warning(
           "تم التحقق لكن لم يُرجع التوكن. حاول تسجيل الدخول مرة أخرى إن لزم.",
         );
-      } else {
-        toast.success("تم التحقق بنجاح");
       }
 
       navigate("/dashboard", { replace: true });
