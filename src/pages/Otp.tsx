@@ -97,6 +97,7 @@ function OTPVerification() {
 
     setLoading(true);
     setError("");
+    let redirected = false;
 
     try {
       const result = await verifyOtpMutation.mutateAsync({
@@ -108,65 +109,63 @@ function OTPVerification() {
         token?: string;
         accessToken?: string;
         redirectUrl?: string;
-        fallbackUrl?: string;
         data?: {
           token?: string;
           accessToken?: string;
           redirectUrl?: string;
-          fallbackUrl?: string;
         };
       };
-      const ok = persistAuth(result);
       const token = verifyResult?.token || verifyResult?.accessToken || "";
-      const verifyRedirectUrl =
+      const verifyRedirect =
         verifyResult?.redirectUrl || verifyResult?.data?.redirectUrl;
 
-      if (verifyRedirectUrl) {
-        window.location.assign(verifyRedirectUrl);
+      if (verifyRedirect) {
+        redirected = true;
+        window.location.replace(verifyRedirect);
         return;
       }
 
       if (token && storeSlug) {
         try {
-          const validated = await validateUserMutation.mutateAsync({
+          const validateData = (await validateUserMutation.mutateAsync({
             store: storeSlug,
             token,
-          });
-          const validateResponse = validated as {
+          })) as {
             redirectUrl?: string;
             data?: { redirectUrl?: string };
           };
           const redirectUrl =
-            validateResponse?.redirectUrl ||
-            validateResponse?.data?.redirectUrl;
-          // Temporary debugging: remove after confirming production behavior.
-          console.log("VALIDATE RESPONSE:", validateResponse);
-          console.log("VALIDATE DATA:", validateResponse?.data);
-          console.log("REDIRECT URL:", redirectUrl);
-          if (redirectUrl) {
-            window.location.assign(redirectUrl);
+            validateData?.redirectUrl || validateData?.data?.redirectUrl;
+
+          console.log("[AUTH] validate success");
+          console.log("[AUTH] redirectUrl:", Boolean(redirectUrl));
+
+          if (!redirectUrl) {
+            persistAuth(result);
+            navigate("/auth/redirect-error", { replace: true });
             return;
           }
-          goToRedirectError({ token, store: storeSlug });
+
+          redirected = true;
+          window.location.replace(redirectUrl);
           return;
         } catch (validateError) {
           console.error("AUTH REDIRECT FAILED", validateError);
+          persistAuth(result);
           goToRedirectError({ token, store: storeSlug });
           return;
         }
       }
 
+      const ok = persistAuth(result);
       if (ok) {
         goToRedirectError({ token, store: storeSlug });
         return;
       }
 
-      if (!ok) {
-        toast.warning(
-          "تم التحقق لكن لم يُرجع التوكن. حاول تسجيل الدخول مرة أخرى إن لزم.",
-        );
-      }
-
+      toast.warning(
+        "تم التحقق لكن لم يُرجع التوكن. حاول تسجيل الدخول مرة أخرى إن لزم.",
+      );
       navigate("/dashboard", { replace: true });
     } catch (err: unknown) {
       setError(
@@ -177,7 +176,7 @@ function OTPVerification() {
       );
       setTimeout(() => setOtp(""), 300);
     } finally {
-      setLoading(false);
+      if (!redirected) setLoading(false);
     }
   };
 
