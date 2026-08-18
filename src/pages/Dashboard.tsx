@@ -207,42 +207,37 @@ const StoreCard = ({
   const navigate = useNavigate();
 
   const handleOpenStore = () => {
-    if (store.domain) {
-      // استخراج الدومين فقط بدون https:// وبدون .mel.iq
-      let domainOnly = store.domain;
+    if (!store.domain) return;
 
-      // إزالة https:// أو http://
-      domainOnly = domainOnly.replace(/^https?:\/\//, "");
+    let domainOnly = store.domain
+      .replace(/^https?:\/\//, "")
+      .replace(/\.mel\.iq$/, "")
+      .split("/")[0];
 
-      // إزالة .mel.iq من النهاية
-      domainOnly = domainOnly.replace(/\.mel\.iq$/, "");
-
-      // إزالة أي مسار إضافي
-      domainOnly = domainOnly.split("/")[0];
-
-      validateUserMutation.mutate(
-        {
-          store: domainOnly,
+    validateUserMutation.mutate(
+      {
+        store: domainOnly,
+      },
+      {
+        onSuccess: (data: any) => {
+          const redirectUrl = data?.redirectUrl || data?.data?.redirectUrl;
+          if (!redirectUrl) {
+            toast.error("تعذر فتح المتجر. حاول مرة أخرى.");
+            return;
+          }
+          // Safari blocks window.open after async API calls.
+          window.location.href = redirectUrl;
         },
-        {
-          onSuccess: (data: any) => {
-            console.log(data);
-            // toast.success("تم إرسال الدومين بنجاح");
-            if (data.redirectUrl) {
-              window.open(data.redirectUrl, "_blank", "noopener,noreferrer");
-            }
-          },
-          onError: (error: any) => {
-            const errorMessage =
-              error?.response?.data?.message ||
-              error?.message ||
-              "حدث خطأ في إرسال الدومين";
-            toast.error(errorMessage);
-            console.error("Error sending domain:", error);
-          },
+        onError: (error: any) => {
+          const errorMessage =
+            error?.response?.data?.message ||
+            error?.message ||
+            "حدث خطأ في إرسال الدومين";
+          toast.error(errorMessage);
+          console.error("Error sending domain:", error);
         },
-      );
-    }
+      },
+    );
   };
 
   return (
