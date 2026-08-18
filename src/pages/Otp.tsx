@@ -15,6 +15,20 @@ import {
   showDevOtpToast,
 } from "@/utils/otp";
 
+const AUTH_DEBUG_KEY = "mel-auth-debug";
+
+function redactUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.searchParams.has("token")) {
+      parsed.searchParams.set("token", "***");
+    }
+    return parsed.toString();
+  } catch {
+    return url.replace(/token=[^&]+/i, "token=***");
+  }
+}
+
 function OTPVerification() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -41,7 +55,29 @@ function OTPVerification() {
   const [error, setError] = useState("");
   const [resendCooldown, setResendCooldown] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>(() => {
+    try {
+      const raw = sessionStorage.getItem(AUTH_DEBUG_KEY);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const isBusy = isVerifyingPending || isValidatingUser;
+
+  const logAuth = (message: string) => {
+    const line = `${new Date().toLocaleTimeString()} ${message}`;
+    console.log(message);
+    setDebugLogs((prev) => {
+      const next = [...prev, line].slice(-20);
+      try {
+        sessionStorage.setItem(AUTH_DEBUG_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   const goToRedirectError = (params?: { token?: string; store?: string }) => {
     navigate("/auth/redirect-error", {
@@ -115,12 +151,17 @@ function OTPVerification() {
           const verifyRedirect =
             verifyData?.redirectUrl || verifyData?.data?.redirectUrl;
 
+          logAuth("[AUTH] verify success");
+          logAuth(`[AUTH] verify redirect exists: ${!!verifyRedirect}`);
+
           if (verifyRedirect) {
+            logAuth(`[AUTH] redirect URL: ${redactUrl(verifyRedirect)}`);
             window.location.href = verifyRedirect;
             return;
           }
 
           if (token && storeSlug) {
+            logAuth(`[AUTH] calling validate-user store=${storeSlug}`);
             validateUser(
               { store: storeSlug, token },
               {
@@ -129,8 +170,8 @@ function OTPVerification() {
                     validateData?.redirectUrl ||
                     validateData?.data?.redirectUrl;
 
-                  console.log("[AUTH] validate-user success");
-                  console.log("[AUTH] redirect exists:", !!redirectUrl);
+                  logAuth("[AUTH] validate-user success");
+                  logAuth(`[AUTH] redirect exists: ${!!redirectUrl}`);
 
                   if (!redirectUrl) {
                     persistAuth(verifyData);
@@ -138,10 +179,11 @@ function OTPVerification() {
                     return;
                   }
 
-                  // Safari-safe navigation
+                  logAuth(`[AUTH] redirect URL: ${redactUrl(redirectUrl)}`);
                   window.location.href = redirectUrl;
                 },
                 onError: (validateError) => {
+                  logAuth("[AUTH] validate-user failed");
                   console.error("AUTH REDIRECT FAILED", validateError);
                   persistAuth(verifyData);
                   goToRedirectError({ token, store: storeSlug });
@@ -153,6 +195,7 @@ function OTPVerification() {
 
           persistAuth(verifyData);
           if (token) {
+            logAuth("[AUTH] no store slug — redirect error");
             goToRedirectError({ token, store: storeSlug });
             return;
           }
@@ -358,6 +401,30 @@ function OTPVerification() {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="fixed bottom-3 left-3 right-3 z-50 rounded-xl border border-amber-400 bg-black/90 text-lime-300 p-3 text-[11px] leading-5 shadow-2xl">
+        <div className="flex items-center justify-between gap-2 mb-2 text-amber-200">
+          <span>Debug Console (مؤقت)</span>
+          <button
+            type="button"
+            className="text-white/80 underline"
+            onClick={() => {
+              setDebugLogs([]);
+              sessionStorage.removeItem(AUTH_DEBUG_KEY);
+            }}
+          >
+            مسح
+          </button>
+        </div>
+        <div
+          dir="ltr"
+          className="max-h-36 overflow-y-auto font-mono whitespace-pre-wrap break-all"
+        >
+          {debugLogs.length
+            ? debugLogs.join("\n")
+            : "انتظر التحقق… ستظهر هنا رسائل [AUTH]"}
         </div>
       </div>
     </div>
