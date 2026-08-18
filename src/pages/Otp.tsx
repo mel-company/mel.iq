@@ -18,9 +18,10 @@ import {
 function OTPVerification() {
   const location = useLocation();
   const navigate = useNavigate();
-  const verifyOtpMutation = useVerify();
+  const { mutate: verify, isPending: isVerifyingPending } = useVerify();
   const resendOtpMutation = useLogin();
-  const validateUserMutation = useValidateUser();
+  const { mutate: validateUser, isPending: isValidatingUser } =
+    useValidateUser();
   const { login } = useAuth();
 
   const phone = (location.state as { phone?: string } | null)?.phone || "";
@@ -38,9 +39,9 @@ function OTPVerification() {
   const [otp, setOtp] = useState(initialOtp);
   const [devOtp, setDevOtp] = useState(initialOtp);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const isBusy = isVerifyingPending || isValidatingUser;
 
   const goToRedirectError = (params?: { token?: string; store?: string }) => {
     navigate("/auth/redirect-error", {
@@ -92,100 +93,86 @@ function OTPVerification() {
     return Boolean(token);
   };
 
-  const autoSubmit = async (otpValue: string) => {
-    if (loading || !phone) return;
-
-    setLoading(true);
-    setError("");
-    let redirected = false;
-
-    try {
-      const result = await verifyOtpMutation.mutateAsync({
-        phone,
-        code: otpValue,
-      });
-
-      const verifyResult = result as {
-        token?: string;
-        accessToken?: string;
-        redirectUrl?: string;
-        data?: {
-          token?: string;
-          accessToken?: string;
-          redirectUrl?: string;
-        };
-      };
-      const token = verifyResult?.token || verifyResult?.accessToken || "";
-      const verifyRedirect =
-        verifyResult?.redirectUrl || verifyResult?.data?.redirectUrl;
-
-      if (verifyRedirect) {
-        redirected = true;
-        window.location.replace(verifyRedirect);
-        return;
-      }
-
-      if (token && storeSlug) {
-        try {
-          const validateData = (await validateUserMutation.mutateAsync({
-            store: storeSlug,
-            token,
-          })) as {
-            redirectUrl?: string;
-            data?: { redirectUrl?: string };
-          };
-          const redirectUrl =
-            validateData?.redirectUrl || validateData?.data?.redirectUrl;
-
-          console.log("[AUTH] validate success");
-          console.log("[AUTH] redirectUrl:", Boolean(redirectUrl));
-
-          if (!redirectUrl) {
-            persistAuth(result);
-            navigate("/auth/redirect-error", { replace: true });
-            return;
-          }
-
-          redirected = true;
-          window.location.replace(redirectUrl);
-          return;
-        } catch (validateError) {
-          console.error("AUTH REDIRECT FAILED", validateError);
-          persistAuth(result);
-          goToRedirectError({ token, store: storeSlug });
-          return;
-        }
-      }
-
-      const ok = persistAuth(result);
-      if (ok) {
-        goToRedirectError({ token, store: storeSlug });
-        return;
-      }
-
-      toast.warning(
-        "تم التحقق لكن لم يُرجع التوكن. حاول تسجيل الدخول مرة أخرى إن لزم.",
-      );
-      navigate("/dashboard", { replace: true });
-    } catch (err: unknown) {
-      setError(
-        getApiErrorMessage(
-          err,
-          "رمز التحقق غير صحيح. يرجى المحاولة مرة أخرى.",
-        ),
-      );
-      setTimeout(() => setOtp(""), 300);
-    } finally {
-      if (!redirected) setLoading(false);
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (otp.length !== 4) {
+  const submitOtp = (otpValue: string) => {
+    if (isBusy || !phone) return;
+    if (otpValue.length !== 4) {
       setError("يرجى إدخال جميع الأرقام");
       return;
     }
-    await autoSubmit(otp);
+
+    setError("");
+
+    verify(
+      { phone, code: otpValue },
+      {
+        onSuccess: (verifyData: any) => {
+          const token =
+            verifyData?.token ||
+            verifyData?.accessToken ||
+            verifyData?.data?.token ||
+            verifyData?.data?.accessToken ||
+            "";
+          const verifyRedirect =
+            verifyData?.redirectUrl || verifyData?.data?.redirectUrl;
+
+          if (verifyRedirect) {
+            window.location.href = verifyRedirect;
+            return;
+          }
+
+          if (token && storeSlug) {
+            validateUser(
+              { store: storeSlug, token },
+              {
+                onSuccess: (validateData: any) => {
+                  const redirectUrl =
+                    validateData?.redirectUrl ||
+                    validateData?.data?.redirectUrl;
+
+                  console.log("[AUTH] validate-user success");
+                  console.log("[AUTH] redirect exists:", !!redirectUrl);
+
+                  if (!redirectUrl) {
+                    persistAuth(verifyData);
+                    navigate("/auth/redirect-error", { replace: true });
+                    return;
+                  }
+
+                  // Safari-safe navigation
+                  window.location.href = redirectUrl;
+                },
+                onError: (validateError) => {
+                  console.error("AUTH REDIRECT FAILED", validateError);
+                  persistAuth(verifyData);
+                  goToRedirectError({ token, store: storeSlug });
+                },
+              },
+            );
+            return;
+          }
+
+          persistAuth(verifyData);
+          if (token) {
+            goToRedirectError({ token, store: storeSlug });
+            return;
+          }
+
+          toast.warning(
+            "تم التحقق لكن لم يُرجع التوكن. حاول تسجيل الدخول مرة أخرى إن لزم.",
+          );
+          navigate("/dashboard", { replace: true });
+        },
+        onError: (err) => {
+          setError(
+            getApiErrorMessage(
+              err,
+              "رمز التحقق غير صحيح. يرجى المحاولة مرة أخرى.",
+            ),
+          );
+          setTimeout(() => setOtp(""), 300);
+        },
+      },
+    );
   };
 
   const handleResendOtp = () => {
@@ -249,7 +236,7 @@ function OTPVerification() {
                   type="button"
                   onClick={() => {
                     setOtp(devOtp);
-                    void autoSubmit(devOtp);
+                    void submitOtp(devOtp);
                   }}
                   className="mt-3 text-sm font-medium text-violet-600 dark:text-violet-400 hover:underline"
                 >
@@ -277,7 +264,7 @@ function OTPVerification() {
               className="space-y-6"
               onSubmit={(e) => {
                 e.preventDefault();
-                void handleSubmit();
+                void submitOtp(otp);
               }}
             >
               <div className="space-y-4">
@@ -323,7 +310,7 @@ function OTPVerification() {
                 <button
                   type="button"
                   onClick={handleResendOtp}
-                  disabled={!canResend || loading}
+                  disabled={!canResend || isBusy}
                   className={`text-sm font-medium transition-colors ${
                     canResend
                       ? "text-violet-600 dark:text-violet-400 hover:text-violet-700"
@@ -338,15 +325,15 @@ function OTPVerification() {
 
               <button
                 type="submit"
-                disabled={loading || otp.length !== 4}
+                disabled={isBusy || otp.length !== 4}
                 className={`w-full py-4 px-4 rounded-xl font-medium text-white transition-all ${
-                  loading || otp.length !== 4
+                  isBusy || otp.length !== 4
                     ? "bg-gray-300 dark:bg-gray-700 cursor-not-allowed"
                     : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg"
                 }`}
               >
                 <div className="flex items-center justify-center gap-2">
-                  {loading ? (
+                  {isBusy ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       <span>جاري التحقق...</span>
