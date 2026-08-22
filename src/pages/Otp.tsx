@@ -108,12 +108,25 @@ function OTPVerification() {
           const verifyRedirect =
             verifyData?.redirectUrl || verifyData?.data?.redirectUrl;
 
+          // احفظ الجلسة دائماً بعد verify الناجح
+          persistAuth(verifyData);
+
+          if (!token) {
+            toast.warning(
+              "تم التحقق لكن لم يُرجع التوكن. حاول تسجيل الدخول مرة أخرى إن لزم.",
+            );
+            navigate("/dashboard", { replace: true });
+            return;
+          }
+
+          // إذا الـ verify رجّع رابط مباشر للمتجر/الداشبورد
           if (verifyRedirect) {
             window.location.href = verifyRedirect;
             return;
           }
 
-          if (token && storeSlug) {
+          // فتح متجر محدد: نحتاج validate-user ثم redirect
+          if (storeSlug) {
             validateUser(
               { store: storeSlug, token },
               {
@@ -123,15 +136,13 @@ function OTPVerification() {
                     validateData?.data?.redirectUrl;
 
                   if (!redirectUrl) {
-                    persistAuth(verifyData);
-                    navigate("/auth/redirect-error", { replace: true });
+                    goToRedirectError({ token, store: storeSlug });
                     return;
                   }
 
                   window.location.href = redirectUrl;
                 },
                 onError: () => {
-                  persistAuth(verifyData);
                   goToRedirectError({ token, store: storeSlug });
                 },
               },
@@ -139,15 +150,8 @@ function OTPVerification() {
             return;
           }
 
-          persistAuth(verifyData);
-          if (token) {
-            goToRedirectError({ token, store: storeSlug });
-            return;
-          }
-
-          toast.warning(
-            "تم التحقق لكن لم يُرجع التوكن. حاول تسجيل الدخول مرة أخرى إن لزم.",
-          );
+          // تسجيل دخول عادي بدون store → لوحة mel.iq
+          toast.success("تم التحقق بنجاح");
           navigate("/dashboard", { replace: true });
         },
         onError: (err) => {
