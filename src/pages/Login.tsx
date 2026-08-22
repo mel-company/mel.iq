@@ -1,4 +1,4 @@
-import { ChangeEvent, useState, useEffect } from "react";
+import { ChangeEvent, FormEvent, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import iqFlag from "@/assets/icon/iq.png";
@@ -44,7 +44,10 @@ function Login() {
 
   const { mutate: login, isPending } = useLogin();
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (loading || !isValid) return;
+
     setError("");
     setLoading(true);
 
@@ -81,6 +84,7 @@ function Login() {
       );
     } catch {
       setError("حدث خطأ أثناء إرسال رمز التحقق. يرجى المحاولة مرة أخرى.");
+      setLoading(false);
     }
   };
 
@@ -135,7 +139,12 @@ function Login() {
               </p>
             </div>
 
-            <form className="space-y-6">
+            <form
+              className="space-y-6"
+              onSubmit={(e) => {
+                void handleSubmit(e);
+              }}
+            >
               {/* Phone Input */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -239,13 +248,7 @@ function Login() {
 
               {/* Submit Button */}
               <button
-                type="button"
-                onClick={handleSubmit}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && isValid && !loading) {
-                    handleSubmit();
-                  }
-                }}
+                type="submit"
                 disabled={loading || !isValid}
                 className={`w-full py-4 px-4 rounded-xl font-medium text-white transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] ${
                   loading || !isValid
