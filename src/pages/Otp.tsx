@@ -9,31 +9,13 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { ArrowLeftIcon } from "lucide-react";
-import {
-  extractDevOtp,
-  getApiErrorMessage,
-  showDevOtpToast,
-} from "@/utils/otp";
-
-const AUTH_DEBUG_KEY = "mel-auth-debug";
-
-function redactUrl(url: string) {
-  try {
-    const parsed = new URL(url);
-    if (parsed.searchParams.has("token")) {
-      parsed.searchParams.set("token", "***");
-    }
-    return parsed.toString();
-  } catch {
-    return url.replace(/token=[^&]+/i, "token=***");
-  }
-}
+import { getApiErrorMessage } from "@/utils/otp";
 
 function OTPVerification() {
   const location = useLocation();
   const navigate = useNavigate();
   const { mutate: verify, isPending: isVerifyingPending } = useVerify();
-  const resendOtpMutation = useLogin();
+  const { mutate: resendOtp } = useLogin();
   const { mutate: validateUser, isPending: isValidatingUser } =
     useValidateUser();
   const { login } = useAuth();
@@ -44,40 +26,15 @@ function OTPVerification() {
   const storeFromQuery =
     new URLSearchParams(window.location.search).get("store")?.trim() || "";
   const storeSlug = storeFromState || storeFromQuery;
-  const initialOtp =
-    (location.state as { otpCode?: string } | null)?.otpCode || "";
   const maskedPhone = phone
     ? phone.replace(/(^\+?964)/, "+964 ")
     : "—";
 
-  const [otp, setOtp] = useState(initialOtp);
-  const [devOtp, setDevOtp] = useState(initialOtp);
+  const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [resendCooldown, setResendCooldown] = useState(60);
   const [canResend, setCanResend] = useState(false);
-  const [debugLogs, setDebugLogs] = useState<string[]>(() => {
-    try {
-      const raw = sessionStorage.getItem(AUTH_DEBUG_KEY);
-      return raw ? (JSON.parse(raw) as string[]) : [];
-    } catch {
-      return [];
-    }
-  });
   const isBusy = isVerifyingPending || isValidatingUser;
-
-  const logAuth = (message: string) => {
-    const line = `${new Date().toLocaleTimeString()} ${message}`;
-    console.log(message);
-    setDebugLogs((prev) => {
-      const next = [...prev, line].slice(-20);
-      try {
-        sessionStorage.setItem(AUTH_DEBUG_KEY, JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
 
   const goToRedirectError = (params?: { token?: string; store?: string }) => {
     navigate("/auth/redirect-error", {
@@ -151,17 +108,12 @@ function OTPVerification() {
           const verifyRedirect =
             verifyData?.redirectUrl || verifyData?.data?.redirectUrl;
 
-          logAuth("[AUTH] verify success");
-          logAuth(`[AUTH] verify redirect exists: ${!!verifyRedirect}`);
-
           if (verifyRedirect) {
-            logAuth(`[AUTH] redirect URL: ${redactUrl(verifyRedirect)}`);
             window.location.href = verifyRedirect;
             return;
           }
 
           if (token && storeSlug) {
-            logAuth(`[AUTH] calling validate-user store=${storeSlug}`);
             validateUser(
               { store: storeSlug, token },
               {
@@ -170,21 +122,15 @@ function OTPVerification() {
                     validateData?.redirectUrl ||
                     validateData?.data?.redirectUrl;
 
-                  logAuth("[AUTH] validate-user success");
-                  logAuth(`[AUTH] redirect exists: ${!!redirectUrl}`);
-
                   if (!redirectUrl) {
                     persistAuth(verifyData);
                     navigate("/auth/redirect-error", { replace: true });
                     return;
                   }
 
-                  logAuth(`[AUTH] redirect URL: ${redactUrl(redirectUrl)}`);
                   window.location.href = redirectUrl;
                 },
-                onError: (validateError) => {
-                  logAuth("[AUTH] validate-user failed");
-                  console.error("AUTH REDIRECT FAILED", validateError);
+                onError: () => {
                   persistAuth(verifyData);
                   goToRedirectError({ token, store: storeSlug });
                 },
@@ -195,7 +141,6 @@ function OTPVerification() {
 
           persistAuth(verifyData);
           if (token) {
-            logAuth("[AUTH] no store slug — redirect error");
             goToRedirectError({ token, store: storeSlug });
             return;
           }
@@ -225,16 +170,10 @@ function OTPVerification() {
     setCanResend(false);
     setError("");
 
-    resendOtpMutation.mutate(
+    resendOtp(
       { phone },
       {
         onSuccess: (data) => {
-          const code = extractDevOtp(data);
-          if (code) {
-            setDevOtp(code);
-            setOtp(code);
-            showDevOtpToast(code);
-          }
           toast.success(data?.message || "تم إرسال رمز جديد");
         },
         onError: (err) => {
@@ -264,30 +203,6 @@ function OTPVerification() {
           </div>
 
           <div className="p-8 space-y-6">
-            {devOtp && (
-              <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700 p-4 text-center">
-                <p className="text-xs text-amber-700 dark:text-amber-300 mb-1">
-                  رمز الاختبار (يظهر لأن الواتساب قد لا يصل أثناء التطوير)
-                </p>
-                <p
-                  dir="ltr"
-                  className="text-3xl font-bold tracking-[0.35em] text-amber-800 dark:text-amber-200"
-                >
-                  {devOtp}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOtp(devOtp);
-                    void submitOtp(devOtp);
-                  }}
-                  className="mt-3 text-sm font-medium text-violet-600 dark:text-violet-400 hover:underline"
-                >
-                  استخدم هذا الرمز تلقائياً
-                </button>
-              </div>
-            )}
-
             <div className="space-y-1">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 أدخل رمز التحقق
@@ -307,7 +222,7 @@ function OTPVerification() {
               className="space-y-6"
               onSubmit={(e) => {
                 e.preventDefault();
-                void submitOtp(otp);
+                submitOtp(otp);
               }}
             >
               <div className="space-y-4">
@@ -401,30 +316,6 @@ function OTPVerification() {
               </button>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="fixed bottom-3 left-3 right-3 z-50 rounded-xl border border-amber-400 bg-black/90 text-lime-300 p-3 text-[11px] leading-5 shadow-2xl">
-        <div className="flex items-center justify-between gap-2 mb-2 text-amber-200">
-          <span>Debug Console (مؤقت)</span>
-          <button
-            type="button"
-            className="text-white/80 underline"
-            onClick={() => {
-              setDebugLogs([]);
-              sessionStorage.removeItem(AUTH_DEBUG_KEY);
-            }}
-          >
-            مسح
-          </button>
-        </div>
-        <div
-          dir="ltr"
-          className="max-h-36 overflow-y-auto font-mono whitespace-pre-wrap break-all"
-        >
-          {debugLogs.length
-            ? debugLogs.join("\n")
-            : "انتظر التحقق… ستظهر هنا رسائل [AUTH]"}
         </div>
       </div>
     </div>

@@ -5,11 +5,7 @@ import iqFlag from "@/assets/icon/iq.png";
 import { ArrowLeftIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useLogin } from "@/api/wrappers/auth.wrappers";
-import {
-  extractDevOtp,
-  getApiErrorMessage,
-  showDevOtpToast,
-} from "@/utils/otp";
+import { getApiErrorMessage } from "@/utils/otp";
 
 type LoginFormData = {
   phone: string;
@@ -65,15 +61,12 @@ function Login() {
         { phone: parsed.number },
         {
           onSuccess: (data) => {
-            const otpCode = extractDevOtp(data);
-            showDevOtpToast(otpCode);
             if (data?.message) toast.success(data.message);
             navigate("/otp", {
-              state: { phone: parsed.number, otpCode },
+              state: { phone: parsed.number },
             });
           },
           onError: (err) => {
-            console.error("Login error:", err);
             setError(
               getApiErrorMessage(
                 err,
@@ -86,8 +79,7 @@ function Login() {
           },
         },
       );
-    } catch (err) {
-      console.error("Login error:", err);
+    } catch {
       setError("حدث خطأ أثناء إرسال رمز التحقق. يرجى المحاولة مرة أخرى.");
     }
   };

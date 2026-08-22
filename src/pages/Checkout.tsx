@@ -17,9 +17,7 @@ import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 import { toast } from "sonner";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import {
-  extractDevOtp,
   getApiErrorMessage,
-  showDevOtpToast,
   isPhoneTakenError,
 } from "@/utils/otp";
 
@@ -112,7 +110,6 @@ function Checkout() {
   });
 
   const [otpSent, setOtpSent] = useState(false);
-  const [devOtp, setDevOtp] = useState("");
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [domainChecked, setDomainChecked] = useState(false);
@@ -142,14 +139,7 @@ function Checkout() {
           { phone },
           {
             onSuccess: (data) => {
-              const code = extractDevOtp(data);
-              if (code) {
-                setDevOtp(code);
-                setFormData((prev) => ({ ...prev, phone, otp: code }));
-                showDevOtpToast(code);
-              } else {
-                setFormData((prev) => ({ ...prev, phone }));
-              }
+              setFormData((prev) => ({ ...prev, phone }));
               setOtpSent(true);
             },
             onError: (error) => {
@@ -245,15 +235,10 @@ function Checkout() {
   };
 
   const proceedToOtpStep = (phone: string, data?: unknown) => {
-    const code = extractDevOtp(data);
-    if (code) {
-      setDevOtp(code);
-      showDevOtpToast(code);
-    }
     setFormData((prev) => ({
       ...prev,
       phone,
-      otp: code || prev.otp || "",
+      otp: "",
     }));
     setOtpSent(true);
     setCurrentStep(2);
@@ -627,12 +612,7 @@ storeFormData.append("planId", formData.plan.id);
       );
 
     const onResendSuccess = (data: unknown) => {
-      const code = extractDevOtp(data);
-      if (code) {
-        setDevOtp(code);
-        setFormData((prev) => ({ ...prev, otp: code }));
-        showDevOtpToast(code);
-      }
+      setFormData((prev) => ({ ...prev, otp: "" }));
       toast.success("تم إرسال رمز OTP جديد إلى رقمك");
     };
 
@@ -717,19 +697,8 @@ storeFormData.append("planId", formData.plan.id);
                         sendOtpMutation(
                           { phone },
                           {
-                            onSuccess: (data) => {
-                              const code = extractDevOtp(data);
-                              if (code) {
-                                setDevOtp(code);
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  phone,
-                                  otp: code,
-                                }));
-                                showDevOtpToast(code);
-                              } else {
-                                setFormData((prev) => ({ ...prev, phone }));
-                              }
+                            onSuccess: () => {
+                              setFormData((prev) => ({ ...prev, phone, otp: "" }));
                               setOtpSent(true);
                               setCurrentStep(2);
                             },
@@ -740,7 +709,6 @@ storeFormData.append("planId", formData.plan.id);
                                   "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
                                 ),
                               );
-                              console.error("Error sending OTP:", error);
                             },
                           },
                         );
@@ -831,29 +799,6 @@ storeFormData.append("planId", formData.plan.id);
                   </span>
                 ) : null}
               </p>
-
-              {devOtp && (
-                <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700 p-4 text-center">
-                  <p className="text-xs text-amber-700 dark:text-amber-300 mb-1">
-                    رمز الاختبار (للتطوير)
-                  </p>
-                  <p
-                    dir="ltr"
-                    className="text-3xl font-bold tracking-[0.35em] text-amber-800 dark:text-amber-200"
-                  >
-                    {devOtp}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFormData((prev) => ({ ...prev, otp: devOtp }))
-                    }
-                    className="mt-2 text-sm text-violet-600 dark:text-violet-400 hover:underline"
-                  >
-                    املأ الرمز تلقائياً
-                  </button>
-                </div>
-              )}
 
               <form onSubmit={handleOTPVerify} className="max-w-sm mx-auto space-y-6">
                 <div>
