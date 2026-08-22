@@ -99,6 +99,16 @@ const formatDate = (dateString?: string): string => {
   }
 };
 
+const R2_PUBLIC_BASE =
+  "https://pub-f8707810144b47a6978976f94751bbc8.r2.dev";
+
+/** Backend often returns a full signed/public URL; sometimes only the object key. */
+const resolveStoreLogoUrl = (logo?: string | null): string | null => {
+  if (!logo || logo === "placeholder") return null;
+  if (logo.startsWith("http://") || logo.startsWith("https://")) return logo;
+  return `${R2_PUBLIC_BASE}/${logo.replace(/^\//, "")}`;
+};
+
 const STATUS_CONFIG = {
   ACTIVE: {
     text: "نشط",
@@ -246,20 +256,19 @@ const StoreCard = ({
     );
   };
 
+  const logoUrl = resolveStoreLogoUrl(store.logo);
+
   return (
     <div className="bg-white dark:bg-black rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6 hover:shadow-xl transition-shadow">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xl font-bold text-black dark:text-white truncate">
           {store.name}
         </h3>
-        {store.logo && (
+        {logoUrl && (
           <img
-            src={
-              "https://pub-f8707810144b47a6978976f94751bbc8.r2.dev/" +
-              store.logo
-            }
+            src={logoUrl}
             alt={store.name}
-            className="w-10 h-10 rounded-full"
+            className="w-10 h-10 rounded-full object-cover"
           />
         )}
         <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-gray-100 dark:bg-gray-900 text-black dark:text-white border-gray-200 dark:border-gray-800 shrink-0">
