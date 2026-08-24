@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { useLogin, useVerify } from "@/api/wrappers/auth.wrappers";
+import { useLogin, useValidateUser, useVerify } from "@/api/wrappers/auth.wrappers";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   InputOTP,
@@ -9,32 +9,43 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { ArrowLeftIcon } from "lucide-react";
-import {
-  extractDevOtp,
-  getApiErrorMessage,
-  showDevOtpToast,
-} from "@/utils/otp";
+import { getApiErrorMessage } from "@/utils/otp";
 
 function OTPVerification() {
   const location = useLocation();
   const navigate = useNavigate();
-  const verifyOtpMutation = useVerify();
-  const resendOtpMutation = useLogin();
+  const { mutate: verify, isPending: isVerifyingPending } = useVerify();
+  const { mutate: resendOtp } = useLogin();
+  const { mutate: validateUser, isPending: isValidatingUser } =
+    useValidateUser();
   const { login } = useAuth();
 
   const phone = (location.state as { phone?: string } | null)?.phone || "";
-  const initialOtp =
-    (location.state as { otpCode?: string } | null)?.otpCode || "";
+  const storeFromState =
+    (location.state as { store?: string } | null)?.store?.trim() || "";
+  const storeFromQuery =
+    new URLSearchParams(window.location.search).get("store")?.trim() || "";
+  const storeSlug = storeFromState || storeFromQuery;
   const maskedPhone = phone
     ? phone.replace(/(^\+?964)/, "+964 ")
     : "—";
 
-  const [otp, setOtp] = useState(initialOtp);
-  const [devOtp, setDevOtp] = useState(initialOtp);
+  const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const isBusy = isVerifyingPending || isValidatingUser;
+
+  const goToRedirectError = (params?: { token?: string; store?: string }) => {
+    navigate("/auth/redirect-error", {
+      replace: true,
+      state: {
+        errorCode: "AUTH_REDIRECT_FAILED",
+        token: params?.token || "",
+        store: params?.store || "",
+      },
+    });
+  };
 
   useEffect(() => {
     if (!phone) {
@@ -75,47 +86,85 @@ function OTPVerification() {
     return Boolean(token);
   };
 
-  const autoSubmit = async (otpValue: string) => {
-    if (loading || !phone) return;
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const result = await verifyOtpMutation.mutateAsync({
-        phone,
-        code: otpValue,
-      });
-
-      const ok = persistAuth(result);
-      if (!ok) {
-        toast.warning(
-          "تم التحقق لكن لم يُرجع التوكن. حاول تسجيل الدخول مرة أخرى إن لزم.",
-        );
-      } else {
-        toast.success("تم التحقق بنجاح");
-      }
-
-      navigate("/dashboard", { replace: true });
-    } catch (err: unknown) {
-      setError(
-        getApiErrorMessage(
-          err,
-          "رمز التحقق غير صحيح. يرجى المحاولة مرة أخرى.",
-        ),
-      );
-      setTimeout(() => setOtp(""), 300);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (otp.length !== 4) {
+  const submitOtp = (otpValue: string) => {
+    if (isBusy || !phone) return;
+    if (otpValue.length !== 4) {
       setError("يرجى إدخال جميع الأرقام");
       return;
     }
-    await autoSubmit(otp);
+
+    setError("");
+
+    verify(
+      { phone, code: otpValue },
+      {
+        onSuccess: (verifyData: any) => {
+          const token =
+            verifyData?.token ||
+            verifyData?.accessToken ||
+            verifyData?.data?.token ||
+            verifyData?.data?.accessToken ||
+            "";
+          const verifyRedirect =
+            verifyData?.redirectUrl || verifyData?.data?.redirectUrl;
+
+          // احفظ الجلسة دائماً بعد verify الناجح
+          persistAuth(verifyData);
+
+          if (!token) {
+            toast.warning(
+              "تم التحقق لكن لم يُرجع التوكن. حاول تسجيل الدخول مرة أخرى إن لزم.",
+            );
+            navigate("/dashboard", { replace: true });
+            return;
+          }
+
+          // إذا الـ verify رجّع رابط مباشر للمتجر/الداشبورد
+          if (verifyRedirect) {
+            window.location.href = verifyRedirect;
+            return;
+          }
+
+          // فتح متجر محدد: نحتاج validate-user ثم redirect
+          if (storeSlug) {
+            validateUser(
+              { store: storeSlug, token },
+              {
+                onSuccess: (validateData: any) => {
+                  const redirectUrl =
+                    validateData?.redirectUrl ||
+                    validateData?.data?.redirectUrl;
+
+                  if (!redirectUrl) {
+                    goToRedirectError({ token, store: storeSlug });
+                    return;
+                  }
+
+                  window.location.href = redirectUrl;
+                },
+                onError: () => {
+                  goToRedirectError({ token, store: storeSlug });
+                },
+              },
+            );
+            return;
+          }
+
+          // تسجيل دخول عادي بدون store → لوحة mel.iq
+          toast.success("تم التحقق بنجاح");
+          navigate("/dashboard", { replace: true });
+        },
+        onError: (err) => {
+          setError(
+            getApiErrorMessage(
+              err,
+              "رمز التحقق غير صحيح. يرجى المحاولة مرة أخرى.",
+            ),
+          );
+          setTimeout(() => setOtp(""), 300);
+        },
+      },
+    );
   };
 
   const handleResendOtp = () => {
@@ -125,16 +174,10 @@ function OTPVerification() {
     setCanResend(false);
     setError("");
 
-    resendOtpMutation.mutate(
+    resendOtp(
       { phone },
       {
         onSuccess: (data) => {
-          const code = extractDevOtp(data);
-          if (code) {
-            setDevOtp(code);
-            setOtp(code);
-            showDevOtpToast(code);
-          }
           toast.success(data?.message || "تم إرسال رمز جديد");
         },
         onError: (err) => {
@@ -164,30 +207,6 @@ function OTPVerification() {
           </div>
 
           <div className="p-8 space-y-6">
-            {devOtp && (
-              <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700 p-4 text-center">
-                <p className="text-xs text-amber-700 dark:text-amber-300 mb-1">
-                  رمز الاختبار (يظهر لأن الواتساب قد لا يصل أثناء التطوير)
-                </p>
-                <p
-                  dir="ltr"
-                  className="text-3xl font-bold tracking-[0.35em] text-amber-800 dark:text-amber-200"
-                >
-                  {devOtp}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOtp(devOtp);
-                    void autoSubmit(devOtp);
-                  }}
-                  className="mt-3 text-sm font-medium text-violet-600 dark:text-violet-400 hover:underline"
-                >
-                  استخدم هذا الرمز تلقائياً
-                </button>
-              </div>
-            )}
-
             <div className="space-y-1">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 أدخل رمز التحقق
@@ -207,7 +226,7 @@ function OTPVerification() {
               className="space-y-6"
               onSubmit={(e) => {
                 e.preventDefault();
-                void handleSubmit();
+                submitOtp(otp);
               }}
             >
               <div className="space-y-4">
@@ -253,7 +272,7 @@ function OTPVerification() {
                 <button
                   type="button"
                   onClick={handleResendOtp}
-                  disabled={!canResend || loading}
+                  disabled={!canResend || isBusy}
                   className={`text-sm font-medium transition-colors ${
                     canResend
                       ? "text-violet-600 dark:text-violet-400 hover:text-violet-700"
@@ -268,15 +287,15 @@ function OTPVerification() {
 
               <button
                 type="submit"
-                disabled={loading || otp.length !== 4}
+                disabled={isBusy || otp.length !== 4}
                 className={`w-full py-4 px-4 rounded-xl font-medium text-white transition-all ${
-                  loading || otp.length !== 4
+                  isBusy || otp.length !== 4
                     ? "bg-gray-300 dark:bg-gray-700 cursor-not-allowed"
                     : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg"
                 }`}
               >
                 <div className="flex items-center justify-center gap-2">
-                  {loading ? (
+                  {isBusy ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       <span>جاري التحقق...</span>

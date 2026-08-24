@@ -15,6 +15,7 @@ import { ReactNode } from "react";
 import OTPVerification from "./pages/Otp";
 import { Toaster } from "./components/ui/sonner";
 import NotFound from "./pages/NotFound";
+import AuthRedirectError from "./pages/AuthRedirectError";
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -53,6 +54,15 @@ function App() {
           element={
             <>
               <OTPVerification />
+            </>
+          }
+        />
+        <Route
+          path="/auth/redirect-error"
+          element={
+            <>
+              <Navbar />
+              <AuthRedirectError />
             </>
           }
         />

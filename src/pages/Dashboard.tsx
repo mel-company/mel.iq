@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import {
   useMe,
   useLogout,
-  useValidateUser,
+  useValidateToStorefront,
 } from "@/api/wrappers/auth.wrappers";
 import { useFetchStores } from "@/api/wrappers/store.wrappers";
 import { toast } from "sonner";
@@ -97,6 +97,16 @@ const formatDate = (dateString?: string): string => {
   } catch {
     return "تاريخ غير صالح";
   }
+};
+
+const R2_PUBLIC_BASE =
+  "https://pub-f8707810144b47a6978976f94751bbc8.r2.dev";
+
+/** Backend often returns a full signed/public URL; sometimes only the object key. */
+const resolveStoreLogoUrl = (logo?: string | null): string | null => {
+  if (!logo || logo === "placeholder") return null;
+  if (logo.startsWith("http://") || logo.startsWith("https://")) return logo;
+  return `${R2_PUBLIC_BASE}/${logo.replace(/^\//, "")}`;
 };
 
 const STATUS_CONFIG = {
@@ -199,7 +209,7 @@ const StoreCard = ({
   subscription: Subscription | null;
   onManage: () => void;
 }) => {
-  const validateUserMutation = useValidateUser();
+  const openStoreMutation = useValidateToStorefront();
   const timeRemaining = subscription?.end_at
     ? getTimeRemaining(subscription.end_at)
     : null;
@@ -207,43 +217,46 @@ const StoreCard = ({
   const navigate = useNavigate();
 
   const handleOpenStore = () => {
-    if (store.domain) {
-      // استخراج الدومين فقط بدون https:// وبدون .mel.iq
-      let domainOnly = store.domain;
+    if (!store.domain) return;
 
-      // إزالة https:// أو http://
-      domainOnly = domainOnly.replace(/^https?:\/\//, "");
+    const domainOnly = store.domain
+      .replace(/^https?:\/\//, "")
+      .replace(/\.mel\.iq$/i, "")
+      .split("/")[0];
 
-      // إزالة .mel.iq من النهاية
-      domainOnly = domainOnly.replace(/\.mel\.iq$/, "");
+    // Open immediately on click so Safari treats it as a user gesture.
+    const newWindow = window.open("", "_blank");
 
-      // إزالة أي مسار إضافي
-      domainOnly = domainOnly.split("/")[0];
-
-      validateUserMutation.mutate(
-        {
-          store: domainOnly,
+    openStoreMutation.mutate(
+      { store: domainOnly },
+      {
+        onSuccess: (data: any) => {
+          const redirectUrl = data?.redirectUrl || data?.data?.redirectUrl;
+          if (!redirectUrl) {
+            newWindow?.close();
+            toast.error("تعذر فتح المتجر. حاول مرة أخرى.");
+            return;
+          }
+          if (newWindow) {
+            newWindow.location.href = redirectUrl;
+            return;
+          }
+          window.location.href = redirectUrl;
         },
-        {
-          onSuccess: (data: any) => {
-            console.log(data);
-            // toast.success("تم إرسال الدومين بنجاح");
-            if (data.redirectUrl) {
-              window.open(data.redirectUrl, "_blank", "noopener,noreferrer");
-            }
-          },
-          onError: (error: any) => {
-            const errorMessage =
-              error?.response?.data?.message ||
-              error?.message ||
-              "حدث خطأ في إرسال الدومين";
-            toast.error(errorMessage);
-            console.error("Error sending domain:", error);
-          },
+        onError: (error: any) => {
+          newWindow?.close();
+          const errorMessage =
+            error?.response?.data?.message ||
+            error?.message ||
+            "حدث خطأ في فتح المتجر";
+          toast.error(errorMessage);
+          console.error("Error opening store:", error);
         },
-      );
-    }
+      },
+    );
   };
+
+  const logoUrl = resolveStoreLogoUrl(store.logo);
 
   return (
     <div className="bg-white dark:bg-black rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6 hover:shadow-xl transition-shadow">
@@ -251,14 +264,11 @@ const StoreCard = ({
         <h3 className="text-xl font-bold text-black dark:text-white truncate">
           {store.name}
         </h3>
-        {store.logo && (
+        {logoUrl && (
           <img
-            src={
-              "https://pub-f8707810144b47a6978976f94751bbc8.r2.dev/" +
-              store.logo
-            }
+            src={logoUrl}
             alt={store.name}
-            className="w-10 h-10 rounded-full"
+            className="w-10 h-10 rounded-full object-cover"
           />
         )}
         <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-gray-100 dark:bg-gray-900 text-black dark:text-white border-gray-200 dark:border-gray-800 shrink-0">
@@ -289,11 +299,11 @@ const StoreCard = ({
         {store.domain && (
           <button
             onClick={handleOpenStore}
-            disabled={validateUserMutation.isPending}
+            disabled={openStoreMutation.isPending}
             className="flex-1 bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ExternalLink className="w-4 h-4" />
-            {validateUserMutation.isPending ? "جاري..." : "فتح"}
+            {openStoreMutation.isPending ? "جاري..." : "فتح"}
           </button>
         )}
       </div>

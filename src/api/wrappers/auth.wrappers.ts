@@ -79,7 +79,13 @@ export const useLogout = () => {
  * Validate User
  */
 export const useValidateUser = () => {
+  return useMutation<any, Error, { store: string; token?: string }>({
+    mutationFn: (params) => authAPI.validateUser(params),
+  });
+};
+
+export const useValidateToStorefront = () => {
   return useMutation<any, Error, { store: string }>({
-    mutationFn: ({ store }) => authAPI.validateUser(store),
+    mutationFn: (params) => authAPI.validateToStorefront(params),
   });
 };
