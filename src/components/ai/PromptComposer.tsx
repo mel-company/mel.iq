@@ -8,7 +8,11 @@ import {
 } from "@/api/endpoints/aiStoreGenerator.endpoints";
 import AuthModal from "./AuthModal";
 import GenerationProgress, { type ProgressEntry } from "./GenerationProgress";
-import type { PlannedStep } from "@/api/endpoints/aiStoreGenerator.endpoints";
+import type {
+  PageDesign,
+  PlannedStep,
+} from "@/api/endpoints/aiStoreGenerator.endpoints";
+import DesignReview from "./DesignReview";
 import SuccessModal from "./SuccessModal";
 import CreditsBadge from "./CreditsBadge";
 
@@ -21,6 +25,10 @@ import CreditsBadge from "./CreditsBadge";
  */
 
 const DRAFT_KEY = "ai-store-prompt-draft";
+/** Mirrors PROMPT_MAX_LENGTH on the server, so the limit is visible while
+ *  typing rather than arriving as a 400 after a submit. */
+const PROMPT_MAX_LENGTH = 8000;
+const PROMPT_MIN_LENGTH = 10;
 const MAX_IMAGES = 3;
 /** Downscaled before upload — a phone photo is megabytes of no extra signal. */
 const MAX_IMAGE_EDGE = 1600;
@@ -29,7 +37,15 @@ const MAX_IMAGE_EDGE = 1600;
 const FIGMA_URL =
   /@?(https?:\/\/(?:www\.)?figma\.com\/(?:design|file|board)\/[^\s]+)/;
 
-type Phase = "idle" | "uploading" | "generating" | "done";
+type Phase =
+  | "idle"
+  | "uploading"
+  /** Deciding the design. Nothing has been built and nothing charged yet. */
+  | "designing"
+  /** Design on screen, waiting for the merchant to accept or revise it. */
+  | "reviewing"
+  | "generating"
+  | "done";
 
 /** Re-encodes an image to at most MAX_IMAGE_EDGE on its long side. */
 async function downscale(file: File): Promise<File> {
@@ -78,6 +94,19 @@ export default function PromptComposer() {
     storeName: string;
     subdomain: string;
   } | null>(null);
+  /**
+   * The design the store was built from.
+   *
+   * Held back from the success modal until the merchant either approves it or
+   * revises it — the decisions were being made and then never shown, so there
+   * was no point at which they could be judged or changed.
+   */
+  const [design, setDesign] = useState<PageDesign | null>(null);
+  const [generationId, setGenerationId] = useState<string | null>(null);
+  const [revising, setRevising] = useState(false);
+  /** Uploaded reference urls, carried from the design phase into the build. */
+  const [pendingRefs, setPendingRefs] = useState<string[] | undefined>();
+  const [reviseError, setReviseError] = useState<string | null>(null);
 
   const fileInput = useRef<HTMLInputElement>(null);
   // Survives the auth modal without being a render dependency.
@@ -85,10 +114,16 @@ export default function PromptComposer() {
   // The SSE callback closes over state from when the run started, so the step
   // plan is read through a ref rather than the stale `steps` value.
   const stepsRef = useRef<PlannedStep[]>([]);
+  // Read inside the SSE callback, which closes over stale state.
+  const designRef = useRef<PageDesign | null>(null);
 
   useEffect(() => {
     sessionStorage.setItem(DRAFT_KEY, prompt);
   }, [prompt]);
+
+  useEffect(() => {
+    designRef.current = design;
+  }, [design]);
 
   // Lift a pasted Figma link out of the text into its own chip.
   useEffect(() => {
@@ -135,9 +170,99 @@ export default function PromptComposer() {
         referenceImages = urls;
       }
 
-      setPhase("generating");
-      addStatus("جاري تجهيز الطلب...");
+      // A second run must not show the previous run's design while it works.
+      setDesign(null);
+      designRef.current = null;
+      setReviseError(null);
 
+      // Phase one: decide the design and show it. No store is created and no
+      // credit is charged until the merchant accepts it.
+      setPhase("designing");
+      addStatus("جاري تصميم المتجر...");
+
+      // A holder rather than a bare `let`: TypeScript cannot see the
+      // assignment inside the stream callback and narrows the variable to
+      // `never` after the null check.
+      const proposal: {
+        value: {
+          generationId: string;
+          design: PageDesign | null;
+          storeName: string;
+        } | null;
+      } = { value: null };
+
+      await aiStoreGeneratorAPI.proposeDesign(
+        {
+          prompt: prompt.trim(),
+          referenceImages,
+          figmaUrl: figmaUrl ?? undefined,
+          figmaToken: localStorage.getItem("figma_token") ?? undefined,
+        },
+        (event: GenerationEvent) => {
+          switch (event.type) {
+            case "plan":
+              stepsRef.current = event.steps;
+              setSteps(event.steps);
+              break;
+            case "status":
+              addStatus(event.message);
+              if (typeof event.index === "number") setActiveStep(event.index);
+              break;
+            case "template":
+              if (event.reason) addStatus(event.reason);
+              break;
+            case "brand":
+              setStoreName(event.storeName);
+              break;
+            case "proposal":
+              proposal.value = event;
+              break;
+            case "error":
+              setError(event.message);
+              break;
+          }
+        },
+      );
+
+      const decided = proposal.value;
+      if (!decided) {
+        // The error event already surfaced the reason.
+        setPhase("idle");
+        return;
+      }
+
+      setGenerationId(decided.generationId);
+      setStoreName(decided.storeName);
+      setPendingRefs(referenceImages);
+
+      if (decided.design) {
+        setDesign(decided.design);
+        setPhase("reviewing");
+        return;
+      }
+
+      // No design to review — build straight through rather than stranding
+      // the merchant on an empty gate.
+      await runBuild(decided.generationId, referenceImages);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "تعذر إنشاء المتجر. حاول مرة أخرى.",
+      );
+      setPhase("idle");
+    }
+  };
+
+  /**
+   * Phase two: build the store from the approved design.
+   *
+   * The credit is charged here, so revising a design costs nothing.
+   */
+  const runBuild = async (id: string, referenceImages?: string[]) => {
+    setPhase("generating");
+    setEntries([]);
+    addStatus("جاري بناء المتجر...");
+
+    try {
       let result: {
         editorUrl: string;
         storeUrl?: string;
@@ -148,12 +273,24 @@ export default function PromptComposer() {
       await aiStoreGeneratorAPI.generate(
         {
           prompt: prompt.trim(),
-          referenceImages,
+          referenceImages: referenceImages ?? pendingRefs,
           figmaUrl: figmaUrl ?? undefined,
           figmaToken: localStorage.getItem("figma_token") ?? undefined,
+          // Continues the approved design instead of deciding it again.
+          generationId: id,
         },
         (event: GenerationEvent) => {
           switch (event.type) {
+            case "job":
+              setGenerationId(event.id);
+              break;
+            case "design":
+              // Arrives mid-run, as soon as the page is decided.
+              if (event.design) setDesign(event.design);
+              break;
+            case "warning":
+              addStatus(event.message);
+              break;
             case "plan":
               stepsRef.current = event.steps;
               setSteps(event.steps);
@@ -180,6 +317,8 @@ export default function PromptComposer() {
                 storeName: event.storeName,
                 subdomain: event.subdomain,
               };
+              // Repeated on `done` so a reconnected client still gets it.
+              if (event.design) setDesign(event.design);
               break;
             case "error":
               setError(event.message);
@@ -192,8 +331,6 @@ export default function PromptComposer() {
       if (result) {
         setPhase("done");
         sessionStorage.removeItem(DRAFT_KEY);
-        // The modal decides where to go — the user has just watched a minute
-        // of progress and should see what was built first.
         setSuccess(result);
         return;
       }
@@ -207,9 +344,50 @@ export default function PromptComposer() {
     }
   };
 
+  /**
+   * Accepting the design builds the store from it.
+   *
+   * This is the point the credit is charged: everything before it — the
+   * design and any number of revisions — is free.
+   */
+  const approveDesign = () => {
+    if (!generationId) return;
+    void runBuild(generationId);
+  };
+
+  /**
+   * Revises the design and rebuilds the page from it.
+   *
+   * The feedback edits the decisions, not the rendered tree, so a second round
+   * builds on the first instead of undoing it.
+   */
+  const reviseDesign = async (feedback: string) => {
+    if (!generationId || !design) return;
+    setRevising(true);
+    setReviseError(null);
+    try {
+      const revised = await aiStoreGeneratorAPI.reviseDesign(
+        generationId,
+        design.pageType || "home",
+        feedback,
+      );
+      setDesign(revised.design);
+    } catch (e) {
+      setReviseError(
+        e instanceof Error ? e.message : "تعذر تعديل التصميم. حاول مرة أخرى.",
+      );
+    } finally {
+      setRevising(false);
+    }
+  };
+
   const handleGenerate = () => {
-    if (prompt.trim().length < 10) {
+    if (prompt.trim().length < PROMPT_MIN_LENGTH) {
       toast.error("يرجى كتابة وصف أوضح لمتجرك");
+      return;
+    }
+    if (prompt.length > PROMPT_MAX_LENGTH) {
+      toast.error(`الوصف طويل جداً — الحد الأقصى ${PROMPT_MAX_LENGTH} حرف`);
       return;
     }
     if (!user) {
@@ -221,13 +399,16 @@ export default function PromptComposer() {
     run();
   };
 
-  const busy = phase === "uploading" || phase === "generating";
+  const busy =
+    phase === "uploading" || phase === "designing" || phase === "generating";
 
-  if (busy || phase === "done" || error) {
+  if (busy || phase === "reviewing" || phase === "done" || error) {
     return (
       <div className="w-full">
         <GenerationProgress
-          open={!success}
+          // Hidden while the merchant reads the design: the progress log is
+          // noise next to the thing they are being asked to judge.
+          open={!success && phase !== "reviewing"}
           entries={entries}
           steps={steps}
           activeStep={activeStep}
@@ -237,24 +418,36 @@ export default function PromptComposer() {
           onRetry={
             error
               ? () => {
-                  setError(null);
-                  setPhase("idle");
-                  setEntries([]);
-                  setActiveStep(0);
-                }
+                setError(null);
+                setPhase("idle");
+                setEntries([]);
+                setActiveStep(0);
+              }
               : undefined
           }
           onClose={
             error
               ? () => {
-                  setError(null);
-                  setPhase("idle");
-                  setEntries([]);
-                  setActiveStep(0);
-                }
+                setError(null);
+                setPhase("idle");
+                setEntries([]);
+                setActiveStep(0);
+              }
               : undefined
           }
         />
+        {design && !success && phase === "reviewing" && (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <DesignReview
+              design={design}
+              busy={revising}
+              error={reviseError}
+              onRevise={reviseDesign}
+              onApprove={approveDesign}
+            />
+          </div>
+        )}
+
         <SuccessModal
           open={Boolean(success)}
           storeName={success?.storeName}
@@ -268,6 +461,8 @@ export default function PromptComposer() {
             setEntries([]);
             setPrompt("");
             setImages([]);
+            setDesign(null);
+            setGenerationId(null);
           }}
         />
       </div>
@@ -287,6 +482,18 @@ export default function PromptComposer() {
           placeholder="اوصف متجرك… مثال: متجر لبيع الأجهزة الإلكترونية والهواتف الذكية في بغداد، بألوان زرقاء عصرية"
           className="w-full resize-none bg-transparent px-3 py-2 text-white placeholder:text-white/30 focus:outline-none"
         />
+
+        {/* Only shown as the limit gets close — a counter on every short
+            prompt is noise. */}
+        {prompt.length > PROMPT_MAX_LENGTH * 0.75 && (
+          <p
+            className={`px-3 pb-1 text-left text-xs ${prompt.length > PROMPT_MAX_LENGTH ? "text-red-400" : "text-white/35"
+              }`}
+            dir="ltr"
+          >
+            {prompt.length.toLocaleString()} / {PROMPT_MAX_LENGTH.toLocaleString()}
+          </p>
+        )}
 
         {(images.length > 0 || figmaUrl) && (
           <div className="flex flex-wrap gap-2 px-3 pb-2">
@@ -353,7 +560,10 @@ export default function PromptComposer() {
           <button
             type="button"
             onClick={handleGenerate}
-            disabled={prompt.trim().length < 10}
+            disabled={
+              prompt.trim().length < PROMPT_MIN_LENGTH ||
+              prompt.length > PROMPT_MAX_LENGTH
+            }
             className="inline-flex items-center gap-2 rounded-full bg-[#00c8ff] px-6 py-2.5 font-medium text-white shadow-[0_0_30px_rgba(0,200,255,0.35)] transition-colors hover:bg-[#33d4ff] disabled:opacity-40 disabled:shadow-none"
           >
             {busy ? (
