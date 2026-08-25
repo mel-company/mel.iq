@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useFetchStores, useUpdateStore } from "@/api/wrappers/store.wrappers";
 import {
   useFetchSubscriptions,
@@ -371,14 +371,41 @@ const SubscriptionInfo = ({
 // Main Component
 function StoreManagement() {
   const params = useParams<{ storeId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   // التأكد من أن storeId موجود وصحيح (إزالة أي domain إذا كان موجوداً)
   const storeId = params.storeId?.split("/")[0] || params.storeId;
 
   const { data: storesData, isLoading: storesLoading } = useFetchStores();
-  const { data: subscriptionsData, isLoading: subscriptionsLoading } =
-    useFetchSubscriptions({ storeId });
+  const {
+    data: subscriptionsData,
+    isLoading: subscriptionsLoading,
+    refetch: refetchSubscriptions,
+  } = useFetchSubscriptions({ storeId });
+
+  // After ZainCash: land here with ?paymentId=&result=success
+  useEffect(() => {
+    const paymentId = searchParams.get("paymentId");
+    const result = searchParams.get("result");
+    if (!paymentId || !result) return;
+
+    if (result === "success") {
+      toast.success("تم الدفع بنجاح وتم تجديد الاشتراك");
+      void refetchSubscriptions();
+    } else {
+      toast.error("فشلت عملية الدفع. حاول مرة أخرى.");
+    }
+
+    sessionStorage.removeItem(RENEWAL_RETURN_KEY);
+    sessionStorage.removeItem(LAST_PAYMENT_ID_KEY);
+
+    const next = new URLSearchParams(searchParams);
+    next.delete("paymentId");
+    next.delete("result");
+    next.delete("status");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, refetchSubscriptions]);
 
   const renewMutation = useRenewSubscription();
   const initPaymentMutation = useInitPlatformPayment();
@@ -488,7 +515,7 @@ function StoreManagement() {
           storeId,
           durationMonths: duration,
           billingPeriod: duration >= 12 ? "YEARLY" : "MONTHLY",
-          returnBaseUrl: `${window.location.origin}/checkout/payment-return`,
+          returnBaseUrl: `${window.location.origin}/store/${storeId}/manage`,
         },
         {
           onSuccess: (data) => {
