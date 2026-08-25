@@ -39,8 +39,10 @@ axiosInstance.interceptors.response.use(
         url.includes("/auth/register") ||
         url.includes("/auth/send-otp") ||
         url.includes("/auth/verify");
+      // جاهزية الداشبورد: فشل الفحص ما يعني جلسة منتهية
+      const isDashboardReady = url.includes("/domain/dashboard-ready");
 
-      if (!isPublicAuth) {
+      if (!isPublicAuth && !isDashboardReady) {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
       }

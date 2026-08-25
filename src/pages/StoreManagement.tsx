@@ -19,6 +19,8 @@ interface Store {
   id: string;
   name: string;
   domain?: string;
+  /** Public storefront URL from API, e.g. https://mystore.mel.iq */
+  storeUrl?: string;
   is_deleted?: boolean;
   instagram?: string | null;
   facebook?: string | null;
@@ -413,7 +415,15 @@ function StoreManagement() {
     return normalized[0] || null;
   }, [subscriptionsData]);
 
-  const storeUrl = store?.domain;
+  const storeUrl =
+    store?.storeUrl ||
+    (store?.domain
+      ? `https://${store.domain
+          .replace(/^https?:\/\//, "")
+          .replace(/^dash\./, "")
+          .replace(/\.mel\.iq$/i, "")
+          .split("/")[0]}.mel.iq`
+      : undefined);
   const isLoading = storesLoading || subscriptionsLoading;
   const isPlanBasic = isBasicPlan(subscription?.plan?.name);
 

@@ -16,8 +16,6 @@ import {
   useRestoreGeneration,
 } from "@/api/wrappers/aiStoreGenerator.wrappers";
 import type { GenerationHistoryItem } from "@/api/endpoints/aiStoreGenerator.endpoints";
-import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
-import StoreProvisioningGate from "@/components/StoreProvisioningGate";
 
 /**
  * Past generations, with the two actions that make history useful: open one in
@@ -53,45 +51,17 @@ export default function GenerationHistory() {
   const restoreMutation = useRestoreGeneration();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const {
-    isWaiting: isProvisioning,
-    timedOut: provisioningTimedOut,
-    lastStatus: provisioningStatus,
-    error: provisioningError,
-    waitUntilReady,
-    reset: resetProvisioning,
-    normalizeDomain,
-  } = useWaitForDashboardReady();
-  const [pendingOpen, setPendingOpen] = useState<{
-    url: string;
-    domain: string;
-  } | null>(null);
 
   const items = data?.data ?? [];
 
   if (!user || isLoading || items.length === 0) return null;
-
-  const openReadyUrl = async (url: string, domainHint?: string | null) => {
-    const domain = normalizeDomain(domainHint || "");
-    if (!domain) {
-      window.open(url, "_blank", "noopener,noreferrer");
-      return;
-    }
-    setPendingOpen({ url, domain });
-    const result = await waitUntilReady(domain);
-    if (result.status === "ready") {
-      resetProvisioning();
-      setPendingOpen(null);
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
-  };
 
   const open = async (item: GenerationHistoryItem) => {
     setBusyId(item.id);
     try {
       // A fresh link each time: the original handoff token is one-time.
       const { redirectUrl } = await openMutation.mutateAsync(item.id);
-      await openReadyUrl(redirectUrl, item.store?.domain);
+      window.open(redirectUrl, "_blank", "noopener,noreferrer");
     } catch {
       toast.error("تعذر فتح هذا المتجر");
     } finally {
@@ -106,7 +76,7 @@ export default function GenerationHistory() {
       toast.success("تمت استعادة هذه النسخة");
       setConfirmingId(null);
       refetch();
-      await openReadyUrl(redirectUrl, item.store?.domain);
+      window.open(redirectUrl, "_blank", "noopener,noreferrer");
     } catch {
       toast.error("تعذرت استعادة هذه النسخة");
     } finally {
@@ -116,23 +86,6 @@ export default function GenerationHistory() {
 
   return (
     <section className="mx-auto w-full max-w-3xl px-4 py-16 text-right">
-      <StoreProvisioningGate
-        open={isProvisioning || provisioningTimedOut}
-        domain={pendingOpen?.domain}
-        lastStatus={provisioningStatus}
-        timedOut={provisioningTimedOut}
-        error={provisioningError}
-        onRetry={() => {
-          if (!pendingOpen) return;
-          void openReadyUrl(pendingOpen.url, pendingOpen.domain);
-        }}
-        onContinueAnyway={() => {
-          if (!pendingOpen) return;
-          resetProvisioning();
-          window.open(pendingOpen.url, "_blank", "noopener,noreferrer");
-          setPendingOpen(null);
-        }}
-      />
       <div className="mb-6 flex items-center justify-center gap-2 text-white/70">
         <History size={18} />
         <h2 className="text-lg font-bold">سجل الإنشاء</h2>

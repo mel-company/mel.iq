@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback, useState } from "react";
+import { useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueries } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
@@ -13,8 +13,6 @@ import { subscriptionKeys } from "@/api/wrappers/subscription.wrapper";
 import { subscriptionAPI } from "@/api/endpoints/subscription.endpoint";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, ExternalLink, Settings } from "lucide-react";
-import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
-import StoreProvisioningGate from "@/components/StoreProvisioningGate";
 
 // Types
 interface Store {
@@ -22,8 +20,35 @@ interface Store {
   name: string;
   logo?: string;
   domain?: string;
+  /** Public storefront URL from API, e.g. https://mystore.mel.iq */
+  storeUrl?: string;
   is_deleted?: boolean;
 }
+
+/** https://{slug}.mel.iq — prefer API storeUrl, else build from domain slug. */
+const resolveStorefrontUrl = (store: Store): string | null => {
+  if (store.storeUrl?.trim()) return store.storeUrl.trim();
+  const slug = store.domain
+    ?.trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/^dash\./, "")
+    .replace(/\.mel\.iq$/i, "")
+    .split("/")[0];
+  if (!slug) return null;
+  return `https://${slug}.mel.iq`;
+};
+
+/** https://dash.{slug}.mel.iq */
+const resolveDashboardUrl = (store: Store): string | null => {
+  const slug = store.domain
+    ?.trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/^dash\./, "")
+    .replace(/\.mel\.iq$/i, "")
+    .split("/")[0];
+  if (!slug) return null;
+  return `https://dash.${slug}.mel.iq`;
+};
 
 interface Subscription {
   id: string;
@@ -216,38 +241,18 @@ const StoreCard = ({
     ? getTimeRemaining(subscription.end_at)
     : null;
   const statusBadge = subscription ? getStatusBadge(subscription.status) : null;
-  const navigate = useNavigate();
-  const {
-    isWaiting: isProvisioning,
-    timedOut: provisioningTimedOut,
-    lastStatus: provisioningStatus,
-    error: provisioningError,
-    waitUntilReady,
-    reset: resetProvisioning,
-    normalizeDomain,
-  } = useWaitForDashboardReady();
-  const [pendingRedirectUrl, setPendingRedirectUrl] = useState<string | null>(
-    null,
-  );
-  const [pendingWindow, setPendingWindow] = useState<Window | null>(null);
 
   const domainOnly = store.domain
-    ? normalizeDomain(store.domain)
-    : "";
-
-  const finishOpen = (redirectUrl: string, targetWindow: Window | null) => {
-    resetProvisioning();
-    setPendingRedirectUrl(null);
-    setPendingWindow(null);
-    if (targetWindow && !targetWindow.closed) {
-      targetWindow.location.href = redirectUrl;
-      return;
-    }
-    window.location.href = redirectUrl;
-  };
+    ?.trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/^dash\./, "")
+    .replace(/\.mel\.iq$/i, "")
+    .split("/")[0] || "";
+  const storefrontUrl = resolveStorefrontUrl(store);
+  const dashboardUrl = resolveDashboardUrl(store);
 
   const handleOpenStore = () => {
-    if (!store.domain || !domainOnly) return;
+    if (!domainOnly) return;
 
     // Open immediately on click so Safari treats it as a user gesture.
     const newWindow = window.open("", "_blank");
@@ -256,26 +261,20 @@ const StoreCard = ({
       { store: domainOnly },
       {
         onSuccess: (data: any) => {
-          const redirectUrl = data?.redirectUrl || data?.data?.redirectUrl;
+          const redirectUrl =
+            data?.redirectUrl ||
+            data?.data?.redirectUrl ||
+            dashboardUrl;
           if (!redirectUrl) {
             newWindow?.close();
             toast.error("تعذر فتح المتجر. حاول مرة أخرى.");
             return;
           }
-
-          setPendingRedirectUrl(redirectUrl);
-          setPendingWindow(newWindow);
-
-          void (async () => {
-            const result = await waitUntilReady(domainOnly);
-            if (result.status === "ready") {
-              finishOpen(redirectUrl, newWindow);
-            } else if (result.status === "timeout") {
-              // Keep blank tab; gate offers retry / continue
-            } else {
-              newWindow?.close();
-            }
-          })();
+          if (newWindow && !newWindow.closed) {
+            newWindow.location.href = redirectUrl;
+            return;
+          }
+          window.location.href = redirectUrl;
         },
         onError: (error: any) => {
           newWindow?.close();
@@ -310,10 +309,26 @@ const StoreCard = ({
         </span>
       </div>
 
-      {store.domain && (
+      {dashboardUrl && (
+        <a
+          href={dashboardUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          dir="ltr"
+          className="mb-3 block truncate text-left text-xs text-violet-600 hover:underline dark:text-violet-400"
+          onClick={(e) => {
+            e.preventDefault();
+            handleOpenStore();
+          }}
+        >
+          {dashboardUrl.replace(/^https?:\/\//, "")}
+        </a>
+      )}
+
+      {storefrontUrl && (
         <div className="mb-4 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
           <iframe
-            src={`${store.domain}`}
+            src={storefrontUrl}
             className="w-full h-48"
             title={`معاينة ${store.name}`}
             loading="lazy"
@@ -330,41 +345,17 @@ const StoreCard = ({
           إدارة
         </button>
 
-        {store.domain && (
+        {domainOnly && (
           <button
             onClick={handleOpenStore}
-            disabled={openStoreMutation.isPending || isProvisioning}
+            disabled={openStoreMutation.isPending}
             className="flex-1 bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ExternalLink className="w-4 h-4" />
-            {openStoreMutation.isPending || isProvisioning
-              ? "جاري..."
-              : "فتح"}
+            {openStoreMutation.isPending ? "جاري..." : "فتح"}
           </button>
         )}
       </div>
-
-      <StoreProvisioningGate
-        open={isProvisioning || provisioningTimedOut}
-        domain={domainOnly}
-        lastStatus={provisioningStatus}
-        timedOut={provisioningTimedOut}
-        error={provisioningError}
-        onRetry={() => {
-          if (!pendingRedirectUrl || !domainOnly) return;
-          void (async () => {
-            const result = await waitUntilReady(domainOnly);
-            if (result.status === "ready") {
-              finishOpen(pendingRedirectUrl, pendingWindow);
-            }
-          })();
-        }}
-        onContinueAnyway={() => {
-          if (pendingRedirectUrl) {
-            finishOpen(pendingRedirectUrl, pendingWindow);
-          }
-        }}
-      />
     </div>
   );
 };

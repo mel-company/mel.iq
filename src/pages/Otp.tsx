@@ -10,8 +10,6 @@ import {
 } from "@/components/ui/input-otp";
 import { ArrowLeftIcon } from "lucide-react";
 import { getApiErrorMessage } from "@/utils/otp";
-import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
-import StoreProvisioningGate from "@/components/StoreProvisioningGate";
 
 function OTPVerification() {
   const location = useLocation();
@@ -21,15 +19,6 @@ function OTPVerification() {
   const { mutate: validateUser, isPending: isValidatingUser } =
     useValidateUser();
   const { login } = useAuth();
-  const {
-    isWaiting: isProvisioning,
-    timedOut: provisioningTimedOut,
-    lastStatus: provisioningStatus,
-    error: provisioningError,
-    waitUntilReady,
-    reset: resetProvisioning,
-    normalizeDomain,
-  } = useWaitForDashboardReady();
 
   const phone = (location.state as { phone?: string } | null)?.phone || "";
   const storeFromState =
@@ -45,13 +34,7 @@ function OTPVerification() {
   const [error, setError] = useState("");
   const [resendCooldown, setResendCooldown] = useState(60);
   const [canResend, setCanResend] = useState(false);
-  const [pendingRedirectUrl, setPendingRedirectUrl] = useState<string | null>(
-    null,
-  );
-  const [provisioningDomain, setProvisioningDomain] = useState<string | null>(
-    null,
-  );
-  const isBusy = isVerifyingPending || isValidatingUser || isProvisioning;
+  const isBusy = isVerifyingPending || isValidatingUser;
 
   const goToRedirectError = (params?: { token?: string; store?: string }) => {
     navigate("/auth/redirect-error", {
@@ -62,32 +45,6 @@ function OTPVerification() {
         store: params?.store || "",
       },
     });
-  };
-
-  const redirectAfterReady = async (url: string, domainHint?: string) => {
-    setPendingRedirectUrl(url);
-    const fromUrl = (() => {
-      try {
-        const host = new URL(url).hostname;
-        return normalizeDomain(host);
-      } catch {
-        return "";
-      }
-    })();
-    const domain = normalizeDomain(domainHint || storeSlug || fromUrl);
-    setProvisioningDomain(domain || null);
-
-    if (!domain) {
-      window.location.href = url;
-      return;
-    }
-
-    const result = await waitUntilReady(domain);
-    if (result.status === "ready") {
-      resetProvisioning();
-      window.location.href = url;
-    }
-    // timeout: gate stays open for retry / continue
   };
 
   useEffect(() => {
@@ -164,7 +121,7 @@ function OTPVerification() {
 
           // إذا الـ verify رجّع رابط مباشر للمتجر/الداشبورد
           if (verifyRedirect) {
-            void redirectAfterReady(verifyRedirect, storeSlug);
+            window.location.href = verifyRedirect;
             return;
           }
 
@@ -183,7 +140,7 @@ function OTPVerification() {
                     return;
                   }
 
-                  void redirectAfterReady(redirectUrl, storeSlug);
+                  window.location.href = redirectUrl;
                 },
                 onError: () => {
                   goToRedirectError({ token, store: storeSlug });
@@ -365,27 +322,6 @@ function OTPVerification() {
           </div>
         </div>
       </div>
-
-      <StoreProvisioningGate
-        open={isProvisioning || provisioningTimedOut}
-        domain={provisioningDomain}
-        lastStatus={provisioningStatus}
-        timedOut={provisioningTimedOut}
-        error={provisioningError}
-        onRetry={() => {
-          if (!pendingRedirectUrl) return;
-          void redirectAfterReady(
-            pendingRedirectUrl,
-            provisioningDomain || storeSlug,
-          );
-        }}
-        onContinueAnyway={() => {
-          if (pendingRedirectUrl) {
-            resetProvisioning();
-            window.location.href = pendingRedirectUrl;
-          }
-        }}
-      />
     </div>
   );
 }
