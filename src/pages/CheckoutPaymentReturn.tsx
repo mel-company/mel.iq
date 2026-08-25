@@ -5,11 +5,17 @@ import { usePlatformPaymentStatus } from "@/api/wrappers/platform-payment.wrappe
 
 const CHECKOUT_DRAFT_KEY = "mel_checkout_draft";
 const RENEWAL_RETURN_KEY = "mel_renewal_return";
+const LAST_PAYMENT_ID_KEY = "mel_last_platform_payment_id";
 
 export default function CheckoutPaymentReturn() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const paymentId = params.get("paymentId");
+  const paymentIdFromQuery = params.get("paymentId");
+  const paymentIdFromStorage =
+    typeof window !== "undefined"
+      ? sessionStorage.getItem(LAST_PAYMENT_ID_KEY)
+      : null;
+  const paymentId = paymentIdFromQuery || paymentIdFromStorage;
   const result = params.get("result");
 
   const { data, isLoading, isError } = usePlatformPaymentStatus(
@@ -70,6 +76,7 @@ export default function CheckoutPaymentReturn() {
 
     if (status === "PAID") {
       toast.success("تم الدفع بنجاح");
+      sessionStorage.removeItem(LAST_PAYMENT_ID_KEY);
       if (isRenewal && renewalReturn?.storeId) {
         sessionStorage.removeItem(RENEWAL_RETURN_KEY);
         navigate(`/store/${renewalReturn.storeId}/manage`, { replace: true });
@@ -112,4 +119,4 @@ export default function CheckoutPaymentReturn() {
   );
 }
 
-export { CHECKOUT_DRAFT_KEY };
+export { CHECKOUT_DRAFT_KEY, LAST_PAYMENT_ID_KEY };

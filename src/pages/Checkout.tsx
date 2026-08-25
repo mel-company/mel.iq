@@ -14,7 +14,7 @@ import {
 } from "@/api/wrappers/store.wrappers";
 import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 import { useInitPlatformPayment } from "@/api/wrappers/platform-payment.wrapper";
-import { CHECKOUT_DRAFT_KEY } from "@/pages/CheckoutPaymentReturn";
+import { CHECKOUT_DRAFT_KEY, LAST_PAYMENT_ID_KEY } from "@/pages/CheckoutPaymentReturn";
 import { toast } from "sonner";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import {
@@ -509,10 +509,14 @@ function Checkout() {
       {
         onSuccess: (data) => {
           const redirectUrl = data?.redirectUrl;
+          const paymentId = data?.id || data?.paymentId;
           if (!redirectUrl) {
             setProcessing(false);
             toast.error("لم يتم استلام رابط الدفع من زين كاش");
             return;
+          }
+          if (paymentId) {
+            sessionStorage.setItem(LAST_PAYMENT_ID_KEY, String(paymentId));
           }
           window.location.href = redirectUrl;
         },

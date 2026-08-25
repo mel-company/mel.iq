@@ -16,6 +16,7 @@ import { ArrowLeftIcon, AlertCircle, ArrowRightIcon, X } from "lucide-react";
 import { toast } from "sonner";
 
 const RENEWAL_RETURN_KEY = "mel_renewal_return";
+const LAST_PAYMENT_ID_KEY = "mel_last_platform_payment_id";
 
 // Types
 interface Store {
@@ -492,9 +493,13 @@ function StoreManagement() {
         {
           onSuccess: (data) => {
             const redirectUrl = data?.redirectUrl || data?.data?.redirectUrl;
+            const paymentId = data?.id || data?.data?.id;
             if (!redirectUrl) {
               toast.error("تعذر بدء عملية الدفع");
               return;
+            }
+            if (paymentId) {
+              sessionStorage.setItem(LAST_PAYMENT_ID_KEY, String(paymentId));
             }
             window.location.href = redirectUrl;
           },
