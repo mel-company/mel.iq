@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { usePlatformPaymentStatus } from "@/api/wrappers/platform-payment.wrapper";
 
 const CHECKOUT_DRAFT_KEY = "mel_checkout_draft";
+const RENEWAL_RETURN_KEY = "mel_renewal_return";
 
 export default function CheckoutPaymentReturn() {
   const navigate = useNavigate();
@@ -17,11 +18,21 @@ export default function CheckoutPaymentReturn() {
   );
 
   const status = data?.status as string | undefined;
+  const paymentType = data?.type as string | undefined;
 
   const draft = useMemo(() => {
     try {
       const raw = sessionStorage.getItem(CHECKOUT_DRAFT_KEY);
       return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const renewalReturn = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem(RENEWAL_RETURN_KEY);
+      return raw ? (JSON.parse(raw) as { storeId?: string }) : null;
     } catch {
       return null;
     }
@@ -34,17 +45,36 @@ export default function CheckoutPaymentReturn() {
       return;
     }
 
+    const isRenewal =
+      paymentType === "RENEWAL" ||
+      paymentType === "CHANGE_PLAN" ||
+      !!renewalReturn?.storeId;
+
     if (result === "failure" || status === "FAILED" || status === "EXPIRED") {
       toast.error("فشلت عملية الدفع. حاول مرة أخرى.");
+      if (isRenewal && renewalReturn?.storeId) {
+        sessionStorage.removeItem(RENEWAL_RETURN_KEY);
+        navigate(`/store/${renewalReturn.storeId}/manage`, { replace: true });
+        return;
+      }
       navigate("/checkout", {
         replace: true,
-        state: { skipToStep: 4, selectedPlan: draft?.plan, paymentFailed: true },
+        state: {
+          skipToStep: 4,
+          selectedPlan: draft?.plan,
+          paymentFailed: true,
+        },
       });
       return;
     }
 
     if (status === "PAID") {
       toast.success("تم الدفع بنجاح");
+      if (isRenewal && renewalReturn?.storeId) {
+        sessionStorage.removeItem(RENEWAL_RETURN_KEY);
+        navigate(`/store/${renewalReturn.storeId}/manage`, { replace: true });
+        return;
+      }
       navigate("/checkout", {
         replace: true,
         state: {
@@ -56,7 +86,15 @@ export default function CheckoutPaymentReturn() {
         },
       });
     }
-  }, [paymentId, result, status, navigate, draft]);
+  }, [
+    paymentId,
+    result,
+    status,
+    paymentType,
+    navigate,
+    draft,
+    renewalReturn,
+  ]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">

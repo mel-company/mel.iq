@@ -5,6 +5,7 @@ export type PlatformPaymentInitPayload = {
   planId: string;
   billingPeriod?: "MONTHLY" | "YEARLY";
   durationMonths?: number;
+  storeId?: string;
   returnBaseUrl?: string;
 };
 

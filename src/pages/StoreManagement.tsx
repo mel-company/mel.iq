@@ -9,10 +9,13 @@ import {
   useCancelSubscription,
   useUpdateSubscription,
 } from "@/api/wrappers/subscription.wrapper";
+import { useInitPlatformPayment } from "@/api/wrappers/platform-payment.wrapper";
 import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeftIcon, AlertCircle, ArrowRightIcon, X } from "lucide-react";
 import { toast } from "sonner";
+
+const RENEWAL_RETURN_KEY = "mel_renewal_return";
 
 // Types
 interface Store {
@@ -35,8 +38,13 @@ interface Subscription {
   status: "ACTIVE" | "INACTIVE" | "CANCELLED" | "EXPIRED";
   start_at?: string;
   end_at?: string;
+  planId?: string;
   plan?: {
+    id?: string;
     name: string;
+    is_free?: boolean;
+    monthly_price?: number;
+    yearly_price?: number;
   };
 }
 
@@ -372,6 +380,7 @@ function StoreManagement() {
     useFetchSubscriptions({ storeId });
 
   const renewMutation = useRenewSubscription();
+  const initPaymentMutation = useInitPlatformPayment();
   const pauseMutation = usePauseSubscription();
   const resumeMutation = useResumeSubscription();
   const cancelMutation = useCancelSubscription();
@@ -455,6 +464,51 @@ function StoreManagement() {
       return;
     }
 
+    const planId = subscription.plan?.id || subscription.planId;
+    const isFree =
+      subscription.plan?.is_free === true ||
+      !(Number(subscription.plan?.monthly_price) > 0);
+
+    if (!isFree) {
+      if (!planId || !storeId) {
+        toast.error("تعذر تحديد الخطة للتجديد");
+        return;
+      }
+
+      sessionStorage.setItem(
+        RENEWAL_RETURN_KEY,
+        JSON.stringify({ storeId, durationMonths: duration }),
+      );
+
+      initPaymentMutation.mutate(
+        {
+          type: "RENEWAL",
+          planId,
+          storeId,
+          durationMonths: duration,
+          billingPeriod: duration >= 12 ? "YEARLY" : "MONTHLY",
+          returnBaseUrl: `${window.location.origin}/checkout/payment-return`,
+        },
+        {
+          onSuccess: (data) => {
+            const redirectUrl = data?.redirectUrl || data?.data?.redirectUrl;
+            if (!redirectUrl) {
+              toast.error("تعذر بدء عملية الدفع");
+              return;
+            }
+            window.location.href = redirectUrl;
+          },
+          onError: (error: any) => {
+            toast.error(
+              error?.response?.data?.message || "حدث خطأ في بدء الدفع",
+            );
+            console.error("Error initiating renewal payment:", error);
+          },
+        },
+      );
+      return;
+    }
+
     renewMutation.mutate(
       { id: subscription.id, durationMonths: duration },
       {
@@ -462,17 +516,19 @@ function StoreManagement() {
           toast.success(
             `تم تجديد الاشتراك بنجاح لمدة ${duration} ${
               duration === 1 ? "شهر" : "أشهر"
-            }`
+            }`,
           );
           setShowRenewModal(false);
           setSelectedDuration(1);
           setCustomDuration("");
         },
         onError: (error: any) => {
-          toast.error("حدث خطأ في تجديد الاشتراك");
+          toast.error(
+            error?.response?.data?.message || "حدث خطأ في تجديد الاشتراك",
+          );
           console.error("Error renewing subscription:", error);
         },
-      }
+      },
     );
   };
 
@@ -664,7 +720,7 @@ function StoreManagement() {
               onCancel={handleCancel}
               onUpgrade={handleUpgrade}
               isPending={{
-                renew: renewMutation.isPending,
+                renew: renewMutation.isPending || initPaymentMutation.isPending,
                 pause: pauseMutation.isPending,
                 resume: resumeMutation.isPending,
                 cancel: cancelMutation.isPending,
@@ -925,11 +981,14 @@ function StoreManagement() {
                   onClick={handleConfirmRenew}
                   disabled={
                     renewMutation.isPending ||
+                    initPaymentMutation.isPending ||
                     (!customDuration && selectedDuration === 0)
                   }
                   className="px-6 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {renewMutation.isPending ? "جاري..." : "تأكيد التجديد"}
+                  {renewMutation.isPending || initPaymentMutation.isPending
+                    ? "جاري..."
+                    : "تأكيد التجديد"}
                 </button>
               </div>
             </div>
