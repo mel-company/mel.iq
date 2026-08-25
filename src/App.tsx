@@ -6,6 +6,7 @@ import Pricing from "./pages/Pricing";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Checkout from "./pages/Checkout";
+import CheckoutPaymentReturn from "./pages/CheckoutPaymentReturn";
 import Templates from "./pages/Templates";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -124,6 +125,15 @@ function App() {
               <Navbar />
               <Checkout />
             </>
+          }
+        />
+        <Route
+          path="/checkout/payment-return"
+          element={
+            <ProtectedRoute>
+              <Navbar />
+              <CheckoutPaymentReturn />
+            </ProtectedRoute>
           }
         />
         <Route

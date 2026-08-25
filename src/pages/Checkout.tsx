@@ -12,8 +12,9 @@ import {
   useAddStore,
   useCheckStoreDomainAvailability,
 } from "@/api/wrappers/store.wrappers";
-import { useCreateSubscription } from "@/api/wrappers/subscription.wrapper";
 import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
+import { useInitPlatformPayment } from "@/api/wrappers/platform-payment.wrapper";
+import { CHECKOUT_DRAFT_KEY } from "@/pages/CheckoutPaymentReturn";
 import { toast } from "sonner";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import {
@@ -79,7 +80,8 @@ function Checkout() {
   const { mutate: sendOtpMutation, isPending: isSendingOtp } = useSendOtp();
   const { mutate: verifyOtpMutation, isPending: isVerifyingOtp } = useVerify();
   const { mutate: addStoreMutation } = useAddStore();
-  const { mutate: createSubscriptionMutation } = useCreateSubscription();
+  const { mutate: initPaymentMutation, isPending: isInitiatingPayment } =
+    useInitPlatformPayment();
   const {
     timedOut: provisioningTimedOut,
     lastStatus: provisioningStatus,
@@ -101,22 +103,23 @@ function Checkout() {
     const initialPhone = location.state?.userInfo?.phone || "";
 
     // Handle plan: selectedPlan from location.state
-    let initialPlan = location.state?.selectedPlan || null;
+    const draft = location.state?.checkoutDraft;
+    let initialPlan = location.state?.selectedPlan || draft?.plan || null;
 
     return {
-      name: initialName,
-      email: initialEmail,
-      phone: initialPhone,
+      name: initialName || draft?.name || "",
+      email: initialEmail || draft?.email || "",
+      phone: initialPhone || draft?.phone || "",
       plan: initialPlan,
       otp: "",
-      
-      paymentMethod: "card",
-      websiteType: "store",
+      paymentMethod: "zaincash",
+      paymentId: (location.state?.paymentId as string | null) || null,
+      websiteType: draft?.websiteType || "store",
       logo: null as string | null,
       logoFile: null as File | null,
-      storeName: "",
-      domain: "",
-      domainType: "subdomain",
+      storeName: draft?.storeName || "",
+      domain: draft?.domain || "",
+      domainType: draft?.domainType || "subdomain",
       websiteUrl: "",
       username: "",
       password: "",
@@ -124,7 +127,9 @@ function Checkout() {
   });
 
   const [otpSent, setOtpSent] = useState(false);
-  const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [paymentCompleted, setPaymentCompleted] = useState(
+    () => Boolean(location.state?.paymentCompleted),
+  );
   const [processing, setProcessing] = useState(false);
   const [domainChecked, setDomainChecked] = useState(false);
   const [domainAvailable, setDomainAvailable] = useState<boolean | null>(null);
@@ -449,19 +454,63 @@ function Checkout() {
   };
 
   const handlePayment = () => {
-    // Check if plan is selected before payment
     if (!formData.plan || !formData.plan.id) {
       toast.error("الرجاء اختيار خطة قبل الدفع");
       setCurrentStep(3);
       return;
     }
-    // Simulate payment processing
-    setPaymentCompleted(true);
-    setProcessing(true);
-    setTimeout(() => {
-      setProcessing(false);
+
+    const planId =
+      formData.plan?.uuid || formData.plan?.planId || formData.plan?.id;
+
+    // Free plans skip ZainCash
+    if (formData.plan?.is_free || Number(formData.plan?.monthly_price) === 0) {
+      setPaymentCompleted(true);
       setCurrentStep(5);
-    }, 3000); // Give time for processing
+      return;
+    }
+
+    setProcessing(true);
+    sessionStorage.setItem(
+      CHECKOUT_DRAFT_KEY,
+      JSON.stringify({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        plan: formData.plan,
+        storeName: formData.storeName,
+        domain: formData.domain,
+        domainType: formData.domainType,
+        websiteType: formData.websiteType,
+      }),
+    );
+
+    initPaymentMutation(
+      {
+        type: "INITIAL_SUBSCRIPTION",
+        planId,
+        billingPeriod: "MONTHLY",
+        returnBaseUrl: `${window.location.origin}/checkout/payment-return`,
+      },
+      {
+        onSuccess: (data) => {
+          const redirectUrl = data?.redirectUrl;
+          if (!redirectUrl) {
+            setProcessing(false);
+            toast.error("لم يتم استلام رابط الدفع من زين كاش");
+            return;
+          }
+          window.location.href = redirectUrl;
+        },
+        onError: (error: any) => {
+          setProcessing(false);
+          toast.error(
+            error?.response?.data?.message ||
+              "تعذر بدء الدفع عبر زين كاش. حاول مرة أخرى.",
+          );
+        },
+      },
+    );
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -488,7 +537,15 @@ function Checkout() {
     // Check if plan is selected - required before creating store
     if (!formData.plan || !formData.plan.id) {
       toast.error("الرجاء اختيار خطة قبل إنشاء المتجر");
-      setCurrentStep(1); // Go back to plan selection
+      setCurrentStep(3);
+      return;
+    }
+
+    const isFree =
+      formData.plan?.is_free || Number(formData.plan?.monthly_price) === 0;
+    if (!isFree && !formData.paymentId && !paymentCompleted) {
+      toast.error("يجب إكمال الدفع عبر زين كاش قبل إنشاء المتجر");
+      setCurrentStep(4);
       return;
     }
 
@@ -537,78 +594,22 @@ function Checkout() {
           storeFormData.append("logo", formData.logoFile);
         }
         storeFormData.append("createdAt", new Date().toISOString());
-storeFormData.append("planId", formData.plan.id);
-
-        console.log(storeFormData.get("logo"));
-        console.log(storeFormData.get("name"));
-        console.log(storeFormData.get("type"));
-        console.log(storeFormData.get("domain"));
-        console.log(storeFormData.get("createdAt"));
-        console.log(formData.plan);
+        storeFormData.append(
+          "planId",
+          formData.plan.uuid || formData.plan.planId || formData.plan.id,
+        );
+        if (formData.paymentId) {
+          storeFormData.append("paymentId", formData.paymentId);
+        }
 
         addStoreMutation(storeFormData, {
-          onSuccess: (storeData: any) => {
-            // After successful store creation, create subscription
-            const storeId =
-              storeData?.id || storeData?.data?.id || storeData?.store?.id;
-            // Get planId - could be uuid, id, or planId property
-            const planId =
-              formData.plan?.uuid ||
-              formData.plan?.planId ||
-              formData.plan?.id ||
-              null;
-
-            if (storeId && planId && formData.plan) {
-              // Calculate subscription dates (1 year from now)
-              const startAt = new Date().toISOString();
-              const endAt = new Date();
-              endAt.setFullYear(endAt.getFullYear() + 1);
-              const endAtISO = endAt.toISOString();
-
-              createSubscriptionMutation(
-                {
-                  storeId,
-                  planId,
-                  start_at: startAt,
-                  end_at: endAtISO,
-                  status: "ACTIVE",
-                },
-                {
-                  onSuccess: () => {
-                    void finishAfterProvisioning({
-                      websiteType: formData.websiteType,
-                      domain: formData.domain,
-                      url: formData.domain,
-                    });
-                  },
-                  onError: (error) => {
-                    console.error("Error creating subscription:", error);
-                    toast.warning(
-                      "تم إنشاء المتجر بنجاح، لكن حدث خطأ في إنشاء الاشتراك. الرجاء المحاولة مرة أخرى.",
-                    );
-                    void finishAfterProvisioning({
-                      websiteType: formData.websiteType,
-                      domain: formData.domain,
-                      url: formData.domain,
-                    });
-                  },
-                },
-              );
-            } else {
-              // If storeId or planId is missing, show error and don't navigate
-              console.error(
-                "Missing storeId or planId, cannot create subscription",
-                {
-                  storeId,
-                  planId,
-                  plan: formData.plan,
-                },
-              );
-              toast.error(
-                "حدث خطأ: لم يتم العثور على معرف المتجر أو الخطة. الرجاء المحاولة مرة أخرى.",
-              );
-              // Don't navigate - user should stay on the page
-            }
+          onSuccess: () => {
+            sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
+            void finishAfterProvisioning({
+              websiteType: formData.websiteType,
+              domain: formData.domain,
+              url: formData.domain,
+            });
           },
           onError: (error) => {
             console.error("Error creating store:", error);
@@ -1011,18 +1012,21 @@ storeFormData.append("planId", formData.plan.id);
                   </div>
                   <button
                     onClick={handlePayment}
-                    disabled={!formData.plan}
+                    disabled={!formData.plan || isInitiatingPayment || processing}
                     className="w-full bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 hover:from-slate-800 hover:to-slate-600 dark:hover:from-slate-200 dark:hover:to-slate-400 text-white dark:text-slate-900 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                   >
                     {paymentCompleted
                       ? "تم الدفع بنجاح"
-                      : `دفع ${
-                          formData.plan?.monthly_price
-                            ? formData.plan.monthly_price.toLocaleString(
-                                "en-IQ",
-                              )
-                            : "0"
-                        } د.ع /شهرياً`}
+                      : formData.plan?.is_free ||
+                          Number(formData.plan?.monthly_price) === 0
+                        ? "متابعة مجاناً"
+                        : `ادفع عبر زين كاش ${
+                            formData.plan?.monthly_price
+                              ? formData.plan.monthly_price.toLocaleString(
+                                  "en-IQ",
+                                )
+                              : "0"
+                          } د.ع`}
                   </button>
                 </div>
               )}
