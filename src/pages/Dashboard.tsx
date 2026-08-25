@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueries } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
@@ -12,7 +12,14 @@ import { toast } from "sonner";
 import { subscriptionKeys } from "@/api/wrappers/subscription.wrapper";
 import { subscriptionAPI } from "@/api/endpoints/subscription.endpoint";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, ExternalLink, Settings } from "lucide-react";
+import {
+  AlertCircle,
+  ExternalLink,
+  LayoutDashboard,
+  Settings,
+  Store as StoreIcon,
+  X,
+} from "lucide-react";
 
 // Types
 interface Store {
@@ -237,6 +244,7 @@ const StoreCard = ({
   onManage: () => void;
 }) => {
   const openStoreMutation = useValidateToStorefront();
+  const [openChoiceOpen, setOpenChoiceOpen] = useState(false);
   const timeRemaining = subscription?.end_at
     ? getTimeRemaining(subscription.end_at)
     : null;
@@ -251,8 +259,9 @@ const StoreCard = ({
   const storefrontUrl = resolveStorefrontUrl(store);
   const dashboardUrl = resolveDashboardUrl(store);
 
-  const handleOpenStore = () => {
+  const handleOpenDashboard = () => {
     if (!domainOnly) return;
+    setOpenChoiceOpen(false);
 
     // Open immediately on click so Safari treats it as a user gesture.
     const newWindow = window.open("", "_blank");
@@ -267,7 +276,7 @@ const StoreCard = ({
             dashboardUrl;
           if (!redirectUrl) {
             newWindow?.close();
-            toast.error("تعذر فتح المتجر. حاول مرة أخرى.");
+            toast.error("تعذر فتح الداشبورد. حاول مرة أخرى.");
             return;
           }
           if (newWindow && !newWindow.closed) {
@@ -281,12 +290,21 @@ const StoreCard = ({
           const errorMessage =
             error?.response?.data?.message ||
             error?.message ||
-            "حدث خطأ في فتح المتجر";
+            "حدث خطأ في فتح الداشبورد";
           toast.error(errorMessage);
-          console.error("Error opening store:", error);
+          console.error("Error opening dashboard:", error);
         },
       },
     );
+  };
+
+  const handleOpenStorefront = () => {
+    if (!storefrontUrl) {
+      toast.error("رابط المتجر غير متوفر حالياً.");
+      return;
+    }
+    setOpenChoiceOpen(false);
+    window.open(storefrontUrl, "_blank", "noopener,noreferrer");
   };
 
   const logoUrl = resolveStoreLogoUrl(store.logo);
@@ -310,19 +328,14 @@ const StoreCard = ({
       </div>
 
       {dashboardUrl && (
-        <a
-          href={dashboardUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
           dir="ltr"
-          className="mb-3 block truncate text-left text-xs text-violet-600 hover:underline dark:text-violet-400"
-          onClick={(e) => {
-            e.preventDefault();
-            handleOpenStore();
-          }}
+          className="mb-3 block w-full truncate text-left text-xs text-violet-600 hover:underline dark:text-violet-400"
+          onClick={() => setOpenChoiceOpen(true)}
         >
           {dashboardUrl.replace(/^https?:\/\//, "")}
-        </a>
+        </button>
       )}
 
       {storefrontUrl && (
@@ -347,7 +360,7 @@ const StoreCard = ({
 
         {domainOnly && (
           <button
-            onClick={handleOpenStore}
+            onClick={() => setOpenChoiceOpen(true)}
             disabled={openStoreMutation.isPending}
             className="flex-1 bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -356,6 +369,79 @@ const StoreCard = ({
           </button>
         )}
       </div>
+
+      {openChoiceOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setOpenChoiceOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`open-choice-${store.id}`}
+            className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-800 dark:bg-black"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h4
+                  id={`open-choice-${store.id}`}
+                  className="text-lg font-bold text-black dark:text-white"
+                >
+                  وين تريد تفتح؟
+                </h4>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  اختر المتجر أو لوحة التحكم
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpenChoiceOpen(false)}
+                className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-900"
+                aria-label="إغلاق"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleOpenStorefront}
+                disabled={!storefrontUrl}
+                className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-right transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-900"
+              >
+                <StoreIcon className="h-5 w-5 shrink-0 text-black dark:text-white" />
+                <span className="flex-1">
+                  <span className="block text-sm font-semibold text-black dark:text-white">
+                    فتح المتجر
+                  </span>
+                  <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400" dir="ltr">
+                    {storefrontUrl?.replace(/^https?:\/\//, "") || "غير متوفر"}
+                  </span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenDashboard}
+                disabled={openStoreMutation.isPending}
+                className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-right transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-900"
+              >
+                <LayoutDashboard className="h-5 w-5 shrink-0 text-black dark:text-white" />
+                <span className="flex-1">
+                  <span className="block text-sm font-semibold text-black dark:text-white">
+                    {openStoreMutation.isPending ? "جاري الفتح..." : "فتح الداشبورد"}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400" dir="ltr">
+                    {dashboardUrl?.replace(/^https?:\/\//, "") || `dash.${domainOnly}.mel.iq`}
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -403,12 +489,12 @@ function Dashboard() {
     [subscriptions],
   );
 
-  // Redirect to login if not authenticated
+  // Redirect only when /auth/me actually fails (401) — not when data is briefly empty
   useEffect(() => {
-    if (!meLoading && (isError || !me)) {
+    if (!meLoading && isError) {
       navigate("/login", { replace: true });
     }
-  }, [meLoading, isError, me, navigate]);
+  }, [meLoading, isError, navigate]);
 
   const displayUser = me || user;
   const displayName =

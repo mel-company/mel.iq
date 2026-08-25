@@ -49,19 +49,16 @@ export const useSendOtp = () => {
 };
 
 /**
- * Me
+ * Me — يعتمد على كوكي `mat` أو Bearer في localStorage (JwtAuthGuard يقبل الاثنين).
+ * ما نعطّل الطلب إذا localStorage فاضي؛ مسح التوكن المحلي ما يلغي الجلسة بالكوكي.
  */
 export const useMe = () => {
   const token =
     typeof window !== "undefined" ? window.localStorage.getItem("token") : null;
-  const hasValidToken = Boolean(
-    token && token !== "undefined" && token !== "null",
-  );
 
   return useQuery<any, Error, any>({
-    queryKey: [...authKeys.all, token],
+    queryKey: [...authKeys.all, token ?? "cookie"],
     queryFn: () => authAPI.me(),
-    enabled: hasValidToken,
     retry: false,
   });
 };

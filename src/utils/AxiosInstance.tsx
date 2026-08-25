@@ -33,16 +33,12 @@ axiosInstance.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       const url = String(error.config?.url || "");
-      // امسح التوكن التالف فقط على طلبات تحتاج تسجيل دخول (مو login/register/otp)
-      const isPublicAuth =
-        url.includes("/auth/login") ||
-        url.includes("/auth/register") ||
-        url.includes("/auth/send-otp") ||
-        url.includes("/auth/verify");
-      // جاهزية الداشبورد: فشل الفحص ما يعني جلسة منتهية
-      const isDashboardReady = url.includes("/domain/dashboard-ready");
+      // امسح الجلسة المحلية فقط إذا /auth/me أو refresh فشلوا —
+      // 401 من أي endpoint ثاني (صلاحيات/دومين/…) ما يعني إن المستخدم طالع
+      const isSessionCheck =
+        url.includes("/auth/me") || url.includes("/auth/refresh");
 
-      if (!isPublicAuth && !isDashboardReady) {
+      if (isSessionCheck) {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
       }
