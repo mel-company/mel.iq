@@ -31,8 +31,13 @@ export const authAPI = {
   },
 
   sendOtp: async (params?: any): Promise<any> => {
-    const { data } = await axiosInstance.post<any>("/auth/send-otp", {
-      phone: params?.phone,
+    const phone = params?.phone;
+    if (!phone || String(phone).trim() === "") {
+      throw new Error("رقم الهاتف مطلوب لإرسال رمز التحقق");
+    }
+    // Public endpoint — works without JWT (same as login OTP send).
+    const { data } = await axiosInstance.post<any>("/auth/login", {
+      phone,
     });
     return data;
   },

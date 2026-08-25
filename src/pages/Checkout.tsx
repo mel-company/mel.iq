@@ -50,12 +50,26 @@ function normalizeToIqE164(input: string): string | null {
 
 /** Phone used for OTP (logged-in user object or checkout form), always IQ E.164 when possible. */
 function resolveOtpPhone(user: unknown, formPhone: string): string | null {
-  const raw =
-    (user as { phone?: string; user?: { phone?: string } })?.phone ||
-    (user as { user?: { phone?: string } })?.user?.phone ||
-    formPhone;
-  if (raw == null || String(raw).trim() === "") return null;
-  return normalizeToIqE164(String(raw));
+  const u = user as {
+    phone?: string;
+    username?: string;
+    user?: { phone?: string };
+  } | null;
+
+  const candidates = [
+    formPhone,
+    u?.phone,
+    u?.user?.phone,
+    // AuthContext sometimes stores username as the phone after verify
+    u?.username,
+  ];
+
+  for (const raw of candidates) {
+    if (raw == null || String(raw).trim() === "") continue;
+    const normalized = normalizeToIqE164(String(raw));
+    if (normalized) return normalized;
+  }
+  return null;
 }
 
 function Checkout() {
