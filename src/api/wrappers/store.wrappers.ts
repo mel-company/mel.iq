@@ -42,6 +42,25 @@ export const useCheckStoreDomainAvailability = () => {
 };
 
 /**
+ * Check if dash.{domain} DNS + SSL are ready
+ */
+export const useCheckDashboardReady = () => {
+  return useMutation<
+    {
+      ready: boolean;
+      host: string;
+      dnsOk?: boolean;
+      tlsOk?: boolean;
+      domain?: string;
+    },
+    Error,
+    { domain: string }
+  >({
+    mutationFn: (params) => storeAPI.checkDashboardReady(params),
+  });
+};
+
+/**
  * Add a new store
  */
 export const useAddStore = () => {

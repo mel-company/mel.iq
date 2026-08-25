@@ -40,6 +40,27 @@ export const storeAPI = {
     return data;
   },
 
+  /**
+   * Check whether dash.{domain}.mel.iq DNS + SSL are ready for redirect
+   */
+  checkDashboardReady: async (params: {
+    domain: string;
+  }): Promise<{
+    ready: boolean;
+    host: string;
+    dnsOk?: boolean;
+    tlsOk?: boolean;
+    domain?: string;
+  }> => {
+    const { data } = await axiosInstance.post<{
+      ready: boolean;
+      host: string;
+      dnsOk?: boolean;
+      tlsOk?: boolean;
+      domain?: string;
+    }>("/domain/dashboard-ready", params);
+    return data;
+  },
 
   /**
    * Update a store
@@ -49,4 +70,4 @@ export const storeAPI = {
     const { data } = await axiosInstance.put<any>(`/store/${id}`, params);
     return data;
   },
-}
+};

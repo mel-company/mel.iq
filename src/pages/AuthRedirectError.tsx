@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
 import { useValidateUser } from "@/api/wrappers/auth.wrappers";
+import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
+import StoreProvisioningGate from "@/components/StoreProvisioningGate";
 
 type RedirectErrorState = {
   token?: string;
@@ -16,10 +18,34 @@ function AuthRedirectError() {
   const state = (location.state as RedirectErrorState | null) || {};
   const [isRetrying, setIsRetrying] = useState(false);
   const { mutateAsync: validateUser } = useValidateUser();
+  const {
+    isWaiting: isProvisioning,
+    timedOut: provisioningTimedOut,
+    lastStatus: provisioningStatus,
+    error: provisioningError,
+    waitUntilReady,
+    reset: resetProvisioning,
+  } = useWaitForDashboardReady();
+  const [pendingRedirectUrl, setPendingRedirectUrl] = useState<string | null>(
+    null,
+  );
 
   const store = String(state.store || "").trim();
   const token = String(state.token || "").trim();
   const errorCode = state.errorCode || "AUTH_REDIRECT_FAILED";
+
+  const goToDashboard = async (redirectUrl: string) => {
+    setPendingRedirectUrl(redirectUrl);
+    if (!store) {
+      window.location.assign(redirectUrl);
+      return;
+    }
+    const result = await waitUntilReady(store);
+    if (result.status === "ready") {
+      resetProvisioning();
+      window.location.assign(redirectUrl);
+    }
+  };
 
   const handleRetry = async () => {
     if (!store || !token) {
@@ -40,7 +66,7 @@ function AuthRedirectError() {
         return;
       }
 
-      window.location.assign(redirectUrl);
+      await goToDashboard(redirectUrl);
     } catch (error) {
       console.error("AUTH REDIRECT FAILED", error);
       toast.error("فشلت إعادة المحاولة. حاول مرة أخرى.");
@@ -70,10 +96,12 @@ function AuthRedirectError() {
           <button
             type="button"
             onClick={() => void handleRetry()}
-            disabled={isRetrying || !store || !token}
+            disabled={isRetrying || isProvisioning || !store || !token}
             className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 py-3 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isRetrying ? "جاري إعادة المحاولة..." : "إعادة المحاولة"}
+            {isRetrying || isProvisioning
+              ? "جاري إعادة المحاولة..."
+              : "إعادة المحاولة"}
           </button>
 
           <button
@@ -89,6 +117,24 @@ function AuthRedirectError() {
           رمز الخطأ: {errorCode}
         </p>
       </div>
+
+      <StoreProvisioningGate
+        open={isProvisioning || provisioningTimedOut}
+        domain={store}
+        lastStatus={provisioningStatus}
+        timedOut={provisioningTimedOut}
+        error={provisioningError}
+        onRetry={() => {
+          if (pendingRedirectUrl) void goToDashboard(pendingRedirectUrl);
+          else void handleRetry();
+        }}
+        onContinueAnyway={() => {
+          if (pendingRedirectUrl) {
+            resetProvisioning();
+            window.location.assign(pendingRedirectUrl);
+          }
+        }}
+      />
     </div>
   );
 }

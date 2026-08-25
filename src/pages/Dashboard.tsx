@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueries } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
@@ -13,6 +13,8 @@ import { subscriptionKeys } from "@/api/wrappers/subscription.wrapper";
 import { subscriptionAPI } from "@/api/endpoints/subscription.endpoint";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, ExternalLink, Settings } from "lucide-react";
+import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
+import StoreProvisioningGate from "@/components/StoreProvisioningGate";
 
 // Types
 interface Store {
@@ -215,14 +217,37 @@ const StoreCard = ({
     : null;
   const statusBadge = subscription ? getStatusBadge(subscription.status) : null;
   const navigate = useNavigate();
+  const {
+    isWaiting: isProvisioning,
+    timedOut: provisioningTimedOut,
+    lastStatus: provisioningStatus,
+    error: provisioningError,
+    waitUntilReady,
+    reset: resetProvisioning,
+    normalizeDomain,
+  } = useWaitForDashboardReady();
+  const [pendingRedirectUrl, setPendingRedirectUrl] = useState<string | null>(
+    null,
+  );
+  const [pendingWindow, setPendingWindow] = useState<Window | null>(null);
+
+  const domainOnly = store.domain
+    ? normalizeDomain(store.domain)
+    : "";
+
+  const finishOpen = (redirectUrl: string, targetWindow: Window | null) => {
+    resetProvisioning();
+    setPendingRedirectUrl(null);
+    setPendingWindow(null);
+    if (targetWindow && !targetWindow.closed) {
+      targetWindow.location.href = redirectUrl;
+      return;
+    }
+    window.location.href = redirectUrl;
+  };
 
   const handleOpenStore = () => {
-    if (!store.domain) return;
-
-    const domainOnly = store.domain
-      .replace(/^https?:\/\//, "")
-      .replace(/\.mel\.iq$/i, "")
-      .split("/")[0];
+    if (!store.domain || !domainOnly) return;
 
     // Open immediately on click so Safari treats it as a user gesture.
     const newWindow = window.open("", "_blank");
@@ -237,11 +262,20 @@ const StoreCard = ({
             toast.error("تعذر فتح المتجر. حاول مرة أخرى.");
             return;
           }
-          if (newWindow) {
-            newWindow.location.href = redirectUrl;
-            return;
-          }
-          window.location.href = redirectUrl;
+
+          setPendingRedirectUrl(redirectUrl);
+          setPendingWindow(newWindow);
+
+          void (async () => {
+            const result = await waitUntilReady(domainOnly);
+            if (result.status === "ready") {
+              finishOpen(redirectUrl, newWindow);
+            } else if (result.status === "timeout") {
+              // Keep blank tab; gate offers retry / continue
+            } else {
+              newWindow?.close();
+            }
+          })();
         },
         onError: (error: any) => {
           newWindow?.close();
@@ -299,14 +333,38 @@ const StoreCard = ({
         {store.domain && (
           <button
             onClick={handleOpenStore}
-            disabled={openStoreMutation.isPending}
+            disabled={openStoreMutation.isPending || isProvisioning}
             className="flex-1 bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ExternalLink className="w-4 h-4" />
-            {openStoreMutation.isPending ? "جاري..." : "فتح"}
+            {openStoreMutation.isPending || isProvisioning
+              ? "جاري..."
+              : "فتح"}
           </button>
         )}
       </div>
+
+      <StoreProvisioningGate
+        open={isProvisioning || provisioningTimedOut}
+        domain={domainOnly}
+        lastStatus={provisioningStatus}
+        timedOut={provisioningTimedOut}
+        error={provisioningError}
+        onRetry={() => {
+          if (!pendingRedirectUrl || !domainOnly) return;
+          void (async () => {
+            const result = await waitUntilReady(domainOnly);
+            if (result.status === "ready") {
+              finishOpen(pendingRedirectUrl, pendingWindow);
+            }
+          })();
+        }}
+        onContinueAnyway={() => {
+          if (pendingRedirectUrl) {
+            finishOpen(pendingRedirectUrl, pendingWindow);
+          }
+        }}
+      />
     </div>
   );
 };

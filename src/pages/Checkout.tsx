@@ -20,6 +20,8 @@ import {
   getApiErrorMessage,
   isPhoneTakenError,
 } from "@/utils/otp";
+import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
+import StoreProvisioningGate from "@/components/StoreProvisioningGate";
 
 /** Normalize Iraqi mobile input to E.164 (+964…) for the API. */
 function normalizeToIqE164(input: string): string | null {
@@ -78,6 +80,18 @@ function Checkout() {
   const { mutate: verifyOtpMutation, isPending: isVerifyingOtp } = useVerify();
   const { mutate: addStoreMutation } = useAddStore();
   const { mutate: createSubscriptionMutation } = useCreateSubscription();
+  const {
+    timedOut: provisioningTimedOut,
+    lastStatus: provisioningStatus,
+    error: provisioningError,
+    waitUntilReady,
+    reset: resetProvisioning,
+  } = useWaitForDashboardReady();
+  const [pendingTemplatesNav, setPendingTemplatesNav] = useState<{
+    websiteType: string;
+    domain: string;
+    url: string;
+  } | null>(null);
 
   // Initialize formData with user info if available - using lazy initialization
   const [formData, setFormData] = useState(() => {
@@ -115,6 +129,30 @@ function Checkout() {
   const [domainChecked, setDomainChecked] = useState(false);
   const [domainAvailable, setDomainAvailable] = useState<boolean | null>(null);
   const [isCheckingDomain, setIsCheckingDomain] = useState(false);
+
+  const goToTemplates = (nav: {
+    websiteType: string;
+    domain: string;
+    url: string;
+  }) => {
+    resetProvisioning();
+    setPendingTemplatesNav(null);
+    navigate("/templates", { state: nav });
+  };
+
+  const finishAfterProvisioning = async (nav: {
+    websiteType: string;
+    domain: string;
+    url: string;
+  }) => {
+    setPendingTemplatesNav(nav);
+    const result = await waitUntilReady(nav.domain);
+    if (result.status === "ready" || result.status === "cancelled") {
+      if (result.status === "ready") goToTemplates(nav);
+      return;
+    }
+    // timeout: gate stays open with retry / continue buttons
+  };
 
   // Set default plan if skipToStep is 3 and no plan selected
   useEffect(() => {
@@ -537,13 +575,10 @@ storeFormData.append("planId", formData.plan.id);
                 },
                 {
                   onSuccess: () => {
-                    // Navigate to templates page after successful subscription creation
-                    navigate("/templates", {
-                      state: {
-                        websiteType: formData.websiteType,
-                        domain: formData.domain,
-                        url: formData.domain,
-                      },
+                    void finishAfterProvisioning({
+                      websiteType: formData.websiteType,
+                      domain: formData.domain,
+                      url: formData.domain,
                     });
                   },
                   onError: (error) => {
@@ -551,13 +586,10 @@ storeFormData.append("planId", formData.plan.id);
                     toast.warning(
                       "تم إنشاء المتجر بنجاح، لكن حدث خطأ في إنشاء الاشتراك. الرجاء المحاولة مرة أخرى.",
                     );
-                    // Still navigate even if subscription creation fails
-                    navigate("/templates", {
-                      state: {
-                        websiteType: formData.websiteType,
-                        domain: formData.domain,
-                        url: formData.domain,
-                      },
+                    void finishAfterProvisioning({
+                      websiteType: formData.websiteType,
+                      domain: formData.domain,
+                      url: formData.domain,
                     });
                   },
                 },
@@ -585,12 +617,10 @@ storeFormData.append("planId", formData.plan.id);
         });
       } else {
         // Navigate to templates page if user is not logged in
-        navigate("/templates", {
-          state: {
-            websiteType: formData.websiteType,
-            domain: formData.domain,
-            url: formData.domain,
-          },
+        void finishAfterProvisioning({
+          websiteType: formData.websiteType,
+          domain: formData.domain,
+          url: formData.domain,
         });
       }
     }
@@ -1276,6 +1306,21 @@ storeFormData.append("planId", formData.plan.id);
           )}
         </div>
       </div>
+
+      <StoreProvisioningGate
+        open={Boolean(pendingTemplatesNav)}
+        domain={pendingTemplatesNav?.domain || formData.domain}
+        lastStatus={provisioningStatus}
+        timedOut={provisioningTimedOut}
+        error={provisioningError}
+        onRetry={() => {
+          if (!pendingTemplatesNav) return;
+          void finishAfterProvisioning(pendingTemplatesNav);
+        }}
+        onContinueAnyway={() => {
+          if (pendingTemplatesNav) goToTemplates(pendingTemplatesNav);
+        }}
+      />
     </div>
   );
 }
