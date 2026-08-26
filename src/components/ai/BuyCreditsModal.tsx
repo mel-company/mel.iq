@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
-import { X, Loader2, Sparkles, Store, PenLine } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { X, Loader2, Sparkles, Store, PenLine, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
   useCreditPackages,
   usePurchaseCredits,
-  aiGeneratorKeys,
 } from "@/api/wrappers/aiStoreGenerator.wrappers";
 
 interface BuyCreditsModalProps {
@@ -14,25 +12,35 @@ interface BuyCreditsModalProps {
 }
 
 export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps) {
-  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
 
   const { data: packages, isLoading } = useCreditPackages(open);
   const purchase = usePurchaseCredits();
 
   useEffect(() => {
-    if (open) setSelected(null);
+    if (open) {
+      setSelected(null);
+      setRedirecting(false);
+    }
   }, [open]);
 
   const handleBuy = async (packId: string) => {
     setSelected(packId);
     try {
-      await purchase.mutateAsync(packId);
-      toast.success("تم شحن الرصيد بنجاح");
-      queryClient.invalidateQueries({ queryKey: aiGeneratorKeys.credits() });
-      onClose();
+      const returnBaseUrl =
+        typeof window !== "undefined"
+          ? `${window.location.origin}${window.location.pathname}`
+          : undefined;
+      const data = await purchase.mutateAsync({ packId, returnBaseUrl });
+      if (data.redirectUrl) {
+        setRedirecting(true);
+        window.location.href = data.redirectUrl;
+      } else {
+        toast.error("لم يتم استلام رابط الدفع");
+      }
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "تعذر إكمال عملية الشراء");
+      toast.error(e?.response?.data?.message || "تعذر بدء عملية الدفع");
     } finally {
       setSelected(null);
     }
@@ -57,17 +65,24 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
           </div>
           <h2 className="text-xl font-semibold">اشحن رصيد الذكاء الاصطناعي</h2>
           <p className="text-sm text-white/60 mt-1">
-            اختر الباقة التي تناسبك وابدأ إنشاء المتاجر فوراً
+            اختر الباقة وادفع عبر زين كاش لتتمتع بالرصيد فوراً
           </p>
         </div>
 
-        {isLoading && (
+        {redirecting && (
+          <div className="flex flex-col items-center justify-center py-8 gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+            <p className="text-white/70">جاري توجيهك إلى بوابة زين كاش...</p>
+          </div>
+        )}
+
+        {!redirecting && isLoading && (
           <div className="flex justify-center py-8">
             <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
           </div>
         )}
 
-        {!isLoading && (
+        {!redirecting && !isLoading && (
           <div className="grid gap-3">
             {packages?.map((pack) => (
               <button
@@ -100,7 +115,9 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
                       {pack.currency}
                     </span>
                   </div>
-                  <div className="text-xs text-white/40">اشترِ الآن</div>
+                  <div className="text-xs text-white/40 inline-flex items-center gap-1">
+                    ادفع عبر زين كاش <ExternalLink size={10} />
+                  </div>
                 </div>
                 {selected === pack.id && purchase.isPending && (
                   <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
@@ -111,7 +128,7 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
         )}
 
         <p className="text-center text-xs text-white/40 mt-6">
-          الرصيد المشترى لا ينتهي ويُستخدم قبل الرصيد المجاني.
+          بعد الدفع الناجح، سيتم إضافة الرصيد تلقائياً لحسابك.
         </p>
       </div>
     </div>

@@ -77,5 +77,6 @@ export const useCreditPackages = (enabled = true) =>
 
 export const usePurchaseCredits = () =>
   useMutation({
-    mutationFn: (packId: string) => aiStoreGeneratorAPI.purchaseCredits(packId),
+    mutationFn: ({ packId, returnBaseUrl }: { packId: string; returnBaseUrl?: string }) =>
+      aiStoreGeneratorAPI.purchaseCredits(packId, returnBaseUrl),
   });

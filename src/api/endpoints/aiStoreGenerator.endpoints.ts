@@ -237,14 +237,25 @@ export const aiStoreGeneratorAPI = {
     return data;
   },
 
-  purchaseCredits: async (packId: string): Promise<{
-    unlimited: boolean;
-    periodStart?: string;
-    periodEnd?: string;
-    generations: { remaining: number; purchased?: number };
-    editor: { remaining: number; purchased?: number };
+  purchaseCredits: async (packId: string, returnBaseUrl?: string): Promise<{
+    id: string;
+    redirectUrl: string;
+    amount: number;
+    currency: string;
+    status: string;
   }> => {
-    const { data } = await axiosInstance.post("/credits/purchase", { packId });
+    const { data } = await axiosInstance.post("/credits/purchase", { packId, returnBaseUrl });
+    return data;
+  },
+
+  getCreditPurchaseStatus: async (paymentId: string): Promise<{
+    id: string;
+    status: string;
+    amount: number;
+    currency: string;
+    packData?: any;
+  }> => {
+    const { data } = await axiosInstance.get(`/credits/purchase/${paymentId}/status`);
     return data;
   },
 

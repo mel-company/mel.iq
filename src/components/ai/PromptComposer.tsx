@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ImagePlus, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCredits } from "@/api/wrappers/aiStoreGenerator.wrappers";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useCredits,
+  aiGeneratorKeys,
+} from "@/api/wrappers/aiStoreGenerator.wrappers";
 import {
   aiStoreGeneratorAPI,
   type GenerationEvent,
@@ -77,6 +81,39 @@ async function downscale(file: File): Promise<File> {
 export default function PromptComposer() {
   const { user } = useAuth();
   const { data: credits } = useCredits(Boolean(user));
+  const queryClient = useQueryClient();
+
+  // Handle a ZainCash credit purchase return (success or failure).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentId = params.get("paymentId");
+    const result = params.get("result");
+    if (!paymentId) return;
+
+    aiStoreGeneratorAPI
+      .getCreditPurchaseStatus(paymentId)
+      .then((data) => {
+        if (data.status === "PAID") {
+          toast.success("تم شحن الرصيد بنجاح");
+          queryClient.invalidateQueries({ queryKey: aiGeneratorKeys.credits() });
+        } else if (data.status === "FAILED" || data.status === "EXPIRED") {
+          toast.error("فشلت عملية الدفع أو انتهت صلاحيتها");
+        } else if (result === "failure") {
+          toast.error("لم تكتمل عملية الدفع");
+        }
+      })
+      .catch(() => toast.error("تعذر التحقق من حالة الدفع"))
+      .finally(() => {
+        params.delete("paymentId");
+        params.delete("result");
+        params.delete("status");
+        const clean =
+          params.toString().length > 0
+            ? `?${params.toString()}`
+            : window.location.pathname;
+        window.history.replaceState({}, "", clean);
+      });
+  }, [queryClient]);
 
   const [prompt, setPrompt] = useState(
     () => sessionStorage.getItem(DRAFT_KEY) || "",
