@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ImagePlus, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCredits } from "@/api/wrappers/aiStoreGenerator.wrappers";
 import {
   aiStoreGeneratorAPI,
   type GenerationEvent,
@@ -15,6 +16,7 @@ import type {
 import DesignReview from "./DesignReview";
 import SuccessModal from "./SuccessModal";
 import CreditsBadge from "./CreditsBadge";
+import BuyCreditsModal from "./BuyCreditsModal";
 
 /**
  * The landing page's primary call to action: describe a store, get one.
@@ -74,6 +76,7 @@ async function downscale(file: File): Promise<File> {
 
 export default function PromptComposer() {
   const { user } = useAuth();
+  const { data: credits } = useCredits(Boolean(user));
 
   const [prompt, setPrompt] = useState(
     () => sessionStorage.getItem(DRAFT_KEY) || "",
@@ -107,6 +110,7 @@ export default function PromptComposer() {
   /** Uploaded reference urls, carried from the design phase into the build. */
   const [pendingRefs, setPendingRefs] = useState<string[] | undefined>();
   const [reviseError, setReviseError] = useState<string | null>(null);
+  const [buyOpen, setBuyOpen] = useState(false);
 
   const fileInput = useRef<HTMLInputElement>(null);
   // Survives the auth modal without being a render dependency.
@@ -151,6 +155,14 @@ export default function PromptComposer() {
     setImages((prev) => [...prev, ...processed]);
   };
 
+  const hasStoreCredits = () =>
+    Boolean(
+      credits?.unlimited ||
+      (credits &&
+        ((credits.generations?.remaining ?? 0) +
+          (credits.generations?.purchased ?? 0)) > 0),
+    );
+
   const run = async () => {
     setError(null);
     setRefunded(false);
@@ -159,6 +171,12 @@ export default function PromptComposer() {
     stepsRef.current = [];
     setActiveStep(0);
     setStoreName(undefined);
+
+    if (user && !hasStoreCredits()) {
+      setBuyOpen(true);
+      setError("لا يوجد رصيد كافٍ. اشحن رصيدك أولاً.");
+      return;
+    }
 
     try {
       let referenceImages: string[] = [];
@@ -258,6 +276,12 @@ export default function PromptComposer() {
    * The credit is charged here, so revising a design costs nothing.
    */
   const runBuild = async (id: string, referenceImages?: string[]) => {
+    if (user && !hasStoreCredits()) {
+      setBuyOpen(true);
+      setError("لا يوجد رصيد كافٍ. اشحن رصيدك أولاً.");
+      return;
+    }
+
     setPhase("generating");
     setEntries([]);
     addStatus("جاري بناء المتجر...");
@@ -465,6 +489,7 @@ export default function PromptComposer() {
             setGenerationId(null);
           }}
         />
+        <BuyCreditsModal open={buyOpen} onClose={() => setBuyOpen(false)} />
       </div>
     );
   }

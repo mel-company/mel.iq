@@ -67,3 +67,15 @@ export const useGenerationStatus = (id: string | null) =>
       return status === "SUCCEEDED" || status === "FAILED" ? false : 5_000;
     },
   });
+
+export const useCreditPackages = (enabled = true) =>
+  useQuery({
+    queryKey: [...aiGeneratorKeys.credits(), "packages"],
+    queryFn: () => aiStoreGeneratorAPI.getCreditPackages(),
+    enabled,
+  });
+
+export const usePurchaseCredits = () =>
+  useMutation({
+    mutationFn: (packId: string) => aiStoreGeneratorAPI.purchaseCredits(packId),
+  });

@@ -34,12 +34,12 @@ export type GenerationEvent =
   /** The ordered steps this run will take, sent before any work starts. */
   | { type: "plan"; steps: PlannedStep[] }
   | {
-      type: "status";
-      message: string;
-      step?: string;
-      index?: number;
-      total?: number;
-    }
+    type: "status";
+    message: string;
+    step?: string;
+    index?: number;
+    total?: number;
+  }
   | { type: "template"; templateId: string; reason: string }
   | { type: "brand"; storeName: string }
   /** The vertical the creative director settled on. */
@@ -49,37 +49,37 @@ export type GenerationEvent =
    * `design` is null when the composer fell back to filling a template.
    */
   | {
-      type: "design";
-      designedPages?: number;
-      totalPages?: number;
-      truncatedPages?: string[];
-      skippedPages?: string[];
-      design?: PageDesign | null;
-    }
+    type: "design";
+    designedPages?: number;
+    totalPages?: number;
+    truncatedPages?: string[];
+    skippedPages?: string[];
+    design?: PageDesign | null;
+  }
   /**
    * The design phase's result. Arrives instead of `done`: nothing has been
    * built or charged yet, and the merchant decides whether it should be.
    */
   | {
-      type: "proposal";
-      generationId: string;
-      design: PageDesign | null;
-      storeName: string;
-    }
+    type: "proposal";
+    generationId: string;
+    design: PageDesign | null;
+    storeName: string;
+  }
   /** Something degraded but the run continued. */
   | { type: "warning"; code: string; message: string }
   | {
-      type: "done";
-      generationId: string;
-      subdomain: string;
-      storeName: string;
-      redirectUrl: string;
-      /** Storefront address; live only after the user publishes. */
-      storeUrl?: string;
-      templateId?: string;
-      /** Repeated here so a client that reconnected still gets it. */
-      design?: PageDesign | null;
-    }
+    type: "done";
+    generationId: string;
+    subdomain: string;
+    storeName: string;
+    redirectUrl: string;
+    /** Storefront address; live only after the user publishes. */
+    storeUrl?: string;
+    templateId?: string;
+    /** Repeated here so a client that reconnected still gets it. */
+    design?: PageDesign | null;
+  }
   | { type: "error"; message: string; refunded?: boolean };
 
 export interface GenerationHistoryItem {
@@ -214,8 +214,37 @@ export const aiStoreGeneratorAPI = {
     return data;
   },
 
-  getCredits: async (): Promise<{ credits: number; unlimited?: boolean }> => {
+  getCredits: async (): Promise<{
+    unlimited: boolean;
+    periodStart?: string;
+    periodEnd?: string;
+    generations: { included?: number; used?: number; remaining: number; purchased?: number };
+    editor: { included?: number; used?: number; remaining: number; purchased?: number };
+  }> => {
     const { data } = await axiosInstance.get("/credits/me");
+    return data;
+  },
+
+  getCreditPackages: async (): Promise<Array<{
+    id: string;
+    name: string;
+    generations: number;
+    editor: number;
+    price: number;
+    currency: string;
+  }>> => {
+    const { data } = await axiosInstance.get("/credits/packages");
+    return data;
+  },
+
+  purchaseCredits: async (packId: string): Promise<{
+    unlimited: boolean;
+    periodStart?: string;
+    periodEnd?: string;
+    generations: { remaining: number; purchased?: number };
+    editor: { remaining: number; purchased?: number };
+  }> => {
+    const { data } = await axiosInstance.post("/credits/purchase", { packId });
     return data;
   },
 
