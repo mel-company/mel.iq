@@ -57,11 +57,11 @@ export const useRestoreGeneration = () =>
  * The stream is the primary channel; this exists so a closed or reloaded tab
  * can pick a run back up rather than losing it — and the credit with it.
  */
-export const useGenerationStatus = (id: string | null) =>
+export const useGenerationStatus = (id: string | null, enabled = true) =>
   useQuery({
     queryKey: aiGeneratorKeys.generation(id ?? ""),
     queryFn: () => aiStoreGeneratorAPI.getGeneration(id!),
-    enabled: Boolean(id),
+    enabled: enabled && Boolean(id),
     refetchInterval: (query) => {
       const status = (query.state.data as any)?.status;
       return status === "SUCCEEDED" || status === "FAILED" ? false : 5_000;

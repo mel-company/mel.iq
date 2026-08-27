@@ -2,6 +2,15 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
+interface TemplateItem {
+  id: number
+  name: string
+  icon: string
+  description: string
+  price: number
+  preview: string
+}
+
 function Templates() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -28,7 +37,7 @@ function Templates() {
 
   const templates = selectedType === 'store' ? storeTemplates : restaurantTemplates
 
-  const handlePurchase = (template) => {
+  const handlePurchase = (template: TemplateItem) => {
     // Simulate purchase and download
     alert(`تم شراء ${template.name} بنجاح! سيتم تحميل القالب الآن.`)
     // Simulate download
@@ -57,8 +66,8 @@ function Templates() {
             <button
               onClick={() => setSelectedType('store')}
               className={`px-6 py-3 rounded-md font-semibold transition-colors ${selectedType === 'store'
-                  ? 'bg-black dark:bg-white text-white dark:text-black'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900'
+                ? 'bg-black dark:bg-white text-white dark:text-black'
+                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900'
                 }`}
             >
               متاجر إلكترونية 🛍️
@@ -66,8 +75,8 @@ function Templates() {
             <button
               onClick={() => setSelectedType('restaurant')}
               className={`px-6 py-3 rounded-md font-semibold transition-colors ${selectedType === 'restaurant'
-                  ? 'bg-black dark:bg-white text-white dark:text-black'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900'
+                ? 'bg-black dark:bg-white text-white dark:text-black'
+                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900'
                 }`}
             >
               منيو مطاعم 🍽️

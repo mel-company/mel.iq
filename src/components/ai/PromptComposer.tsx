@@ -51,6 +51,7 @@ type Phase =
   /** Design on screen, waiting for the merchant to accept or revise it. */
   | "reviewing"
   | "generating"
+  | "polling"
   | "done";
 
 /** Re-encodes an image to at most MAX_IMAGE_EDGE on its long side. */
@@ -132,7 +133,7 @@ export default function PromptComposer() {
     editorUrl: string;
     storeUrl?: string;
     storeName: string;
-    subdomain: string;
+    subdomain?: string;
   } | null>(null);
   /**
    * The design the store was built from.
@@ -157,6 +158,9 @@ export default function PromptComposer() {
   const stepsRef = useRef<PlannedStep[]>([]);
   // Read inside the SSE callback, which closes over stale state.
   const designRef = useRef<PageDesign | null>(null);
+  // Set to true when the stream emits its terminal event (proposal/done/error).
+  const designTerminalRef = useRef(false);
+  const buildTerminalRef = useRef(false);
 
   useEffect(() => {
     sessionStorage.setItem(DRAFT_KEY, prompt);
@@ -165,6 +169,49 @@ export default function PromptComposer() {
   useEffect(() => {
     designRef.current = design;
   }, [design]);
+
+  // If the SSE connection drops before the server finishes, fall back to
+  // polling the generation status so the modal stays open until the run is
+  // actually complete.
+  useEffect(() => {
+    if (phase !== "polling" || !generationId) return;
+
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const data = await aiStoreGeneratorAPI.getGeneration(generationId);
+        if (cancelled) return;
+
+        if (data.status === "SUCCEEDED") {
+          const { redirectUrl } = await aiStoreGeneratorAPI.openGeneration(
+            generationId,
+          );
+          if (cancelled) return;
+          const url = new URL(redirectUrl);
+          const subdomain = url.searchParams.get("store") ?? undefined;
+          setSuccess({
+            editorUrl: redirectUrl,
+            storeName: storeName ?? "",
+            subdomain,
+          });
+          sessionStorage.removeItem(DRAFT_KEY);
+          setPhase("done");
+        } else if (data.status === "FAILED") {
+          setError(data.error || "فشل إنشاء المتجر.");
+          setPhase("idle");
+        }
+      } catch (e) {
+        // Polling errors are transient — the next tick will retry.
+      }
+    };
+
+    void tick();
+    const interval = setInterval(() => void tick(), 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [phase, generationId, storeName]);
 
   // Lift a pasted Figma link out of the text into its own chip.
   useEffect(() => {
@@ -229,6 +276,8 @@ export default function PromptComposer() {
       setDesign(null);
       designRef.current = null;
       setReviseError(null);
+      designTerminalRef.current = false;
+      buildTerminalRef.current = false;
 
       // Phase one: decide the design and show it. No store is created and no
       // credit is charged until the merchant accepts it.
@@ -271,9 +320,11 @@ export default function PromptComposer() {
               break;
             case "proposal":
               proposal.value = event;
+              designTerminalRef.current = true;
               break;
             case "error":
               setError(event.message);
+              designTerminalRef.current = true;
               break;
           }
         },
@@ -281,7 +332,14 @@ export default function PromptComposer() {
 
       const decided = proposal.value;
       if (!decided) {
-        // The error event already surfaced the reason.
+        // If the stream ended without a proposal or an error, the connection
+        // was dropped before the design phase finished. Surface that rather
+        // than silently returning to the composer.
+        if (!designTerminalRef.current) {
+          setError(
+            "انقطع الاتصال قبل اكتمال تصميم المتجر. تحقق من الشبكة وحاول مرة أخرى.",
+          );
+        }
         setPhase("idle");
         return;
       }
@@ -378,12 +436,14 @@ export default function PromptComposer() {
                 storeName: event.storeName,
                 subdomain: event.subdomain,
               };
+              buildTerminalRef.current = true;
               // Repeated on `done` so a reconnected client still gets it.
               if (event.design) setDesign(event.design);
               break;
             case "error":
               setError(event.message);
               setRefunded(Boolean(event.refunded));
+              buildTerminalRef.current = true;
               break;
           }
         },
@@ -396,6 +456,20 @@ export default function PromptComposer() {
         return;
       }
 
+      // If the stream ended without a terminal event, the connection was
+      // likely dropped by a proxy/timeout before the server finished. Keep
+      // the modal open and poll the job status instead of closing silently.
+      if (!buildTerminalRef.current && generationId) {
+        addStatus("انقطع الاتصال بالخادم. جاري التحقق من حالة الإنشاء…");
+        setPhase("polling");
+        return;
+      }
+
+      if (!buildTerminalRef.current) {
+        setError(
+          "انقطع الاتصال قبل إكمال الإنشاء. تحقق من الشبكة وحاول مرة أخرى.",
+        );
+      }
       setPhase("idle");
     } catch (e) {
       setError(
@@ -461,7 +535,10 @@ export default function PromptComposer() {
   };
 
   const busy =
-    phase === "uploading" || phase === "designing" || phase === "generating";
+    phase === "uploading" ||
+    phase === "designing" ||
+    phase === "generating" ||
+    phase === "polling";
 
   if (busy || phase === "reviewing" || phase === "done" || error) {
     return (
