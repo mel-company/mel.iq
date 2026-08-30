@@ -29,6 +29,28 @@ export interface PageDesign {
   sections: SectionDesign[];
 }
 
+/** Why a run failed, in the only terms the client needs. */
+export type FailureCode = "ai-unavailable" | "ai-busy" | "timeout" | "unknown";
+
+export type QuestionKind = "boolean" | "single" | "multi";
+
+export interface QuestionOption {
+  value: string;
+  label: string;
+  /** Pre-selected, so skipping the questions still answers them. */
+  recommended?: boolean;
+}
+
+export interface DesignQuestion {
+  id: string;
+  question: string;
+  kind: QuestionKind;
+  options: QuestionOption[];
+}
+
+/** `questionId -> chosen values`. */
+export type DesignAnswers = Record<string, string[]>;
+
 export type GenerationEvent =
   | { type: "job"; id: string }
   /** The ordered steps this run will take, sent before any work starts. */
@@ -66,6 +88,14 @@ export type GenerationEvent =
     design: PageDesign | null;
     storeName: string;
   }
+  /**
+   * The decisions the merchant gets to make before anything is built.
+   *
+   * Arrives on the design stream just before `proposal`. Every question
+   * carries its own recommendation, so a merchant who ignores them still gets
+   * the model's best guess.
+   */
+  | { type: "questions"; questions: DesignQuestion[] }
   /** Something degraded but the run continued. */
   | { type: "warning"; code: string; message: string }
   | {
@@ -80,7 +110,12 @@ export type GenerationEvent =
     /** Repeated here so a client that reconnected still gets it. */
     design?: PageDesign | null;
   }
-  | { type: "error"; message: string; refunded?: boolean };
+  /**
+   * `message` is always safe to render: the server classifies the failure and
+   * never forwards upstream text. `code` says which kind it was, so the UI can
+   * decide whether an immediate retry is worth offering.
+   */
+  | { type: "error"; message: string; code?: FailureCode; refunded?: boolean };
 
 export interface GenerationHistoryItem {
   id: string;
@@ -102,6 +137,21 @@ export interface GenerateParams {
   figmaToken?: string;
   figmaRefreshToken?: string;
   subdomainHint?: string;
+  /**
+   * The merchant's own logo, as an R2 url.
+   *
+   * Uploaded through the same references endpoint as the design references —
+   * it is one more image on R2 — but kept separate in the payload because it
+   * is a brand asset, not something to design from.
+   */
+  logoUrl?: string;
+  /**
+   * What the merchant answered, keyed by question id.
+   *
+   * Only meaningful alongside the `generationId` the questions were asked
+   * under — the server maps ids back to the labels it stored.
+   */
+  answers?: DesignAnswers;
   /** Continues an approved design from `proposeDesign`. */
   generationId?: string;
 }

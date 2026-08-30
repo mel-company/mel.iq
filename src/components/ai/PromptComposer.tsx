@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ImagePlus, Loader2, X } from "lucide-react";
+import { ArrowUp, ImagePlus, Loader2, Sparkle, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
@@ -9,10 +9,17 @@ import {
 } from "@/api/wrappers/aiStoreGenerator.wrappers";
 import {
   aiStoreGeneratorAPI,
+  type DesignAnswers,
+  type DesignQuestion,
+  type FailureCode,
   type GenerationEvent,
 } from "@/api/endpoints/aiStoreGenerator.endpoints";
 import AuthModal from "./AuthModal";
-import GenerationProgress, { type ProgressEntry } from "./GenerationProgress";
+import GenerationProgress, {
+  preloadMascot,
+  type GenerationPhase,
+  type ProgressEntry,
+} from "./GenerationProgress";
 import type {
   PageDesign,
   PlannedStep,
@@ -120,6 +127,16 @@ export default function PromptComposer() {
     () => sessionStorage.getItem(DRAFT_KEY) || "",
   );
   const [images, setImages] = useState<File[]>([]);
+  /**
+   * The merchant's own logo.
+   *
+   * Kept apart from the design references on purpose: it is a brand asset to
+   * put *in* the store, not an image to design *from*. Mixed into
+   * `referenceImages` it would be transcribed as a page and reproduced as a
+   * layout, which is the failure mode this whole flow is being fixed for.
+   */
+  const [logo, setLogo] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [figmaUrl, setFigmaUrl] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -128,6 +145,7 @@ export default function PromptComposer() {
   const [activeStep, setActiveStep] = useState(0);
   const [storeName, setStoreName] = useState<string>();
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<FailureCode | null>(null);
   const [refunded, setRefunded] = useState(false);
   const [success, setSuccess] = useState<{
     editorUrl: string;
@@ -147,10 +165,31 @@ export default function PromptComposer() {
   const [revising, setRevising] = useState(false);
   /** Uploaded reference urls, carried from the design phase into the build. */
   const [pendingRefs, setPendingRefs] = useState<string[] | undefined>();
+  const [pendingLogo, setPendingLogo] = useState<string | undefined>();
+  const [questions, setQuestions] = useState<DesignQuestion[]>([]);
+  /**
+   * Pre-filled with every recommendation the moment the questions arrive.
+   *
+   * That is what makes the step skippable without losing anything: a merchant
+   * who never touches it still builds on the model's own best answers, which
+   * is exactly what they would have got before the questions existed.
+   */
+  const [answers, setAnswers] = useState<DesignAnswers>({});
+  /**
+   * The same answers, readable synchronously.
+   *
+   * When the design phase returns no design to review, `run` calls `runBuild`
+   * in the same turn that just seeded the answers — and the `answers` binding
+   * that closure captured is still the empty object from the previous render.
+   * The merchant's recommendations were silently dropped on exactly the path
+   * where they are the only answers there will ever be.
+   */
+  const answersRef = useRef<DesignAnswers>({});
   const [reviseError, setReviseError] = useState<string | null>(null);
   const [buyOpen, setBuyOpen] = useState(false);
 
   const fileInput = useRef<HTMLInputElement>(null);
+  const logoInput = useRef<HTMLInputElement>(null);
   // Survives the auth modal without being a render dependency.
   const pendingSubmit = useRef(false);
   // The SSE callback closes over state from when the run started, so the step
@@ -239,6 +278,31 @@ export default function PromptComposer() {
     setImages((prev) => [...prev, ...processed]);
   };
 
+  const handleLogo = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("الشعار يجب أن يكون صورة");
+      return;
+    }
+    // Downscaled like every other upload: a 4000px logo costs the merchant
+    // upload time for pixels the navbar renders at 48.
+    const processed = await downscale(file);
+    setLogo(processed);
+    setLogoPreview((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return URL.createObjectURL(processed);
+    });
+  };
+
+  const clearLogo = () => {
+    setLogo(null);
+    setLogoPreview((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return null;
+    });
+  };
+
   const hasStoreCredits = () =>
     Boolean(
       credits?.unlimited ||
@@ -249,6 +313,7 @@ export default function PromptComposer() {
 
   const run = async () => {
     setError(null);
+    setErrorCode(null);
     setRefunded(false);
     setEntries([]);
     setSteps([]);
@@ -264,16 +329,36 @@ export default function PromptComposer() {
 
     try {
       let referenceImages: string[] = [];
+      let logoUrl: string | undefined;
 
-      if (images.length) {
+      if (images.length || logo) {
         setPhase("uploading");
-        addStatus("جاري رفع الصور المرجعية...");
-        const { urls } = await aiStoreGeneratorAPI.uploadReferences(images);
-        referenceImages = urls;
+        addStatus(
+          images.length ? "جاري رفع الصور المرجعية..." : "جاري رفع الشعار...",
+        );
+        // Two calls rather than one batch: the endpoint accepts three files,
+        // and three references plus a logo is four — batching them would drop
+        // whichever went last.
+        const [refs, logoUrls] = await Promise.all([
+          images.length
+            ? aiStoreGeneratorAPI.uploadReferences(images)
+            : Promise.resolve({ urls: [] as string[] }),
+          logo
+            ? aiStoreGeneratorAPI.uploadReferences([logo])
+            : Promise.resolve({ urls: [] as string[] }),
+        ]);
+        referenceImages = refs.urls;
+        logoUrl = logoUrls.urls[0];
+        setPendingRefs(refs.urls);
+        setPendingLogo(logoUrl);
       }
 
-      // A second run must not show the previous run's design while it works.
+      // A second run must not show the previous run's design — or its
+      // questions, which belong to a store that is no longer being built.
       setDesign(null);
+      setQuestions([]);
+      setAnswers({});
+      answersRef.current = {};
       designRef.current = null;
       setReviseError(null);
       designTerminalRef.current = false;
@@ -318,12 +403,29 @@ export default function PromptComposer() {
             case "brand":
               setStoreName(event.storeName);
               break;
+            case "questions": {
+              setQuestions(event.questions);
+              // Seeded with the recommendations so the step is genuinely
+              // optional: build now and you get the model's own answers.
+              const seeded = Object.fromEntries(
+                event.questions.map((question) => [
+                  question.id,
+                  question.options
+                    .filter((option) => option.recommended)
+                    .map((option) => option.value),
+                ]),
+              );
+              answersRef.current = seeded;
+              setAnswers(seeded);
+              break;
+            }
             case "proposal":
               proposal.value = event;
               designTerminalRef.current = true;
               break;
             case "error":
               setError(event.message);
+              setErrorCode(event.code ?? null);
               designTerminalRef.current = true;
               break;
           }
@@ -351,12 +453,15 @@ export default function PromptComposer() {
       if (decided.design) {
         setDesign(decided.design);
         setPhase("reviewing");
+        // The build mascot is next, and the merchant is about to spend a while
+        // reading the design — the cheapest window there is to fetch it in.
+        preloadMascot("code");
         return;
       }
 
       // No design to review — build straight through rather than stranding
       // the merchant on an empty gate.
-      await runBuild(decided.generationId, referenceImages);
+      await runBuild(decided.generationId, referenceImages, logoUrl);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "تعذر إنشاء المتجر. حاول مرة أخرى.",
@@ -370,7 +475,11 @@ export default function PromptComposer() {
    *
    * The credit is charged here, so revising a design costs nothing.
    */
-  const runBuild = async (id: string, referenceImages?: string[]) => {
+  const runBuild = async (
+    id: string,
+    referenceImages?: string[],
+    uploadedLogo?: string,
+  ) => {
     if (user && !hasStoreCredits()) {
       setBuyOpen(true);
       setError("لا يوجد رصيد كافٍ. اشحن رصيدك أولاً.");
@@ -393,6 +502,10 @@ export default function PromptComposer() {
         {
           prompt: prompt.trim(),
           referenceImages: referenceImages ?? pendingRefs,
+          logoUrl: uploadedLogo ?? pendingLogo,
+          answers: Object.keys(answersRef.current).length
+            ? answersRef.current
+            : undefined,
           figmaUrl: figmaUrl ?? undefined,
           figmaToken: localStorage.getItem("figma_token") ?? undefined,
           // Continues the approved design instead of deciding it again.
@@ -442,6 +555,7 @@ export default function PromptComposer() {
               break;
             case "error":
               setError(event.message);
+              setErrorCode(event.code ?? null);
               setRefunded(Boolean(event.refunded));
               buildTerminalRef.current = true;
               break;
@@ -540,6 +654,13 @@ export default function PromptComposer() {
     phase === "generating" ||
     phase === "polling";
 
+  // Designing and reviewing are the design half; everything after the merchant
+  // approves is the build.
+  const mascotPhase: GenerationPhase =
+    phase === "generating" || phase === "polling" || phase === "done"
+      ? "code"
+      : "design";
+
   if (busy || phase === "reviewing" || phase === "done" || error) {
     return (
       <div className="w-full">
@@ -551,12 +672,15 @@ export default function PromptComposer() {
           steps={steps}
           activeStep={activeStep}
           storeName={storeName}
+          phase={mascotPhase}
           error={error}
+          errorCode={errorCode}
           refunded={refunded}
           onRetry={
             error
               ? () => {
                 setError(null);
+                setErrorCode(null);
                 setPhase("idle");
                 setEntries([]);
                 setActiveStep(0);
@@ -567,6 +691,7 @@ export default function PromptComposer() {
             error
               ? () => {
                 setError(null);
+                setErrorCode(null);
                 setPhase("idle");
                 setEntries([]);
                 setActiveStep(0);
@@ -582,6 +707,12 @@ export default function PromptComposer() {
               error={reviseError}
               onRevise={reviseDesign}
               onApprove={approveDesign}
+              questions={questions}
+              answers={answers}
+              onAnswer={(next) => {
+                answersRef.current = next;
+                setAnswers(next);
+              }}
             />
           </div>
         )}
@@ -614,6 +745,10 @@ export default function PromptComposer() {
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
+          // Focus is the earliest reliable signal that a run is coming, and it
+          // buys the seconds the mascot needs to decode. Fetched once — the
+          // browser caches it, and a repeat call is a cache hit.
+          onFocus={() => preloadMascot("design")}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleGenerate();
           }}
@@ -670,6 +805,27 @@ export default function PromptComposer() {
           </div>
         )}
 
+        {logoPreview && (
+          <div className="mb-2 flex flex-wrap gap-2 px-1">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#00c8ff]/30 bg-[#00c8ff]/10 py-1 pe-2 ps-1 text-xs text-white/80">
+              <img
+                src={logoPreview}
+                alt=""
+                className="h-6 w-6 rounded-full object-contain"
+              />
+              شعار المتجر
+              <button
+                type="button"
+                onClick={clearLogo}
+                aria-label="إزالة الشعار"
+                className="rounded-full p-0.5 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3 px-1">
           <div className="flex items-center gap-2">
             <button
@@ -690,6 +846,26 @@ export default function PromptComposer() {
               hidden
               onChange={(e) => {
                 handleFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => logoInput.current?.click()}
+              title="أرفق شعار متجرك ليُستخدم مباشرة"
+              aria-label="أرفق شعار المتجر"
+              className={`rounded-full p-2 transition-colors hover:bg-white/5 ${logo ? "text-[#00c8ff]" : "text-white/40 hover:text-white/80"
+                }`}
+            >
+              <Sparkle size={18} />
+            </button>
+            <input
+              ref={logoInput}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                handleLogo(e.target.files);
                 e.target.value = "";
               }}
             />

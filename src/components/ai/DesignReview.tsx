@@ -1,5 +1,9 @@
 import { useState } from "react";
-import type { PageDesign } from "../../api/endpoints/aiStoreGenerator.endpoints";
+import type {
+  DesignAnswers,
+  DesignQuestion,
+  PageDesign,
+} from "../../api/endpoints/aiStoreGenerator.endpoints";
 
 /**
  * Shows the merchant what was designed, and lets them change it.
@@ -60,6 +64,10 @@ interface Props {
   /** Set while a revision is in flight. */
   busy?: boolean;
   error?: string | null;
+  /** The decisions still open, each with a recommendation pre-selected. */
+  questions?: DesignQuestion[];
+  answers?: DesignAnswers;
+  onAnswer?: (answers: DesignAnswers) => void;
 }
 
 export default function DesignReview({
@@ -68,6 +76,9 @@ export default function DesignReview({
   onApprove,
   busy = false,
   error = null,
+  questions = [],
+  answers = {},
+  onAnswer,
 }: Props) {
   const [feedback, setFeedback] = useState("");
   const [expanded, setExpanded] = useState<number | null>(0);
@@ -77,6 +88,25 @@ export default function DesignReview({
     if (note.length < 3 || busy) return;
     await onRevise(note);
     setFeedback("");
+  };
+
+  /**
+   * Records a choice.
+   *
+   * `multi` toggles; everything else replaces. Answers start pre-filled with
+   * the model's recommendations, so this only ever moves a merchant off a
+   * default that was already sensible — there is no empty state to fall into.
+   */
+  const choose = (question: DesignQuestion, value: string) => {
+    if (busy || !onAnswer) return;
+    const current = answers[question.id] ?? [];
+    const next =
+      question.kind === "multi"
+        ? current.includes(value)
+          ? current.filter((v) => v !== value)
+          : [...current, value]
+        : [value];
+    onAnswer({ ...answers, [question.id]: next });
   };
 
   return (
@@ -155,6 +185,48 @@ export default function DesignReview({
           );
         })}
       </ol>
+
+      {questions.length > 0 && (
+        <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <h4 className="text-sm font-bold text-white">
+            بضعة قرارات تجعل المتجر أقرب لما تريد
+          </h4>
+          <p className="mt-1 text-xs text-white/45">
+            كل سؤال مُجاب مسبقاً باقتراحنا — غيّر ما يهمّك، أو تابع مباشرةً.
+          </p>
+
+          <ol className="mt-4 space-y-4">
+            {questions.map((question) => {
+              const chosen = answers[question.id] ?? [];
+              return (
+                <li key={question.id}>
+                  <p className="text-sm text-white/85">{question.question}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {question.options.map((option) => {
+                      const active = chosen.includes(option.value);
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => choose(question, option.value)}
+                          disabled={busy}
+                          aria-pressed={active}
+                          className={`rounded-full border px-3.5 py-1.5 text-xs transition disabled:opacity-40 ${active
+                            ? "border-[#00c8ff] bg-[#00c8ff]/15 text-white"
+                            : "border-white/15 text-white/60 hover:border-white/30 hover:text-white/85"
+                            }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
 
       <div className="mt-5">
         <textarea

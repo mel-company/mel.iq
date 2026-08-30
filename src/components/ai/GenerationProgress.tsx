@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, AlertCircle, Sparkles } from "lucide-react";
+import type { FailureCode } from "../../api/endpoints/aiStoreGenerator.endpoints";
 
 /**
  * Live view of a generation run, as a modal.
@@ -24,6 +25,33 @@ export interface PlannedStep {
   weight: number;
 }
 
+/**
+ * Which mascot belongs to which half of the run.
+ *
+ * The two phases are genuinely different work and take different lengths of
+ * time — deciding the design, then building the store — and a single spinner
+ * said neither. Keyed off the phase the composer is already tracking rather
+ * than off status text, which is Arabic prose and would break on any rewording.
+ */
+const MASCOTS = {
+  design: {
+    src: "/images/bird-design.gif",
+    alt: "جاري تصميم المتجر",
+  },
+  code: {
+    src: "/images/bird-code.gif",
+    alt: "جاري بناء المتجر",
+  },
+} as const;
+
+export type GenerationPhase = keyof typeof MASCOTS;
+
+/** Preloads a mascot so it is decoded before the modal that shows it opens. */
+export function preloadMascot(phase: GenerationPhase): void {
+  const img = new Image();
+  img.src = MASCOTS[phase].src;
+}
+
 interface GenerationProgressProps {
   open: boolean;
   entries: ProgressEntry[];
@@ -31,7 +59,11 @@ interface GenerationProgressProps {
   /** Index of the running step within `steps`. */
   activeStep: number;
   storeName?: string;
+  /** Which half of the run is on screen; picks the mascot. */
+  phase?: GenerationPhase;
   error?: string | null;
+  /** Which kind of failure, so the panel can say what to do about it. */
+  errorCode?: FailureCode | null;
   refunded?: boolean;
   onRetry?: () => void;
   onClose?: () => void;
@@ -41,6 +73,34 @@ const formatElapsed = (seconds: number) => {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+};
+
+/**
+ * What the merchant should do about each kind of failure.
+ *
+ * The panel used to render the raw error and offer "retry" regardless. When
+ * the provider had cut us off, that produced a modal quoting our own API key's
+ * management url and inviting the merchant to retry into the same wall.
+ */
+const FAILURE_ADVICE: Record<FailureCode, { title: string; advice?: string; retry: boolean }> = {
+  "ai-unavailable": {
+    title: "الخدمة غير متاحة مؤقتاً",
+    advice: "المشكلة من طرفنا وقد وصلنا إشعار بها. أعد المحاولة بعد قليل.",
+    // Retrying into a provider that has cut us off fails identically, and
+    // instantly. Offering the button implies it might not.
+    retry: false,
+  },
+  "ai-busy": {
+    title: "الخدمة مزدحمة",
+    advice: "انتظر لحظات ثم أعد المحاولة.",
+    retry: true,
+  },
+  timeout: {
+    title: "انتهت المهلة",
+    advice: "تحقق من اتصالك ثم أعد المحاولة.",
+    retry: true,
+  },
+  unknown: { title: "تعذر إنشاء المتجر", retry: true },
 };
 
 /** Reassurance that scales with how long they have been waiting. */
@@ -57,7 +117,9 @@ export default function GenerationProgress({
   steps,
   activeStep,
   storeName,
+  phase = "design",
   error,
+  errorCode,
   refunded,
   onRetry,
   onClose,
@@ -94,6 +156,7 @@ export default function GenerationProgress({
     : Math.min(95, ((completedWeight + runningWeight / 2) / totalWeight) * 100);
 
   const latest = entries.filter((e) => !e.done).slice(-1)[0] ?? entries.slice(-1)[0];
+  const advice = FAILURE_ADVICE[errorCode ?? "unknown"];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4">
@@ -119,6 +182,23 @@ export default function GenerationProgress({
             {!error && <Sparkles size={16} className="text-[#00c8ff]" />}
           </h2>
         </div>
+
+        {!error && (
+          <div className="mb-3 flex justify-center">
+            <img
+              // Keyed so React swaps the element rather than reusing it: an
+              // unkeyed src change leaves the old GIF's last frame on screen
+              // until the new one has decoded.
+              key={phase}
+              src={MASCOTS[phase].src}
+              alt={MASCOTS[phase].alt}
+              width={150}
+              height={150}
+              className="h-28 w-auto select-none sm:h-32"
+              draggable={false}
+            />
+          </div>
+        )}
 
         {storeName && !error && (
           <p className="mb-4 text-center text-lg text-white/90">{storeName}</p>
@@ -187,16 +267,20 @@ export default function GenerationProgress({
             <div className="flex items-start gap-2 text-sm text-red-300">
               <AlertCircle size={16} className="mt-0.5 shrink-0" />
               <div>
-                <p>{error}</p>
+                <p className="font-medium">{advice.title}</p>
+                <p className="mt-1 text-red-300/85">{error}</p>
+                {advice.advice && (
+                  <p className="mt-1 text-xs text-red-300/60">{advice.advice}</p>
+                )}
                 {refunded && (
-                  <p className="mt-1 text-xs text-red-300/70">
+                  <p className="mt-2 text-xs text-red-300/70">
                     تمت إعادة الرصيد إلى حسابك.
                   </p>
                 )}
               </div>
             </div>
             <div className="mt-4 flex gap-2">
-              {onRetry && (
+              {onRetry && advice.retry && (
                 <button
                   type="button"
                   onClick={onRetry}
