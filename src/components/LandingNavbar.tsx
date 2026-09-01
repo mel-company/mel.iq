@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { LayoutDashboard, LogIn, Menu, X } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
 const rightLinks = [
@@ -142,8 +142,47 @@ function NavGroup({
   );
 }
 
+function AuthAction({
+  variant = "inline",
+  onNavigate,
+}: {
+  variant?: "inline" | "block";
+  onNavigate?: () => void;
+}) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div
+        className={`rounded-lg bg-white/5 animate-pulse ${
+          variant === "inline" ? "h-10 w-32" : "h-10 w-full"
+        }`}
+      />
+    );
+  }
+
+  const isDashboard = Boolean(user);
+  const Icon = isDashboard ? LayoutDashboard : LogIn;
+
+  return (
+    <Link
+      to={isDashboard ? "/dashboard" : "/login"}
+      onClick={onNavigate}
+      className={`flex items-center justify-center gap-2 rounded-lg text-nav whitespace-nowrap transition-all duration-200 ${
+        variant === "inline" ? "px-4 py-2.5" : "w-full px-3 py-2.5"
+      } ${
+        isDashboard
+          ? "bg-linear-to-l from-[#3b9eff] to-[#06b6d4] text-[#060b18] font-normal shadow-lg shadow-[#3b9eff]/20 hover:shadow-[#3b9eff]/35 hover:brightness-110"
+          : "border border-[#3b9eff]/25 bg-[#3b9eff]/10 text-white/85 hover:text-white hover:bg-[#3b9eff]/20 hover:border-[#3b9eff]/45"
+      }`}
+    >
+      <Icon size={16} />
+      {isDashboard ? "لوحة التحكم" : "تسجيل الدخول"}
+    </Link>
+  );
+}
+
 function LandingNavbar() {
-  const { user } = useAuth();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(() =>
@@ -209,27 +248,35 @@ function LandingNavbar() {
   return (
     <header className="fixed top-0 inset-x-0 z-50 bg-[#060b18]/40 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="hidden lg:flex items-center justify-center h-20">
-          <NavGroup
-            links={rightLinks}
-            startIndex={0}
-            activeIndex={activeIndex}
-            onNavigate={handleNavigate}
-          />
+        <div className="hidden lg:grid grid-cols-[1fr_auto_1fr] items-center h-20">
+          <div aria-hidden="true" />
 
-          <Link to="/" className="relative mx-5 shrink-0 group">
-            <div className="absolute inset-0 rounded-full bg-[#3b9eff]/30 blur-xl scale-[2.2] opacity-80 group-hover:opacity-100 transition-opacity" />
-            <div className="relative w-[52px] h-[52px] rounded-full bg-[#0a1628] border border-white/10 flex items-center justify-center shadow-lg shadow-[#3b9eff]/25">
-              <img src="/logo.png" alt="ميل" className="h-7 w-auto" />
-            </div>
-          </Link>
+          <div className="flex items-center justify-center">
+            <NavGroup
+              links={rightLinks}
+              startIndex={0}
+              activeIndex={activeIndex}
+              onNavigate={handleNavigate}
+            />
 
-          <NavGroup
-            links={leftLinks}
-            startIndex={rightLinks.length}
-            activeIndex={activeIndex}
-            onNavigate={handleNavigate}
-          />
+            <Link to="/" className="relative mx-5 shrink-0 group">
+              <div className="absolute inset-0 rounded-full bg-[#3b9eff]/30 blur-xl scale-[2.2] opacity-80 group-hover:opacity-100 transition-opacity" />
+              <div className="relative w-[52px] h-[52px] rounded-full bg-[#0a1628] border border-white/10 flex items-center justify-center shadow-lg shadow-[#3b9eff]/25">
+                <img src="/logo.png" alt="ميل" className="h-7 w-auto" />
+              </div>
+            </Link>
+
+            <NavGroup
+              links={leftLinks}
+              startIndex={rightLinks.length}
+              activeIndex={activeIndex}
+              onNavigate={handleNavigate}
+            />
+          </div>
+
+          <div className="flex items-center justify-end">
+            <AuthAction />
+          </div>
         </div>
 
         <div className="flex lg:hidden items-center justify-between h-16">
@@ -245,12 +292,7 @@ function LandingNavbar() {
               <img src="/logo.png" alt="ميل" className="h-5 w-auto" />
             </div>
           </Link>
-          <Link
-            to={user ? "/dashboard" : "/login"}
-            className="text-nav text-[#00c8ff] px-2"
-          >
-            {user ? "لوحة التحكم" : "دخول"}
-          </Link>
+          <AuthAction />
         </div>
 
         {mobileOpen && (
@@ -275,6 +317,12 @@ function LandingNavbar() {
                 </Link>
               );
             })}
+            <div className="pt-2 mt-1 border-t border-white/10">
+              <AuthAction
+                variant="block"
+                onNavigate={() => setMobileOpen(false)}
+              />
+            </div>
           </nav>
         )}
       </div>

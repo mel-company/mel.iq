@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, AlertCircle, Sparkles } from "lucide-react";
-import type { FailureCode } from "../../api/endpoints/aiStoreGenerator.endpoints";
+import type {
+  DesignAnswers,
+  DesignQuestion,
+  FailureCode,
+} from "../../api/endpoints/aiStoreGenerator.endpoints";
 
 /**
  * Live view of a generation run, as a modal.
@@ -65,6 +69,28 @@ interface GenerationProgressProps {
   /** Which kind of failure, so the panel can say what to do about it. */
   errorCode?: FailureCode | null;
   refunded?: boolean;
+  /**
+   * The decisions still open, asked one at a time while the store is designed.
+   *
+   * They live here rather than in a panel of their own because the wait is the
+   * whole opportunity: a minute of watching a progress bar becomes a minute of
+   * the merchant telling us what they actually want.
+   */
+  questions?: DesignQuestion[];
+  answers?: DesignAnswers;
+  /** Index of the question on screen; equal to `questions.length` when done. */
+  questionIndex?: number;
+  onAnswer?: (question: DesignQuestion, value: string) => void;
+  onNextQuestion?: () => void;
+  onSkipQuestions?: () => void;
+  /**
+   * True once the design has landed and only the answers are outstanding.
+   *
+   * The two finish in either order, so the line under the question has to say
+   * which — telling someone we are still designing when the build is already
+   * waiting on them is both wrong and a reason not to hurry.
+   */
+  designReady?: boolean;
   onRetry?: () => void;
   onClose?: () => void;
 }
@@ -121,6 +147,13 @@ export default function GenerationProgress({
   error,
   errorCode,
   refunded,
+  questions = [],
+  answers = {},
+  questionIndex = 0,
+  onAnswer,
+  onNextQuestion,
+  onSkipQuestions,
+  designReady = false,
   onRetry,
   onClose,
 }: GenerationProgressProps) {
@@ -157,6 +190,11 @@ export default function GenerationProgress({
 
   const latest = entries.filter((e) => !e.done).slice(-1)[0] ?? entries.slice(-1)[0];
   const advice = FAILURE_ADVICE[errorCode ?? "unknown"];
+
+  // One question at a time. A list of six would be a form, and a form during a
+  // wait is worse than the wait.
+  const current = error ? undefined : questions[questionIndex];
+  const chosen = current ? (answers[current.id] ?? []) : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4">
@@ -206,6 +244,7 @@ export default function GenerationProgress({
 
         {!error && (
           <>
+            {!current && (
             <div
               className="mb-5 h-1.5 w-full overflow-hidden rounded-full bg-white/10"
               role="progressbar"
@@ -218,7 +257,21 @@ export default function GenerationProgress({
                 style={{ width: `${percent}%` }}
               />
             </div>
+            )}
 
+            {current ? (
+              <QuestionStep
+                question={current}
+                chosen={chosen}
+                index={questionIndex}
+                total={questions.length}
+                onAnswer={(value) => onAnswer?.(current, value)}
+                onNext={onNextQuestion}
+                onSkip={onSkipQuestions}
+                designReady={designReady}
+              />
+            ) : (
+              <>
             <ol className="mb-5 space-y-2.5">
               {steps.map((step, index) => {
                 const done = index < activeStep;
@@ -259,6 +312,8 @@ export default function GenerationProgress({
               </p>
             )}
             <p className="text-xs text-white/30">{waitingHint(elapsed)}</p>
+              </>
+            )}
           </>
         )}
 
@@ -302,6 +357,115 @@ export default function GenerationProgress({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+
+/**
+ * One decision, asked while the store is being designed.
+ *
+ * Single-answer questions advance on tap: there is no value in making someone
+ * choose and then confirm. Multi-answer ones need an explicit next, because
+ * "done choosing" is not observable from a tap.
+ */
+function QuestionStep({
+  question,
+  chosen,
+  index,
+  total,
+  onAnswer,
+  onNext,
+  onSkip,
+  designReady,
+}: {
+  question: DesignQuestion;
+  chosen: string[];
+  index: number;
+  total: number;
+  onAnswer: (value: string) => void;
+  onNext?: () => void;
+  onSkip?: () => void;
+  designReady: boolean;
+}) {
+  const multi = question.kind === "multi";
+
+  return (
+    <div className="mb-5">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs text-white/40">
+          سؤال {index + 1} من {total}
+        </span>
+        <div className="flex gap-1" aria-hidden="true">
+          {Array.from({ length: total }, (_, i) => (
+            <span
+              key={i}
+              className={`h-1 rounded-full transition-all ${i < index
+                ? "w-4 bg-[#00c8ff]"
+                : i === index
+                  ? "w-6 bg-white/70"
+                  : "w-4 bg-white/15"
+                }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      <p className="mb-3 text-base font-medium leading-relaxed text-white">
+        {question.question}
+      </p>
+
+      <div className="space-y-2">
+        {question.options.map((option) => {
+          const active = chosen.includes(option.value);
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onAnswer(option.value)}
+              aria-pressed={active}
+              className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-right text-sm transition ${active
+                ? "border-[#00c8ff] bg-[#00c8ff]/15 text-white"
+                : "border-white/12 text-white/70 hover:border-white/30 hover:bg-white/5 hover:text-white"
+                }`}
+            >
+              <span
+                className={`flex h-4 w-4 shrink-0 items-center justify-center border transition ${multi ? "rounded" : "rounded-full"
+                  } ${active ? "border-[#00c8ff] bg-[#00c8ff]" : "border-white/25"}`}
+              >
+                {active && <Check size={11} className="text-[#0b0f19]" />}
+              </span>
+              <span className="flex-1">{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex items-center gap-2">
+        {multi && (
+          <button
+            type="button"
+            onClick={onNext}
+            className="flex-1 rounded-full bg-[#00c8ff] py-2 text-sm font-medium text-white transition-colors hover:bg-[#33d4ff]"
+          >
+            التالي
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onSkip}
+          className={`rounded-full py-2 text-xs text-white/40 transition-colors hover:text-white/70 ${multi ? "px-4" : "flex-1"
+            }`}
+        >
+          تخطي الأسئلة
+        </button>
+      </div>
+
+      <p className="mt-3 text-center text-xs text-white/25">
+        {designReady
+          ? "التصميم جاهز — أكمل إجاباتك ونبدأ البناء."
+          : "نحن نصمم متجرك الآن — إجاباتك تدخل في التصميم مباشرة."}
+      </p>
     </div>
   );
 }

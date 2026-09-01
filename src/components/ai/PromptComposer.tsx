@@ -24,7 +24,6 @@ import type {
   PageDesign,
   PlannedStep,
 } from "@/api/endpoints/aiStoreGenerator.endpoints";
-import DesignReview from "./DesignReview";
 import SuccessModal from "./SuccessModal";
 import CreditsBadge from "./CreditsBadge";
 import BuyCreditsModal from "./BuyCreditsModal";
@@ -53,10 +52,16 @@ const FIGMA_URL =
 type Phase =
   | "idle"
   | "uploading"
-  /** Deciding the design. Nothing has been built and nothing charged yet. */
+  /**
+   * Deciding the design, and asking the merchant the open questions while it
+   * happens. Nothing has been built and nothing charged yet.
+   *
+   * There is no separate review phase any more. The design was being finished
+   * and then put on screen for approval, which turned a wait into a wait plus
+   * a reading task — and buried the questions underneath it. The design is now
+   * kept under the hood and the questions own the wait.
+   */
   | "designing"
-  /** Design on screen, waiting for the merchant to accept or revise it. */
-  | "reviewing"
   | "generating"
   | "polling"
   | "done";
@@ -153,16 +158,7 @@ export default function PromptComposer() {
     storeName: string;
     subdomain?: string;
   } | null>(null);
-  /**
-   * The design the store was built from.
-   *
-   * Held back from the success modal until the merchant either approves it or
-   * revises it — the decisions were being made and then never shown, so there
-   * was no point at which they could be judged or changed.
-   */
-  const [design, setDesign] = useState<PageDesign | null>(null);
   const [generationId, setGenerationId] = useState<string | null>(null);
-  const [revising, setRevising] = useState(false);
   /** Uploaded reference urls, carried from the design phase into the build. */
   const [pendingRefs, setPendingRefs] = useState<string[] | undefined>();
   const [pendingLogo, setPendingLogo] = useState<string | undefined>();
@@ -185,8 +181,47 @@ export default function PromptComposer() {
    * where they are the only answers there will ever be.
    */
   const answersRef = useRef<DesignAnswers>({});
-  const [reviseError, setReviseError] = useState<string | null>(null);
+  /**
+   * Which question is on screen. `questions.length` means "all answered".
+   *
+   * Starts past the end so nothing shows until questions actually arrive.
+   */
+  const [questionIndex, setQuestionIndex] = useState(0);
+  /**
+   * The build, waiting for the merchant to finish answering.
+   *
+   * The design and the questions finish in whichever order they finish — the
+   * questions are emitted the moment they exist, and the director usually
+   * takes longer. Parking the build here lets either one arrive first.
+   */
+  const [pendingBuild, setPendingBuild] = useState<{
+    id: string;
+    referenceImages?: string[];
+    logoUrl?: string;
+  } | null>(null);
+  const buildStartedRef = useRef(false);
   const [buyOpen, setBuyOpen] = useState(false);
+
+  // `?credits=1` opens the top-up modal on arrival.
+  //
+  // The editor is a separate app with no billing UI of its own, so when the
+  // AI assistant there reports "لا يوجد رصيد كافٍ" the only thing it can offer
+  // is a link here. Without this the link dropped the merchant on the landing
+  // page with no indication of what to do next.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("credits") !== "1") return;
+
+    setBuyOpen(true);
+
+    params.delete("credits");
+    const clean =
+      params.toString().length > 0
+        ? `?${params.toString()}`
+        : window.location.pathname;
+    window.history.replaceState({}, "", clean);
+  }, []);
+
 
   const fileInput = useRef<HTMLInputElement>(null);
   const logoInput = useRef<HTMLInputElement>(null);
@@ -195,8 +230,6 @@ export default function PromptComposer() {
   // The SSE callback closes over state from when the run started, so the step
   // plan is read through a ref rather than the stale `steps` value.
   const stepsRef = useRef<PlannedStep[]>([]);
-  // Read inside the SSE callback, which closes over stale state.
-  const designRef = useRef<PageDesign | null>(null);
   // Set to true when the stream emits its terminal event (proposal/done/error).
   const designTerminalRef = useRef(false);
   const buildTerminalRef = useRef(false);
@@ -204,10 +237,6 @@ export default function PromptComposer() {
   useEffect(() => {
     sessionStorage.setItem(DRAFT_KEY, prompt);
   }, [prompt]);
-
-  useEffect(() => {
-    designRef.current = design;
-  }, [design]);
 
   // If the SSE connection drops before the server finishes, fall back to
   // polling the generation status so the modal stays open until the run is
@@ -355,12 +384,9 @@ export default function PromptComposer() {
 
       // A second run must not show the previous run's design — or its
       // questions, which belong to a store that is no longer being built.
-      setDesign(null);
       setQuestions([]);
       setAnswers({});
       answersRef.current = {};
-      designRef.current = null;
-      setReviseError(null);
       designTerminalRef.current = false;
       buildTerminalRef.current = false;
 
@@ -417,6 +443,7 @@ export default function PromptComposer() {
               );
               answersRef.current = seeded;
               setAnswers(seeded);
+              setQuestionIndex(0);
               break;
             }
             case "proposal":
@@ -450,18 +477,19 @@ export default function PromptComposer() {
       setStoreName(decided.storeName);
       setPendingRefs(referenceImages);
 
-      if (decided.design) {
-        setDesign(decided.design);
-        setPhase("reviewing");
-        // The build mascot is next, and the merchant is about to spend a while
-        // reading the design — the cheapest window there is to fetch it in.
-        preloadMascot("code");
-        return;
-      }
+      // The design itself stays server-side — it is persisted on the
+      // generation row and the build reads it from there. Nothing on the
+      // client needs a copy, and holding one only invites showing it.
+      preloadMascot("code");
 
-      // No design to review — build straight through rather than stranding
-      // the merchant on an empty gate.
-      await runBuild(decided.generationId, referenceImages, logoUrl);
+      // Parked rather than started: the merchant may still be answering. The
+      // effect below builds as soon as both halves are ready, in whichever
+      // order they land.
+      setPendingBuild({
+        id: decided.generationId,
+        referenceImages,
+        logoUrl,
+      });
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "تعذر إنشاء المتجر. حاول مرة أخرى.",
@@ -517,8 +545,9 @@ export default function PromptComposer() {
               setGenerationId(event.id);
               break;
             case "design":
-              // Arrives mid-run, as soon as the page is decided.
-              if (event.design) setDesign(event.design);
+              // The design is not shown, so there is nothing to hold. The
+              // event still carries how much of it landed, which the status
+              // line below already reports.
               break;
             case "warning":
               addStatus(event.message);
@@ -550,8 +579,6 @@ export default function PromptComposer() {
                 subdomain: event.subdomain,
               };
               buildTerminalRef.current = true;
-              // Repeated on `done` so a reconnected client still gets it.
-              if (event.design) setDesign(event.design);
               break;
             case "error":
               setError(event.message);
@@ -599,36 +626,51 @@ export default function PromptComposer() {
    * This is the point the credit is charged: everything before it — the
    * design and any number of revisions — is free.
    */
-  const approveDesign = () => {
-    if (!generationId) return;
-    void runBuild(generationId);
+  /**
+   * Records one answer and moves on.
+   *
+   * A single-answer question advances on tap — asking someone to choose and
+   * then confirm is a step for nothing. A `multi` one stays put, because
+   * "finished choosing" is not something a tap can tell us.
+   */
+  const answerQuestion = (question: DesignQuestion, value: string) => {
+    const current = answersRef.current[question.id] ?? [];
+    const next =
+      question.kind === "multi"
+        ? current.includes(value)
+          ? current.filter((v) => v !== value)
+          : [...current, value]
+        : [value];
+
+    const merged = { ...answersRef.current, [question.id]: next };
+    answersRef.current = merged;
+    setAnswers(merged);
+
+    if (question.kind !== "multi") setQuestionIndex((i) => i + 1);
   };
 
   /**
-   * Revises the design and rebuilds the page from it.
+   * Starts the build once the design and the answers are both in.
    *
-   * The feedback edits the decisions, not the rendered tree, so a second round
-   * builds on the first instead of undoing it.
+   * They finish in whichever order they finish: the questions are emitted as
+   * soon as they exist, and the director usually runs longer — but a merchant
+   * who reads slowly can easily still be answering when the design lands.
+   * Whichever is last triggers this.
    */
-  const reviseDesign = async (feedback: string) => {
-    if (!generationId || !design) return;
-    setRevising(true);
-    setReviseError(null);
-    try {
-      const revised = await aiStoreGeneratorAPI.reviseDesign(
-        generationId,
-        design.pageType || "home",
-        feedback,
-      );
-      setDesign(revised.design);
-    } catch (e) {
-      setReviseError(
-        e instanceof Error ? e.message : "تعذر تعديل التصميم. حاول مرة أخرى.",
-      );
-    } finally {
-      setRevising(false);
-    }
-  };
+  useEffect(() => {
+    if (!pendingBuild || buildStartedRef.current) return;
+    if (questionIndex < questions.length) return;
+
+    buildStartedRef.current = true;
+    void runBuild(
+      pendingBuild.id,
+      pendingBuild.referenceImages,
+      pendingBuild.logoUrl,
+    );
+    // `runBuild` is redefined every render and is not a dependency worth
+    // chasing; the ref above is what guarantees one call.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingBuild, questionIndex, questions.length]);
 
   const handleGenerate = () => {
     if (prompt.trim().length < PROMPT_MIN_LENGTH) {
@@ -661,13 +703,11 @@ export default function PromptComposer() {
       ? "code"
       : "design";
 
-  if (busy || phase === "reviewing" || phase === "done" || error) {
+  if (busy || phase === "done" || error) {
     return (
       <div className="w-full">
         <GenerationProgress
-          // Hidden while the merchant reads the design: the progress log is
-          // noise next to the thing they are being asked to judge.
-          open={!success && phase !== "reviewing"}
+          open={!success}
           entries={entries}
           steps={steps}
           activeStep={activeStep}
@@ -676,6 +716,13 @@ export default function PromptComposer() {
           error={error}
           errorCode={errorCode}
           refunded={refunded}
+          questions={questions}
+          answers={answers}
+          questionIndex={questionIndex}
+          onAnswer={answerQuestion}
+          onNextQuestion={() => setQuestionIndex((i) => i + 1)}
+          onSkipQuestions={() => setQuestionIndex(questions.length)}
+          designReady={Boolean(pendingBuild)}
           onRetry={
             error
               ? () => {
@@ -699,24 +746,6 @@ export default function PromptComposer() {
               : undefined
           }
         />
-        {design && !success && phase === "reviewing" && (
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-            <DesignReview
-              design={design}
-              busy={revising}
-              error={reviseError}
-              onRevise={reviseDesign}
-              onApprove={approveDesign}
-              questions={questions}
-              answers={answers}
-              onAnswer={(next) => {
-                answersRef.current = next;
-                setAnswers(next);
-              }}
-            />
-          </div>
-        )}
-
         <SuccessModal
           open={Boolean(success)}
           storeName={success?.storeName}
@@ -730,7 +759,6 @@ export default function PromptComposer() {
             setEntries([]);
             setPrompt("");
             setImages([]);
-            setDesign(null);
             setGenerationId(null);
           }}
         />
@@ -909,6 +937,13 @@ export default function PromptComposer() {
           }
         }}
       />
+
+      {/* Also mounted here, not only in the post-generation branch above.
+          `setBuyOpen(true)` is reachable from this branch — the `?credits=1`
+          arrival from the editor lands on exactly this screen — and without the
+          modal rendered here that call set state nothing was reading, so the
+          merchant arrived at the landing page with no way to top up. */}
+      <BuyCreditsModal open={buyOpen} onClose={() => setBuyOpen(false)} />
     </div>
   );
 }
