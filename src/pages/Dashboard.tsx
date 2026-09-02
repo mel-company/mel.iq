@@ -27,20 +27,26 @@ interface Store {
   name: string;
   logo?: string;
   domain?: string;
+  customDomain?: string | null;
   /** Public storefront URL from API, e.g. https://mystore.mel.iq */
   storeUrl?: string;
   is_deleted?: boolean;
 }
 
-/** https://{slug}.mel.iq — prefer API storeUrl, else build from domain slug. */
+/** Prefer API storeUrl, then customDomain, then platform slug. */
 const resolveStorefrontUrl = (store: Store): string | null => {
   if (store.storeUrl?.trim()) return store.storeUrl.trim();
+  if (store.customDomain?.trim()) {
+    const host = store.customDomain.trim().replace(/^https?:\/\//, "");
+    return `https://${host}`;
+  }
   const slug = store.domain
     ?.trim()
     .replace(/^https?:\/\//, "")
     .replace(/^dash\./, "")
     .replace(/\.mel\.iq$/i, "")
-    .split("/")[0];
+    .split("/")[0]
+    ?.split(".")[0];
   if (!slug) return null;
   return `https://${slug}.mel.iq`;
 };
@@ -52,7 +58,8 @@ const resolveDashboardUrl = (store: Store): string | null => {
     .replace(/^https?:\/\//, "")
     .replace(/^dash\./, "")
     .replace(/\.mel\.iq$/i, "")
-    .split("/")[0];
+    .split("/")[0]
+    ?.split(".")[0];
   if (!slug) return null;
   return `https://dash.${slug}.mel.iq`;
 };
@@ -250,12 +257,14 @@ const StoreCard = ({
     : null;
   const statusBadge = subscription ? getStatusBadge(subscription.status) : null;
 
-  const domainOnly = store.domain
-    ?.trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/^dash\./, "")
-    .replace(/\.mel\.iq$/i, "")
-    .split("/")[0] || "";
+  const domainOnly =
+    store.domain
+      ?.trim()
+      .replace(/^https?:\/\//, "")
+      .replace(/^dash\./, "")
+      .replace(/\.mel\.iq$/i, "")
+      .split("/")[0]
+      ?.split(".")[0] || "";
   const storefrontUrl = resolveStorefrontUrl(store);
   const dashboardUrl = resolveDashboardUrl(store);
 

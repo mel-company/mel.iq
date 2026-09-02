@@ -12,6 +12,11 @@ import {
   useAddStore,
   useCheckStoreDomainAvailability,
 } from "@/api/wrappers/store.wrappers";
+import { useDynadotSearch } from "@/api/wrappers/dynadot.wrappers";
+import DomainPriceBreakdown from "@/components/DomainPriceBreakdown";
+import type { DynadotSearchResult } from "@/api/endpoints/dynadot.endpoints";
+import { useSetCustomDomain } from "@/api/wrappers/domain.wrappers";
+import { extractPlatformSlug } from "@/hooks/useDomainCheck";
 import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 import { useInitPlatformPayment } from "@/api/wrappers/platform-payment.wrapper";
 import { CHECKOUT_DRAFT_KEY, LAST_PAYMENT_ID_KEY } from "@/pages/CheckoutPaymentReturn";
@@ -94,6 +99,7 @@ function Checkout() {
   const { mutate: sendOtpMutation, isPending: isSendingOtp } = useSendOtp();
   const { mutate: verifyOtpMutation, isPending: isVerifyingOtp } = useVerify();
   const { mutate: addStoreMutation } = useAddStore();
+  const { mutate: setCustomDomainMutation } = useSetCustomDomain();
   const { mutate: initPaymentMutation, isPending: isInitiatingPayment } =
     useInitPlatformPayment();
   const {
@@ -148,6 +154,9 @@ function Checkout() {
   const [domainChecked, setDomainChecked] = useState(false);
   const [domainAvailable, setDomainAvailable] = useState<boolean | null>(null);
   const [isCheckingDomain, setIsCheckingDomain] = useState(false);
+  const [dynadotResult, setDynadotResult] = useState<DynadotSearchResult | null>(
+    null,
+  );
 
   const goToTemplates = (nav: {
     websiteType: string;
@@ -223,6 +232,7 @@ function Checkout() {
   ];
 
   const checkDomainAvailabilityMutation = useCheckStoreDomainAvailability();
+  const dynadotSearchMutation = useDynadotSearch();
 
   // Show loading or error states
   if (plans.isLoading) return <div>Loading...</div>;
@@ -233,6 +243,7 @@ function Checkout() {
     if (e.target.name === "domain" || e.target.name === "domainType") {
       setDomainChecked(false);
       setDomainAvailable(null);
+      setDynadotResult(null);
     }
   };
 
@@ -248,24 +259,72 @@ function Checkout() {
 
     setIsCheckingDomain(true);
     setDomainChecked(false);
+    setDynadotResult(null);
 
-    // Prepare domain based on type
-    const fullDomain =
-      formData.domainType === "subdomain"
-        ? `${formData.domain}.mel.iq`
-        : formData.domain;
+    if (formData.domainType === "custom") {
+      const domain = formData.domain.trim().toLowerCase();
+      dynadotSearchMutation.mutate(
+        { domain },
+        {
+          onSuccess: (results) => {
+            setIsCheckingDomain(false);
+            setDomainChecked(true);
 
-    // Send domain with type to API
+            const result =
+              results.find((r) => r.domain === domain) ?? results[0] ?? null;
+            setDynadotResult(result);
+
+            if (!result) {
+              setDomainAvailable(false);
+              toast.error("لم يتم العثور على نتيجة للدومين.");
+              return;
+            }
+
+            if (!result.supported) {
+              setDomainAvailable(false);
+              toast.error(
+                result.error ||
+                  "هذا النوع من الدومينات غير مدعوم للتسجيل (مثل .iq). جرّب دوميناً مثل example.com",
+              );
+              return;
+            }
+
+            if (result.available) {
+              setDomainAvailable(true);
+              toast.success("الدومين متاح للتسجيل!");
+            } else {
+              setDomainAvailable(false);
+              toast.error(
+                result.premium
+                  ? "الدومين متاح كـ premium — التسجيل لاحقاً."
+                  : "الدومين غير متاح. الرجاء اختيار دومين آخر.",
+              );
+            }
+          },
+          onError: (error: any) => {
+            setIsCheckingDomain(false);
+            setDomainChecked(false);
+            console.error("Error searching domain via Dynadot:", error);
+            const errorMessage =
+              error?.response?.data?.message ||
+              error?.message ||
+              "حدث خطأ في البحث عن الدومين";
+            toast.error(errorMessage);
+          },
+        },
+      );
+      return;
+    }
+
     checkDomainAvailabilityMutation.mutate(
       {
         domain: formData.domain,
-        domainType: formData.domainType, // Send domain type to distinguish between subdomain and custom
+        domainType: formData.domainType,
       },
       {
         onSuccess: (data: any) => {
           setIsCheckingDomain(false);
           setDomainChecked(true);
-          // API returns { isAvailable: true/false }
           const available =
             data?.isAvailable ?? data?.data?.isAvailable ?? false;
           setDomainAvailable(available);
@@ -280,7 +339,6 @@ function Checkout() {
           setIsCheckingDomain(false);
           setDomainChecked(false);
           console.error("Error checking domain:", error);
-          // Try to extract error message
           const errorMessage =
             error?.response?.data?.message ||
             error?.message ||
@@ -583,13 +641,19 @@ function Checkout() {
     }
 
     if (formData.websiteType && formData.domain) {
-      // Generate final website URL based on domain choice
-      let finalUrl = "";
-      if (formData.domainType === "subdomain") {
-        finalUrl = `https://${formData.domain}.mel.iq`;
-      } else {
-        finalUrl = `https://${formData.domain}`;
-      }
+      const platformSlug = extractPlatformSlug(
+        formData.domain,
+        formData.domainType === "custom" ? "custom" : "subdomain",
+      );
+      const customDomain =
+        formData.domainType === "custom"
+          ? formData.domain.trim().toLowerCase()
+          : null;
+
+      const finalUrl =
+        formData.domainType === "subdomain"
+          ? `https://${platformSlug}.mel.iq`
+          : `https://${customDomain}`;
 
       const updatedFormData = {
         ...formData,
@@ -598,16 +662,27 @@ function Checkout() {
 
       setFormData(updatedFormData);
 
+      const finishStoreSetup = () => {
+        sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
+        void finishAfterProvisioning({
+          websiteType: formData.websiteType,
+          domain: platformSlug,
+          url: platformSlug,
+        });
+      };
+
       // Save store to user account if logged in
       if (user) {
-        // Create FormData for file upload
         const storeFormData = new FormData();
-        storeFormData.append("name", formData.storeName || formData.domain);
+        storeFormData.append(
+          "name",
+          formData.storeName || platformSlug || formData.domain,
+        );
         storeFormData.append(
           "type",
           formData.websiteType === "store" ? "ECOMMERCE" : "RESTAURANT",
         );
-        storeFormData.append("domain", formData.domain);
+        storeFormData.append("domain", platformSlug);
         if (formData.logoFile) {
           storeFormData.append("logo", formData.logoFile);
         }
@@ -622,12 +697,23 @@ function Checkout() {
 
         addStoreMutation(storeFormData, {
           onSuccess: () => {
-            sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
-            void finishAfterProvisioning({
-              websiteType: formData.websiteType,
-              domain: formData.domain,
-              url: formData.domain,
-            });
+            if (customDomain) {
+              setCustomDomainMutation(
+                { domain: customDomain },
+                {
+                  onSuccess: finishStoreSetup,
+                  onError: (error) => {
+                    console.error("Error setting custom domain:", error);
+                    toast.error(
+                      "تم إنشاء المتجر لكن فشل ربط الدومين المخصص. يمكنك ربطه من الإدارة.",
+                    );
+                    finishStoreSetup();
+                  },
+                },
+              );
+              return;
+            }
+            finishStoreSetup();
           },
           onError: (error) => {
             console.error("Error creating store:", error);
@@ -635,11 +721,10 @@ function Checkout() {
           },
         });
       } else {
-        // Navigate to templates page if user is not logged in
         void finishAfterProvisioning({
           websiteType: formData.websiteType,
-          domain: formData.domain,
-          url: formData.domain,
+          domain: platformSlug,
+          url: platformSlug,
         });
       }
     }
@@ -1314,6 +1399,35 @@ function Checkout() {
                       )}
                     </button>
                   </div>
+                  {formData.domainType === "custom" && dynadotResult && (
+                    <div
+                      className={`mt-3 rounded-lg border-2 p-3 text-sm ${
+                        dynadotResult.available && dynadotResult.supported
+                          ? "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
+                          : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+                      }`}
+                    >
+                      <p className="font-medium" dir="ltr">
+                        {dynadotResult.domain}
+                      </p>
+                      {!dynadotResult.supported && (
+                        <p className="mt-1">
+                          {dynadotResult.error ||
+                            "نوع الدومين غير مدعوم للتسجيل عبر Dynadot"}
+                        </p>
+                      )}
+                      {dynadotResult.supported && !dynadotResult.available && (
+                        <p className="mt-1">
+                          {dynadotResult.premium
+                            ? "دومين premium — التسجيل متاح لاحقاً"
+                            : "الدومين مسجّل مسبقاً وغير متاح"}
+                        </p>
+                      )}
+                      {dynadotResult.available && (
+                        <DomainPriceBreakdown result={dynadotResult} />
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <button

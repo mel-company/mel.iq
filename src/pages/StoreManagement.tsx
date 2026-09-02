@@ -1,6 +1,17 @@
 import { useMemo, useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useFetchStores, useUpdateStore } from "@/api/wrappers/store.wrappers";
+import DomainSettingsFields from "@/components/DomainSettingsFields";
+import {
+  getStoreDomainInputValue,
+  getStoreDomainType,
+  normalizePlatformSlug,
+  useDomainCheck,
+} from "@/hooks/useDomainCheck";
+import {
+  getDomainPurchasePricing,
+  formatUsd,
+} from "@/utils/domainPricing";
 import {
   useFetchSubscriptions,
   useRenewSubscription,
@@ -12,10 +23,37 @@ import {
 import { useInitPlatformPayment } from "@/api/wrappers/platform-payment.wrapper";
 import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeftIcon, AlertCircle, ArrowRightIcon, X } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRightIcon,
+  CreditCard,
+  ExternalLink,
+  Globe,
+  LayoutDashboard,
+  LayoutGrid,
+  Share2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
+type ManageTab = "overview" | "domain" | "subscription" | "social";
+
+const R2_PUBLIC_BASE =
+  "https://pub-f8707810144b47a6978976f94751bbc8.r2.dev";
+
+const MANAGE_TABS: {
+  id: ManageTab;
+  label: string;
+  icon: typeof LayoutGrid;
+}[] = [
+  { id: "overview", label: "نظرة عامة", icon: LayoutGrid },
+  { id: "domain", label: "الدومين", icon: Globe },
+  { id: "subscription", label: "الاشتراك", icon: CreditCard },
+  { id: "social", label: "السوشيال", icon: Share2 },
+];
+
 const RENEWAL_RETURN_KEY = "mel_renewal_return";
+const DOMAIN_PURCHASE_RETURN_KEY = "mel_domain_purchase_return";
 const LAST_PAYMENT_ID_KEY = "mel_last_platform_payment_id";
 
 // Types
@@ -23,6 +61,7 @@ interface Store {
   id: string;
   name: string;
   domain?: string;
+  customDomain?: string | null;
   /** Public storefront URL from API, e.g. https://mystore.mel.iq */
   storeUrl?: string;
   is_deleted?: boolean;
@@ -155,20 +194,82 @@ const isBasicPlan = (planName?: string): boolean => {
   );
 };
 
+const resolveStoreLogoUrl = (logo?: string | null): string | null => {
+  if (!logo || logo === "placeholder") return null;
+  if (logo.startsWith("http://") || logo.startsWith("https://")) return logo;
+  return `${R2_PUBLIC_BASE}/${logo.replace(/^\//, "")}`;
+};
+
+const SectionCard = ({
+  title,
+  description,
+  children,
+  className = "",
+}: {
+  title?: string;
+  description?: string;
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <section
+    className={`overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-black ${className}`}
+  >
+    {(title || description) && (
+      <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+        {title && (
+          <h2 className="text-lg font-semibold text-black dark:text-white">
+            {title}
+          </h2>
+        )}
+        {description && (
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {description}
+          </p>
+        )}
+      </div>
+    )}
+    <div className="p-6">{children}</div>
+  </section>
+);
+
+const StatCard = ({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: string;
+}) => (
+  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+    <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+      {label}
+    </p>
+    <div
+      className="mt-1 text-sm font-semibold text-black dark:text-white"
+      dir="ltr"
+    >
+      {value}
+    </div>
+    {hint && (
+      <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{hint}</p>
+    )}
+  </div>
+);
+
 // Components
 const LoadingSkeleton = () => (
-  <div className="min-h-screen bg-white dark:bg-black">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <Skeleton className="h-12 w-64 mb-6" />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <Skeleton className="h-96 w-full rounded-lg" />
-        </div>
-        <div className="space-y-4">
-          <Skeleton className="h-32 w-full rounded-lg" />
-          <Skeleton className="h-32 w-full rounded-lg" />
-        </div>
+  <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="border-b border-gray-200 bg-white px-6 py-5 dark:border-gray-800 dark:bg-black">
+      <Skeleton className="h-10 w-72" />
+    </div>
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-20 rounded-xl" />
+        ))}
       </div>
+      <Skeleton className="h-[28rem] w-full rounded-2xl" />
     </div>
   </div>
 );
@@ -190,8 +291,9 @@ const StoreNotFound = ({ onBack }: { onBack: () => void }) => (
   </div>
 );
 
-const SubscriptionInfo = ({
+const SubscriptionPanel = ({
   subscription,
+  isPlanBasic,
   onRenew,
   onPause,
   onResume,
@@ -200,6 +302,7 @@ const SubscriptionInfo = ({
   isPending,
 }: {
   subscription: Subscription | null;
+  isPlanBasic: boolean;
   onRenew: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -215,12 +318,13 @@ const SubscriptionInfo = ({
 }) => {
   if (!subscription) {
     return (
-      <div className="bg-white dark:bg-black rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6">
-        <h2 className="text-lg font-semibold text-black dark:text-white mb-4">
-          معلومات الاشتراك
-        </h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          لا يوجد اشتراك نشط لهذا المتجر
+      <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
+        <CreditCard className="mx-auto mb-3 h-10 w-10 text-gray-400" />
+        <p className="font-medium text-black dark:text-white">
+          لا يوجد اشتراك نشط
+        </p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          هذا المتجر غير مرتبط باشتراك حالياً
         </p>
       </div>
     );
@@ -229,141 +333,134 @@ const SubscriptionInfo = ({
   const timeRemaining = getTimeRemaining(subscription.end_at);
   const statusBadge = getStatusBadge(subscription.status);
 
+  const actionBtn =
+    "rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+
   return (
-    <div className="bg-white dark:bg-black rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6">
-      <h2 className="text-lg font-semibold text-black dark:text-white mb-4">
-        معلومات الاشتراك
-      </h2>
-
-      <div className="space-y-4">
-        <div>
-          <span className="text-sm text-gray-600 dark:text-gray-400">
-            الحالة:
-          </span>
-          <span
-            className={`ml-2 px-3 py-1 rounded-full text-xs font-semibold border ${statusBadge.className}`}
-          >
-            {statusBadge.text}
-          </span>
-        </div>
-
-        {timeRemaining && (
-          <div>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              الوقت المتبقي:
-            </span>
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <StatCard
+          label="الحالة"
+          value={
             <span
-              className={`ml-2 text-sm font-bold ${
-                timeRemaining.expired
+              className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadge.className}`}
+            >
+              {statusBadge.text}
+            </span>
+          }
+        />
+        <StatCard
+          label="الخطة"
+          value={subscription.plan?.name || "غير محدد"}
+        />
+        <StatCard
+          label="الوقت المتبقي"
+          value={
+            <span
+              className={
+                timeRemaining?.expired
                   ? "text-red-600 dark:text-red-400"
-                  : (timeRemaining.daysLeft ?? 0) <= 7
-                  ? "text-yellow-600 dark:text-yellow-400"
-                  : "text-green-600 dark:text-green-400"
-              }`}
+                  : (timeRemaining?.daysLeft ?? 0) <= 7
+                    ? "text-yellow-600 dark:text-yellow-400"
+                    : "text-green-600 dark:text-green-400"
+              }
             >
-              {timeRemaining.text}
+              {timeRemaining?.text || "—"}
             </span>
-          </div>
-        )}
-
-        {subscription.start_at && (
-          <div>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              تاريخ البدء:
-            </span>
-            <span className="ml-2 text-sm text-black dark:text-white">
-              {formatDate(subscription.start_at)}
-            </span>
-          </div>
-        )}
-
-        {subscription.end_at && (
-          <div>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              تاريخ الانتهاء:
-            </span>
-            <span className="ml-2 text-sm text-black dark:text-white">
-              {formatDate(subscription.end_at)}
-            </span>
-          </div>
-        )}
-
-        {subscription.plan?.name && (
-          <div>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              الخطة:
-            </span>
-            <span className="ml-2 text-sm font-medium text-black dark:text-white">
-              {subscription.plan.name}
-            </span>
-          </div>
-        )}
+          }
+        />
+        <StatCard
+          label="تاريخ البدء"
+          value={formatDate(subscription.start_at)}
+        />
+        <StatCard
+          label="تاريخ الانتهاء"
+          value={formatDate(subscription.end_at)}
+        />
       </div>
 
-      <div className="mt-6 space-y-2">
-        {subscription.status === "ACTIVE" && (
-          <>
-            <button
-              onClick={onRenew}
-              disabled={isPending.renew}
-              className="w-full bg-green-100 dark:bg-green-900 hover:bg-green-200 dark:hover:bg-green-800 text-green-800 dark:text-green-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-green-300 dark:border-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPending.renew ? "جاري..." : "تجديد الاشتراك"}
-            </button>
-            <button
-              onClick={onUpgrade}
-              disabled={isPending.upgrade}
-              className="w-full bg-violet-100 dark:bg-violet-900 hover:bg-violet-200 dark:hover:bg-violet-800 text-violet-800 dark:text-violet-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-violet-300 dark:border-violet-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPending.upgrade ? "جاري..." : "ترقية الاشتراك"}
-            </button>
-            <button
-              onClick={onPause}
-              disabled={isPending.pause}
-              className="w-full bg-yellow-100 dark:bg-yellow-900 hover:bg-yellow-200 dark:hover:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-yellow-300 dark:border-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPending.pause ? "جاري..." : "إيقاف الاشتراك"}
-            </button>
-            <button
-              onClick={onCancel}
-              disabled={isPending.cancel}
-              className="w-full bg-red-100 dark:bg-red-900 hover:bg-red-200 dark:hover:bg-red-800 text-red-800 dark:text-red-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-red-300 dark:border-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPending.cancel ? "جاري..." : "إلغاء الاشتراك"}
-            </button>
-          </>
-        )}
+      {isPlanBasic ? (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+          <p className="text-sm font-medium text-black dark:text-white">
+            الخطة الأولى
+          </p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            الترقية والتجديد غير متاحين في هذه الخطة
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <p className="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+              إجراءات الاشتراك
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {subscription.status === "ACTIVE" && (
+                <>
+                  <button
+                    onClick={onRenew}
+                    disabled={isPending.renew}
+                    className={`${actionBtn} bg-green-600 text-white hover:bg-green-700`}
+                  >
+                    {isPending.renew ? "جاري..." : "تجديد"}
+                  </button>
+                  <button
+                    onClick={onUpgrade}
+                    disabled={isPending.upgrade}
+                    className={`${actionBtn} border border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-200`}
+                  >
+                    {isPending.upgrade ? "جاري..." : "ترقية الخطة"}
+                  </button>
+                  <button
+                    onClick={onPause}
+                    disabled={isPending.pause}
+                    className={`${actionBtn} border border-yellow-300 bg-yellow-50 text-yellow-800 hover:bg-yellow-100 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200`}
+                  >
+                    {isPending.pause ? "جاري..." : "إيقاف مؤقت"}
+                  </button>
+                </>
+              )}
 
-        {subscription.status === "INACTIVE" && (
-          <>
-            <button
-              onClick={onResume}
-              disabled={isPending.resume}
-              className="w-full bg-green-100 dark:bg-green-900 hover:bg-green-200 dark:hover:bg-green-800 text-green-800 dark:text-green-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-green-300 dark:border-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPending.resume ? "جاري..." : "استئناف الاشتراك"}
-            </button>
-            <button
-              onClick={onCancel}
-              disabled={isPending.cancel}
-              className="w-full bg-red-100 dark:bg-red-900 hover:bg-red-200 dark:hover:bg-red-800 text-red-800 dark:text-red-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-red-300 dark:border-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPending.cancel ? "جاري..." : "إلغاء الاشتراك"}
-            </button>
-          </>
-        )}
+              {subscription.status === "INACTIVE" && (
+                <button
+                  onClick={onResume}
+                  disabled={isPending.resume}
+                  className={`${actionBtn} bg-green-600 text-white hover:bg-green-700`}
+                >
+                  {isPending.resume ? "جاري..." : "استئناف"}
+                </button>
+              )}
 
-        {(subscription.status === "CANCELLED" ||
-          subscription.status === "EXPIRED") && (
-          <button
-            onClick={onUpgrade}
-            disabled={isPending.upgrade}
-            className="w-full bg-violet-100 dark:bg-violet-900 hover:bg-violet-200 dark:hover:bg-violet-800 text-violet-800 dark:text-violet-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-violet-300 dark:border-violet-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isPending.upgrade ? "جاري..." : "ترقية الاشتراك"}
-          </button>
-        )}
-      </div>
+              {(subscription.status === "CANCELLED" ||
+                subscription.status === "EXPIRED") && (
+                <button
+                  onClick={onUpgrade}
+                  disabled={isPending.upgrade}
+                  className={`${actionBtn} bg-violet-600 text-white hover:bg-violet-700`}
+                >
+                  {isPending.upgrade ? "جاري..." : "ترقية / تجديد"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {(subscription.status === "ACTIVE" ||
+            subscription.status === "INACTIVE") && (
+            <div className="rounded-xl border border-red-200 bg-red-50/50 p-4 dark:border-red-900 dark:bg-red-950/20">
+              <p className="mb-2 text-sm font-medium text-red-800 dark:text-red-300">
+                منطقة الخطر
+              </p>
+              <button
+                onClick={onCancel}
+                disabled={isPending.cancel}
+                className={`${actionBtn} border border-red-300 bg-white text-red-700 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-300`}
+              >
+                {isPending.cancel ? "جاري..." : "إلغاء الاشتراك وحذف المتجر"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -377,7 +474,7 @@ function StoreManagement() {
   // التأكد من أن storeId موجود وصحيح (إزالة أي domain إذا كان موجوداً)
   const storeId = params.storeId?.split("/")[0] || params.storeId;
 
-  const { data: storesData, isLoading: storesLoading } = useFetchStores();
+  const { data: storesData, isLoading: storesLoading, refetch: refetchStores } = useFetchStores();
   const {
     data: subscriptionsData,
     isLoading: subscriptionsLoading,
@@ -390,14 +487,30 @@ function StoreManagement() {
     const result = searchParams.get("result");
     if (!paymentId || !result) return;
 
+    const domainReturnRaw = sessionStorage.getItem(DOMAIN_PURCHASE_RETURN_KEY);
+    const domainReturn = domainReturnRaw
+      ? (JSON.parse(domainReturnRaw) as { storeId?: string; domain?: string })
+      : null;
+    const isDomainPurchase = Boolean(domainReturn?.domain);
+
     if (result === "success") {
-      toast.success("تم الدفع بنجاح وتم تجديد الاشتراك");
-      void refetchSubscriptions();
+      if (isDomainPurchase) {
+        toast.success("تم الدفع بنجاح! سيتم تسجيل الدومين وربطه بمتجرك.");
+        void refetchStores();
+      } else {
+        toast.success("تم الدفع بنجاح وتم تجديد الاشتراك");
+        void refetchSubscriptions();
+      }
     } else {
-      toast.error("فشلت عملية الدفع. حاول مرة أخرى.");
+      toast.error(
+        isDomainPurchase
+          ? "فشلت عملية دفع الدومين. حاول مرة أخرى."
+          : "فشلت عملية الدفع. حاول مرة أخرى.",
+      );
     }
 
     sessionStorage.removeItem(RENEWAL_RETURN_KEY);
+    sessionStorage.removeItem(DOMAIN_PURCHASE_RETURN_KEY);
     sessionStorage.removeItem(LAST_PAYMENT_ID_KEY);
 
     const next = new URLSearchParams(searchParams);
@@ -405,7 +518,7 @@ function StoreManagement() {
     next.delete("result");
     next.delete("status");
     setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams, refetchSubscriptions]);
+  }, [searchParams, setSearchParams, refetchSubscriptions, refetchStores]);
 
   const renewMutation = useRenewSubscription();
   const initPaymentMutation = useInitPlatformPayment();
@@ -415,6 +528,21 @@ function StoreManagement() {
   const updateSubscriptionMutation = useUpdateSubscription();
   const updateStoreMutation = useUpdateStore();
   const { data: plansData } = useFetchAllPlans();
+
+  const {
+    domain,
+    domainType,
+    domainChecked,
+    domainAvailable,
+    isCheckingDomain,
+    dynadotResult,
+    setDomain,
+    setDomainType,
+    handleDomainChange,
+    handleDomainTypeChange,
+    checkDomain,
+    resetCheck,
+  } = useDomainCheck();
 
   // Upgrade modal state
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -428,6 +556,7 @@ function StoreManagement() {
   // Cancel/Delete store modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [deleteStoreName, setDeleteStoreName] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<ManageTab>("overview");
 
   const stores = useMemo(() => {
     const normalized = normalizeApiResponse<Store>(storesData);
@@ -454,13 +583,11 @@ function StoreManagement() {
 
   const storeUrl =
     store?.storeUrl ||
-    (store?.domain
-      ? `https://${store.domain
-          .replace(/^https?:\/\//, "")
-          .replace(/^dash\./, "")
-          .replace(/\.mel\.iq$/i, "")
-          .split("/")[0]}.mel.iq`
-      : undefined);
+    (store?.customDomain
+      ? `https://${store.customDomain.replace(/^https?:\/\//, "")}`
+      : store?.domain
+        ? `https://${normalizePlatformSlug(store.domain)}.mel.iq`
+        : undefined);
   const isLoading = storesLoading || subscriptionsLoading;
   const isPlanBasic = isBasicPlan(subscription?.plan?.name);
 
@@ -473,8 +600,12 @@ function StoreManagement() {
         tiktok: store.tiktok || "",
         x: store.x || "",
       });
+
+      setDomain(getStoreDomainInputValue(store));
+      setDomainType(getStoreDomainType(store));
+      resetCheck();
     }
-  }, [store]);
+  }, [store, setDomain, setDomainType, resetCheck]);
 
   const handleRenew = () => {
     setShowRenewModal(true);
@@ -661,6 +792,93 @@ function StoreManagement() {
     });
   };
 
+  const handleDomainSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!storeId || !store) return;
+
+    const originalValue = getStoreDomainInputValue(store);
+    const hasDomainChanged =
+      domain.trim().toLowerCase() !== originalValue.toLowerCase();
+
+    if (!hasDomainChanged) {
+      toast.info("لم يتم تغيير الدومين");
+      return;
+    }
+
+    if (!domainChecked || domainAvailable !== true) {
+      toast.error("الرجاء التحقق من توفر الدومين أولاً");
+      return;
+    }
+
+    if (domainType === "custom") {
+      const normalizedDomain = domain.trim().toLowerCase();
+      const pricing = getDomainPurchasePricing(dynadotResult?.price);
+      if (!pricing) {
+        toast.error("تعذر حساب سعر الدومين. أعد التحقق من التوفر.");
+        return;
+      }
+
+      sessionStorage.setItem(
+        DOMAIN_PURCHASE_RETURN_KEY,
+        JSON.stringify({ storeId, domain: normalizedDomain }),
+      );
+
+      initPaymentMutation.mutate(
+        {
+          type: "DOMAIN_REGISTRATION",
+          storeId,
+          domain: normalizedDomain,
+          returnBaseUrl: `${window.location.origin}/store/${storeId}/manage`,
+        },
+        {
+          onSuccess: (data) => {
+            const redirectUrl = data?.redirectUrl || data?.data?.redirectUrl;
+            const paymentId = data?.id || data?.data?.id;
+            if (!redirectUrl) {
+              toast.error("تعذر بدء الدفع عبر زين كاش");
+              return;
+            }
+            if (paymentId) {
+              sessionStorage.setItem(LAST_PAYMENT_ID_KEY, String(paymentId));
+            }
+            window.location.href = redirectUrl;
+          },
+          onError: (error: any) => {
+            sessionStorage.removeItem(DOMAIN_PURCHASE_RETURN_KEY);
+            console.error("Error initiating domain payment:", error);
+            toast.error(
+              error?.response?.data?.message ||
+                "تعذر بدء الدفع عبر زين كاش. حاول مرة أخرى.",
+            );
+          },
+        },
+      );
+      return;
+    }
+
+    updateStoreMutation.mutate(
+      {
+        id: storeId,
+        data: {
+          domain: normalizePlatformSlug(domain),
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success("تم تحديث سلاج المنصة بنجاح");
+          resetCheck();
+          void refetchStores();
+        },
+        onError: (error: any) => {
+          console.error("Error updating platform domain:", error);
+          toast.error(
+            error?.response?.data?.message || "حدث خطأ في تحديث الدومين",
+          );
+        },
+      },
+    );
+  };
+
   const handleSocialMediaSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (storeId) {
@@ -690,180 +908,369 @@ function StoreManagement() {
   if (isLoading) return <LoadingSkeleton />;
   if (!store) return <StoreNotFound onBack={() => navigate("/dashboard")} />;
 
+  const originalDomainValue = getStoreDomainInputValue(store);
+  const hasDomainChanged =
+    domain.trim().toLowerCase() !== originalDomainValue.toLowerCase();
+  const canSaveDomain =
+    hasDomainChanged && domainChecked && domainAvailable === true;
+  const isSavingDomain =
+    updateStoreMutation.isPending || initPaymentMutation.isPending;
+  const domainPricing =
+    domainType === "custom" ? getDomainPurchasePricing(dynadotResult?.price) : null;
+
+  const platformSlug = normalizePlatformSlug(store.domain);
+  const platformUrl = platformSlug ? `https://${platformSlug}.mel.iq` : null;
+  const dashboardUrl = platformSlug
+    ? `https://dash.${platformSlug}.mel.iq`
+    : null;
+  const logoUrl = resolveStoreLogoUrl(store.logo);
+  const subscriptionBadge = subscription
+    ? getStatusBadge(subscription.status)
+    : null;
+
   return (
-    <div className="min-h-screen bg-white dark:bg-black">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <div className="bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center gap-4">
+      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-gray-800 dark:bg-black/95">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               onClick={() => navigate("/dashboard")}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
+              className="shrink-0 rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-900"
               aria-label="العودة للوحة التحكم"
             >
-              <ArrowRightIcon className="w-5 h-5 text-black dark:text-white" />
+              <ArrowRightIcon className="h-5 w-5 text-black dark:text-white" />
             </button>
-            <div>
-              <h1 className="text-2xl font-bold text-black dark:text-white">
-                إدارة {store.name}
-              </h1>
-              {storeUrl && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {storeUrl}
-                </p>
-              )}
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={store.name}
+                className="h-11 w-11 shrink-0 rounded-xl border border-gray-200 object-cover dark:border-gray-800"
+              />
+            ) : (
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-100 dark:border-gray-800 dark:bg-gray-900">
+                <LayoutDashboard className="h-5 w-5 text-gray-500" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-xl font-bold text-black dark:text-white sm:text-2xl">
+                  {store.name}
+                </h1>
+                {subscriptionBadge && (
+                  <span
+                    className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${subscriptionBadge.className}`}
+                  >
+                    {subscriptionBadge.text}
+                  </span>
+                )}
+              </div>
+              <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                إدارة المتجر
+              </p>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {storeUrl && (
+              <a
+                href={storeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-gray-900"
+              >
+                <ExternalLink className="h-4 w-4" />
+                فتح المتجر
+              </a>
+            )}
+            {dashboardUrl && (
+              <a
+                href={dashboardUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-black px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                الداشبورد
+              </a>
+            )}
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Live Preview */}
-          <div className="lg:col-span-2">
-            <div className="bg-white dark:bg-black rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
-              <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-                <h2 className="text-lg font-semibold text-black dark:text-white">
-                  نافذة حية للموقع
-                </h2>
-              </div>
-              {storeUrl ? (
-                <iframe
-                  src={storeUrl}
-                  className="w-full h-[600px]"
-                  title={`معاينة ${store.name}`}
-                  allow="fullscreen"
-                />
-              ) : (
-                <div className="h-[600px] flex items-center justify-center text-gray-500 dark:text-gray-400">
-                  لا يوجد رابط للموقع
+        <nav className="mx-auto max-w-7xl border-t border-gray-100 px-4 dark:border-gray-900 sm:px-6 lg:px-8">
+          <div className="flex gap-1 overflow-x-auto py-1">
+            {MANAGE_TABS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+                  activeTab === id
+                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    : "text-gray-600 hover:bg-gray-100 hover:text-black dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-white"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </nav>
+      </header>
+
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+        {/* Quick stats */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="رابط المتجر"
+            value={storeUrl?.replace(/^https?:\/\//, "") || "—"}
+            hint="الرابط العام للزوار"
+          />
+          <StatCard
+            label="سلاج المنصة"
+            value={platformSlug ? `${platformSlug}.mel.iq` : "—"}
+            hint="الدومين الافتراضي على MEL"
+          />
+          <StatCard
+            label="الدومين المخصص"
+            value={store.customDomain || "غير مربوط"}
+            hint={store.customDomain ? "يعرض بدل سلاج المنصة" : "يمكن ربطه من تبويب الدومين"}
+          />
+          <StatCard
+            label="الخطة"
+            value={subscription?.plan?.name || "—"}
+            hint={
+              subscription
+                ? getTimeRemaining(subscription.end_at)?.text || "—"
+                : "لا يوجد اشتراك"
+            }
+          />
+        </div>
+
+        {/* Tab: Overview */}
+        {activeTab === "overview" && (
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <SectionCard
+                title="معاينة المتجر"
+                description="عرض مباشر لصفحة المتجر الحالية"
+              >
+                {storeUrl ? (
+                  <iframe
+                    src={storeUrl}
+                    className="h-[32rem] w-full rounded-xl border border-gray-200 dark:border-gray-800"
+                    title={`معاينة ${store.name}`}
+                    allow="fullscreen"
+                  />
+                ) : (
+                  <div className="flex h-[32rem] flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                    <Globe className="mb-3 h-10 w-10" />
+                    <p>لا يوجد رابط للمتجر بعد</p>
+                  </div>
+                )}
+              </SectionCard>
+            </div>
+
+            <div className="space-y-6">
+              <SectionCard title="روابط سريعة">
+                <div className="space-y-2">
+                  {storeUrl && (
+                    <a
+                      href={storeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-900"
+                    >
+                      <span>المتجر</span>
+                      <span className="text-gray-500" dir="ltr">
+                        {storeUrl.replace(/^https?:\/\//, "")}
+                      </span>
+                    </a>
+                  )}
+                  {platformUrl && (
+                    <a
+                      href={platformUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-900"
+                    >
+                      <span>منصة MEL</span>
+                      <span className="text-gray-500" dir="ltr">
+                        {platformUrl.replace(/^https?:\/\//, "")}
+                      </span>
+                    </a>
+                  )}
+                  {dashboardUrl && (
+                    <a
+                      href={dashboardUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-900"
+                    >
+                      <span>لوحة التحكم</span>
+                      <span className="text-gray-500" dir="ltr">
+                        {dashboardUrl.replace(/^https?:\/\//, "")}
+                      </span>
+                    </a>
+                  )}
                 </div>
-              )}
+              </SectionCard>
+
+              <SectionCard title="ملخص الاشتراك">
+                {subscription ? (
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">الحالة</span>
+                      <span className="font-medium">{subscriptionBadge?.text}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">الخطة</span>
+                      <span className="font-medium">
+                        {subscription.plan?.name || "—"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">ينتهي</span>
+                      <span className="font-medium">
+                        {formatDate(subscription.end_at)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("subscription")}
+                      className="mt-2 w-full rounded-lg border border-gray-200 py-2 text-sm font-medium transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-900"
+                    >
+                      إدارة الاشتراك
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">لا يوجد اشتراك نشط</p>
+                )}
+              </SectionCard>
             </div>
           </div>
+        )}
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            <SubscriptionInfo
+        {/* Tab: Domain */}
+        {activeTab === "domain" && (
+          <div className="mx-auto max-w-3xl">
+            <SectionCard
+              title="إعدادات الدومين"
+              description="سلاج المنصة للروابط الافتراضية، والدومين المخصص للمتاجر التي تملك دوميناً خاصاً"
+            >
+              <div className="mb-6 grid gap-3 sm:grid-cols-2">
+                <StatCard
+                  label="سلاج المنصة"
+                  value={`${platformSlug || "—"}.mel.iq`}
+                />
+                <StatCard
+                  label="الدومين المخصص"
+                  value={store.customDomain || "غير مربوط"}
+                />
+              </div>
+
+              <form onSubmit={handleDomainSubmit} className="space-y-4">
+                <DomainSettingsFields
+                  variant="management"
+                  inputNamePrefix="manage-"
+                  domain={domain}
+                  domainType={domainType}
+                  domainChecked={domainChecked}
+                  domainAvailable={domainAvailable}
+                  isCheckingDomain={isCheckingDomain}
+                  dynadotResult={dynadotResult}
+                  onDomainChange={handleDomainChange}
+                  onDomainTypeChange={handleDomainTypeChange}
+                  onCheck={checkDomain}
+                />
+                <button
+                  type="submit"
+                  disabled={!canSaveDomain || isSavingDomain}
+                  className="w-full rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                >
+                  {isSavingDomain
+                    ? "جاري التحويل لزين كاش..."
+                    : domainType === "custom" && domainPricing
+                      ? `الدفع عبر زين كاش — ${formatUsd(domainPricing.totalUsd)}`
+                      : "حفظ سلاج المنصة"}
+                </button>
+              </form>
+            </SectionCard>
+          </div>
+        )}
+
+        {/* Tab: Subscription */}
+        {activeTab === "subscription" && (
+          <SectionCard
+            title="الاشتراك والفوترة"
+            description="إدارة الخطة، التجديد، والترقية"
+          >
+            <SubscriptionPanel
               subscription={subscription}
+              isPlanBasic={isPlanBasic}
               onRenew={handleRenew}
               onPause={handlePause}
               onResume={handleResume}
               onCancel={handleCancel}
               onUpgrade={handleUpgrade}
               isPending={{
-                renew: renewMutation.isPending || initPaymentMutation.isPending,
+                renew:
+                  renewMutation.isPending || initPaymentMutation.isPending,
                 pause: pauseMutation.isPending,
                 resume: resumeMutation.isPending,
                 cancel: cancelMutation.isPending,
                 upgrade: updateSubscriptionMutation.isPending,
               }}
             />
+          </SectionCard>
+        )}
 
-            {/* Social Media */}
-            <div className="bg-white dark:bg-black rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6">
-              <h2 className="text-lg font-semibold text-black dark:text-white mb-4">
-                حسابات الوسائط الاجتماعية
-              </h2>
-              <form onSubmit={handleSocialMediaSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
-                    Instagram
-                  </label>
-                  <input
-                    type="url"
-                    name="instagram"
-                    value={socialMedia.instagram}
-                    onChange={handleSocialMediaChange}
-                    placeholder="https://instagram.com/username"
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent outline-none transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
-                    Facebook
-                  </label>
-                  <input
-                    type="url"
-                    name="facebook"
-                    value={socialMedia.facebook}
-                    onChange={handleSocialMediaChange}
-                    placeholder="https://facebook.com/username"
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent outline-none transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
-                    TikTok
-                  </label>
-                  <input
-                    type="url"
-                    name="tiktok"
-                    value={socialMedia.tiktok}
-                    onChange={handleSocialMediaChange}
-                    placeholder="https://tiktok.com/@username"
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent outline-none transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
-                    X (Twitter)
-                  </label>
-                  <input
-                    type="url"
-                    name="x"
-                    value={socialMedia.x}
-                    onChange={handleSocialMediaChange}
-                    placeholder="https://x.com/username"
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent outline-none transition"
-                  />
+        {/* Tab: Social */}
+        {activeTab === "social" && (
+          <div className="mx-auto max-w-3xl">
+            <SectionCard
+              title="حسابات الوسائط الاجتماعية"
+              description="تظهر روابط حساباتك في صفحة المتجر"
+            >
+              <form onSubmit={handleSocialMediaSubmit} className="space-y-5">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {(
+                    [
+                      { name: "instagram", label: "Instagram", placeholder: "https://instagram.com/username" },
+                      { name: "facebook", label: "Facebook", placeholder: "https://facebook.com/username" },
+                      { name: "tiktok", label: "TikTok", placeholder: "https://tiktok.com/@username" },
+                      { name: "x", label: "X (Twitter)", placeholder: "https://x.com/username" },
+                    ] as const
+                  ).map((field) => (
+                    <div key={field.name}>
+                      <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                        {field.label}
+                      </label>
+                      <input
+                        type="url"
+                        name={field.name}
+                        value={socialMedia[field.name]}
+                        onChange={handleSocialMediaChange}
+                        placeholder={field.placeholder}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-black outline-none transition focus:border-transparent focus:ring-2 focus:ring-black dark:border-gray-600 dark:bg-black dark:text-white dark:focus:ring-white"
+                      />
+                    </div>
+                  ))}
                 </div>
                 <button
                   type="submit"
                   disabled={updateStoreMutation.isPending}
-                  className="w-full bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-gray-200"
                 >
                   {updateStoreMutation.isPending
                     ? "جاري الحفظ..."
-                    : "حفظ التغييرات"}
+                    : "حفظ حسابات السوشيال"}
                 </button>
               </form>
-            </div>
-
-            {/* Plan Info */}
-            <div className="bg-white dark:bg-black rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6">
-              <h2 className="text-lg font-semibold text-black dark:text-white mb-4">
-                الخطة الحالية
-              </h2>
-              {isPlanBasic ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-300 dark:border-gray-700">
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                      أنت حالياً في الخطة الأولى
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      الترقية والتجديد غير متاحين في هذه الخطة
-                    </p>
-                  </div>
-                  <button
-                    disabled
-                    className="w-full bg-gray-200 dark:bg-gray-800 text-gray-500 px-4 py-2 rounded-lg text-sm font-medium cursor-not-allowed border border-gray-300 dark:border-gray-700"
-                  >
-                    ترقية الخطة (مقفول)
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleUpgrade}
-                  className="w-full bg-violet-100 dark:bg-violet-900 hover:bg-violet-200 dark:hover:bg-violet-800 text-violet-800 dark:text-violet-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-violet-300 dark:border-violet-700"
-                >
-                  ترقية الخطة
-                </button>
-              )}
-            </div>
+            </SectionCard>
           </div>
-        </div>
-      </div>
+        )}
+      </main>
 
       {/* Renew Modal */}
       {showRenewModal && (

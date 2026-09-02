@@ -1,11 +1,16 @@
 import axiosInstance from "@/utils/AxiosInstance";
 
 export type PlatformPaymentInitPayload = {
-  type: "INITIAL_SUBSCRIPTION" | "RENEWAL" | "CHANGE_PLAN";
-  planId: string;
+  type:
+    | "INITIAL_SUBSCRIPTION"
+    | "RENEWAL"
+    | "CHANGE_PLAN"
+    | "DOMAIN_REGISTRATION";
+  planId?: string;
   billingPeriod?: "MONTHLY" | "YEARLY";
   durationMonths?: number;
   storeId?: string;
+  domain?: string;
   returnBaseUrl?: string;
 };
 
