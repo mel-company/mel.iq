@@ -796,13 +796,22 @@ function StoreManagement() {
     e.preventDefault();
     if (!storeId || !store) return;
 
-    const originalValue = getStoreDomainInputValue(store);
-    const hasDomainChanged =
-      domain.trim().toLowerCase() !== originalValue.toLowerCase();
+    const normalizedDomain = domain.trim().toLowerCase();
+    const isCustomPurchase = domainType === "custom";
+    const customDomainAlreadyLinked =
+      (store.customDomain || "").trim().toLowerCase() === normalizedDomain;
 
-    if (!hasDomainChanged) {
-      toast.info("لم يتم تغيير الدومين");
-      return;
+    if (isCustomPurchase) {
+      if (customDomainAlreadyLinked) {
+        toast.info("هذا الدومين المخصص مربوط بالفعل");
+        return;
+      }
+    } else {
+      const originalSlug = normalizePlatformSlug(store.domain);
+      if (normalizedDomain === originalSlug) {
+        toast.info("لم يتم تغيير الدومين");
+        return;
+      }
     }
 
     if (!domainChecked || domainAvailable !== true) {
@@ -811,7 +820,6 @@ function StoreManagement() {
     }
 
     if (domainType === "custom") {
-      const normalizedDomain = domain.trim().toLowerCase();
       const pricing = getDomainPurchasePricing(dynadotResult?.price);
       if (!pricing) {
         toast.error("تعذر حساب سعر الدومين. أعد التحقق من التوفر.");
@@ -908,11 +916,26 @@ function StoreManagement() {
   if (isLoading) return <LoadingSkeleton />;
   if (!store) return <StoreNotFound onBack={() => navigate("/dashboard")} />;
 
-  const originalDomainValue = getStoreDomainInputValue(store);
-  const hasDomainChanged =
-    domain.trim().toLowerCase() !== originalDomainValue.toLowerCase();
-  const canSaveDomain =
-    hasDomainChanged && domainChecked && domainAvailable === true;
+  const normalizedDomainInput = domain.trim().toLowerCase();
+  const customDomainAlreadyLinked =
+    (store.customDomain || "").trim().toLowerCase() === normalizedDomainInput;
+  const subdomainChanged =
+    normalizedDomainInput !== normalizePlatformSlug(store.domain).toLowerCase();
+
+  const canPurchaseCustomDomain =
+    domainType === "custom" &&
+    domainChecked &&
+    domainAvailable === true &&
+    !customDomainAlreadyLinked &&
+    getDomainPurchasePricing(dynadotResult?.price) != null;
+
+  const canUpdateSubdomain =
+    domainType === "subdomain" &&
+    subdomainChanged &&
+    domainChecked &&
+    domainAvailable === true;
+
+  const canSaveDomain = canPurchaseCustomDomain || canUpdateSubdomain;
   const isSavingDomain =
     updateStoreMutation.isPending || initPaymentMutation.isPending;
   const domainPricing =
