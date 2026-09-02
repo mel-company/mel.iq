@@ -228,7 +228,7 @@ const SectionCard = ({
         )}
       </div>
     )}
-    <div className="p-6">{children}</div>
+    <div className="p-6 text-black dark:text-white">{children}</div>
   </section>
 );
 
@@ -1102,7 +1102,7 @@ function StoreManagement() {
                       href={storeUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-900"
+                      className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm text-black transition-colors hover:bg-gray-50 dark:border-gray-800 dark:text-white dark:hover:bg-gray-900"
                     >
                       <span>المتجر</span>
                       <span className="text-gray-500" dir="ltr">
@@ -1115,7 +1115,7 @@ function StoreManagement() {
                       href={platformUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-900"
+                      className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm text-black transition-colors hover:bg-gray-50 dark:border-gray-800 dark:text-white dark:hover:bg-gray-900"
                     >
                       <span>منصة MEL</span>
                       <span className="text-gray-500" dir="ltr">
@@ -1128,7 +1128,7 @@ function StoreManagement() {
                       href={dashboardUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-900"
+                      className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm text-black transition-colors hover:bg-gray-50 dark:border-gray-800 dark:text-white dark:hover:bg-gray-900"
                     >
                       <span>لوحة التحكم</span>
                       <span className="text-gray-500" dir="ltr">
@@ -1142,32 +1142,36 @@ function StoreManagement() {
               <SectionCard title="ملخص الاشتراك">
                 {subscription ? (
                   <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">الحالة</span>
-                      <span className="font-medium">{subscriptionBadge?.text}</span>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-gray-500 dark:text-gray-400">الحالة</span>
+                      <span className="font-medium text-black dark:text-white">
+                        {subscriptionBadge?.text}
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">الخطة</span>
-                      <span className="font-medium">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-gray-500 dark:text-gray-400">الخطة</span>
+                      <span className="font-medium text-black dark:text-white">
                         {subscription.plan?.name || "—"}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">ينتهي</span>
-                      <span className="font-medium">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-gray-500 dark:text-gray-400">ينتهي</span>
+                      <span className="font-medium text-black dark:text-white">
                         {formatDate(subscription.end_at)}
                       </span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setActiveTab("subscription")}
-                      className="mt-2 w-full rounded-lg border border-gray-200 py-2 text-sm font-medium transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-900"
+                      className="mt-2 w-full rounded-lg border border-gray-200 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-50 dark:border-gray-800 dark:text-white dark:hover:bg-gray-900"
                     >
                       إدارة الاشتراك
                     </button>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">لا يوجد اشتراك نشط</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    لا يوجد اشتراك نشط
+                  </p>
                 )}
               </SectionCard>
             </div>
