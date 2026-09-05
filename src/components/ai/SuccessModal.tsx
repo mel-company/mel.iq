@@ -19,8 +19,10 @@ interface SuccessModalProps {
   subdomain?: string;
   /** Editor handoff link — one-time token, so it is used, not shared. */
   editorUrl?: string;
-  /** The storefront address, live only after the user publishes. */
+  /** The storefront address. */
   storeUrl?: string;
+  /** True when the run already deployed it, so the address is answering. */
+  published?: boolean;
   onClose: () => void;
 }
 
@@ -30,6 +32,7 @@ export default function SuccessModal({
   subdomain,
   editorUrl,
   storeUrl,
+  published = false,
   onClose,
 }: SuccessModalProps) {
   const {
@@ -98,7 +101,7 @@ export default function SuccessModal({
             type="button"
             onClick={onClose}
             aria-label="إغلاق"
-            className="absolute left-4 top-4 text-white/40 transition-colors hover:text-white/80"
+            className="absolute start-4 top-4 text-white/40 transition-colors hover:text-white/80"
           >
             <X size={20} />
           </button>
@@ -117,7 +120,18 @@ export default function SuccessModal({
           {storeUrl && (
             <div className="mb-6 mt-4 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
               <div className="flex items-center justify-between gap-2" dir="ltr">
-                <span className="truncate text-sm text-white/60">{storeUrl}</span>
+                {published ? (
+                  <a
+                    href={storeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="truncate text-sm text-[#00c8ff] underline-offset-2 hover:underline"
+                  >
+                    {storeUrl}
+                  </a>
+                ) : (
+                  <span className="truncate text-sm text-white/60">{storeUrl}</span>
+                )}
                 <button
                   type="button"
                   aria-label="نسخ العنوان"
@@ -131,7 +145,9 @@ export default function SuccessModal({
                 </button>
               </div>
               <p className="mt-1 text-right text-[11px] text-white/35">
-                يصبح العنوان فعّالاً بعد النشر من المحرر
+                {published
+                  ? "متجرك منشور والعنوان فعّال الآن"
+                  : "يصبح العنوان فعّالاً بعد النشر من المحرر"}
               </p>
             </div>
           )}

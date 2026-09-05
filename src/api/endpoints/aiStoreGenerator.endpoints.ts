@@ -96,6 +96,12 @@ export type GenerationEvent =
    * the model's best guess.
    */
   | { type: "questions"; questions: DesignQuestion[] }
+  | {
+    type: "activity";
+    kind: "design" | "compose" | "review" | "refine" | "images" | "store";
+    message: string;
+    page?: string;
+  }
   /** Something degraded but the run continued. */
   | { type: "warning"; code: string; message: string }
   | {
@@ -104,8 +110,15 @@ export type GenerationEvent =
     subdomain: string;
     storeName: string;
     redirectUrl: string;
-    /** Storefront address; live only after the user publishes. */
+    /**
+     * The storefront's address.
+     *
+     * Live when `published` is true: the run deploys the store to Cloudflare
+     * as its last phase. When the deploy failed it is still the store's
+     * address, just not answering yet.
+     */
     storeUrl?: string;
+    published?: boolean;
     templateId?: string;
     /** Repeated here so a client that reconnected still gets it. */
     design?: PageDesign | null;

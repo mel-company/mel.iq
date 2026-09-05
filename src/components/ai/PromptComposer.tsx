@@ -49,6 +49,16 @@ const MAX_IMAGE_EDGE = 1600;
 const FIGMA_URL =
   /@?(https?:\/\/(?:www\.)?figma\.com\/(?:design|file|board)\/[^\s]+)/;
 
+const recommendedAnswers = (questions: DesignQuestion[]): DesignAnswers =>
+  Object.fromEntries(
+    questions.map((question) => [
+      question.id,
+      question.options
+        .filter((option) => option.recommended)
+        .map((option) => option.value),
+    ]),
+  );
+
 type Phase =
   | "idle"
   | "uploading"
@@ -93,7 +103,7 @@ async function downscale(file: File): Promise<File> {
 
 export default function PromptComposer() {
   const { user } = useAuth();
-  const { data: credits } = useCredits(Boolean(user));
+  const { data: credits, isLoading: creditsLoading } = useCredits(Boolean(user));
   const queryClient = useQueryClient();
 
   // Handle a ZainCash credit purchase return (success or failure).
@@ -157,12 +167,15 @@ export default function PromptComposer() {
     storeUrl?: string;
     storeName: string;
     subdomain?: string;
+    /** True when the run deployed the storefront itself. */
+    published?: boolean;
   } | null>(null);
   const [generationId, setGenerationId] = useState<string | null>(null);
   /** Uploaded reference urls, carried from the design phase into the build. */
   const [pendingRefs, setPendingRefs] = useState<string[] | undefined>();
   const [pendingLogo, setPendingLogo] = useState<string | undefined>();
   const [questions, setQuestions] = useState<DesignQuestion[]>([]);
+  const [questionsReady, setQuestionsReady] = useState(false);
   /**
    * Pre-filled with every recommendation the moment the questions arrive.
    *
@@ -199,6 +212,11 @@ export default function PromptComposer() {
     referenceImages?: string[];
     logoUrl?: string;
   } | null>(null);
+  const [buildConfirmed, setBuildConfirmed] = useState(false);
+  const [visitedQuestions, setVisitedQuestions] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const answerAdvanceRef = useRef<string | null>(null);
   const buildStartedRef = useRef(false);
   const [buyOpen, setBuyOpen] = useState(false);
 
@@ -349,8 +367,23 @@ export default function PromptComposer() {
     stepsRef.current = [];
     setActiveStep(0);
     setStoreName(undefined);
+    setGenerationId(null);
+    setPendingRefs(undefined);
+    setPendingLogo(undefined);
+    setPendingBuild(null);
+    setBuildConfirmed(false);
+    setVisitedQuestions(new Set());
+    setQuestionIndex(0);
+    setQuestions([]);
+    setQuestionsReady(false);
+    setAnswers({});
+    answersRef.current = {};
+    answerAdvanceRef.current = null;
+    buildStartedRef.current = false;
+    designTerminalRef.current = false;
+    buildTerminalRef.current = false;
 
-    if (user && !hasStoreCredits()) {
+    if (user && credits && !hasStoreCredits()) {
       setBuyOpen(true);
       setError("لا يوجد رصيد كافٍ. اشحن رصيدك أولاً.");
       return;
@@ -385,8 +418,15 @@ export default function PromptComposer() {
       // A second run must not show the previous run's design — or its
       // questions, which belong to a store that is no longer being built.
       setQuestions([]);
+      setQuestionsReady(false);
       setAnswers({});
       answersRef.current = {};
+      setQuestionIndex(0);
+      setVisitedQuestions(new Set());
+      setBuildConfirmed(false);
+      setPendingBuild(null);
+      answerAdvanceRef.current = null;
+      buildStartedRef.current = false;
       designTerminalRef.current = false;
       buildTerminalRef.current = false;
 
@@ -423,6 +463,9 @@ export default function PromptComposer() {
               addStatus(event.message);
               if (typeof event.index === "number") setActiveStep(event.index);
               break;
+            case "activity":
+              addStatus(event.message);
+              break;
             case "template":
               if (event.reason) addStatus(event.reason);
               break;
@@ -431,16 +474,11 @@ export default function PromptComposer() {
               break;
             case "questions": {
               setQuestions(event.questions);
+              setQuestionsReady(true);
+              addStatus("جهزنا أسئلة قصيرة لتخصيص تصميم متجرك");
               // Seeded with the recommendations so the step is genuinely
               // optional: build now and you get the model's own answers.
-              const seeded = Object.fromEntries(
-                event.questions.map((question) => [
-                  question.id,
-                  question.options
-                    .filter((option) => option.recommended)
-                    .map((option) => option.value),
-                ]),
-              );
+              const seeded = recommendedAnswers(event.questions);
               answersRef.current = seeded;
               setAnswers(seeded);
               setQuestionIndex(0);
@@ -475,6 +513,7 @@ export default function PromptComposer() {
 
       setGenerationId(decided.generationId);
       setStoreName(decided.storeName);
+      setQuestionsReady(true);
       setPendingRefs(referenceImages);
 
       // The design itself stays server-side — it is persisted on the
@@ -508,7 +547,7 @@ export default function PromptComposer() {
     referenceImages?: string[],
     uploadedLogo?: string,
   ) => {
-    if (user && !hasStoreCredits()) {
+    if (user && credits && !hasStoreCredits()) {
       setBuyOpen(true);
       setError("لا يوجد رصيد كافٍ. اشحن رصيدك أولاً.");
       return;
@@ -516,6 +555,12 @@ export default function PromptComposer() {
 
     setPhase("generating");
     setEntries([]);
+    // The design phase's plan does not describe the build, and the progress
+    // bars read the running step's key out of it. Cleared so the build's own
+    // plan is what they follow.
+    setSteps([]);
+    stepsRef.current = [];
+    setActiveStep(0);
     addStatus("جاري بناء المتجر...");
 
     try {
@@ -524,6 +569,7 @@ export default function PromptComposer() {
         storeUrl?: string;
         storeName: string;
         subdomain: string;
+        published?: boolean;
       } | null = null;
 
       await aiStoreGeneratorAPI.generate(
@@ -562,6 +608,9 @@ export default function PromptComposer() {
               // real pipeline rather than guessing from message text.
               if (typeof event.index === "number") setActiveStep(event.index);
               break;
+            case "activity":
+              addStatus(event.message);
+              break;
             case "template":
               if (event.reason) addStatus(event.reason);
               break;
@@ -577,6 +626,7 @@ export default function PromptComposer() {
                 storeUrl: event.storeUrl,
                 storeName: event.storeName,
                 subdomain: event.subdomain,
+                published: event.published,
               };
               buildTerminalRef.current = true;
               break;
@@ -634,6 +684,11 @@ export default function PromptComposer() {
    * "finished choosing" is not something a tap can tell us.
    */
   const answerQuestion = (question: DesignQuestion, value: string) => {
+    const autoAdvance =
+      question.kind !== "multi" && !visitedQuestions.has(question.id);
+    if (autoAdvance && answerAdvanceRef.current === question.id) return;
+    if (autoAdvance) answerAdvanceRef.current = question.id;
+
     const current = answersRef.current[question.id] ?? [];
     const next =
       question.kind === "multi"
@@ -646,8 +701,37 @@ export default function PromptComposer() {
     answersRef.current = merged;
     setAnswers(merged);
 
-    if (question.kind !== "multi") setQuestionIndex((i) => i + 1);
+    if (autoAdvance) {
+      setVisitedQuestions((previous) => new Set(previous).add(question.id));
+      setQuestionIndex((i) => Math.min(i + 1, questions.length));
+    }
   };
+
+  const nextQuestion = () => {
+    const current = questions[questionIndex];
+    if (current) {
+      setVisitedQuestions((previous) => new Set(previous).add(current.id));
+    }
+    setQuestionIndex((i) => Math.min(i + 1, questions.length));
+  };
+
+  const previousQuestion = () => {
+    setBuildConfirmed(false);
+    setQuestionIndex((i) => Math.max(0, i - 1));
+  };
+
+  /**
+   * A run that asked nothing needs no confirmation.
+   *
+   * The confirmation step exists to let the merchant review the answers they
+   * gave. With no questions there is nothing on it to review — it was a modal
+   * asking permission to continue work the merchant had already asked for,
+   * standing between them and the build for as long as they took to notice it.
+   */
+  useEffect(() => {
+    if (!questionsReady || buildConfirmed || questions.length) return;
+    setBuildConfirmed(true);
+  }, [questionsReady, questions.length, buildConfirmed]);
 
   /**
    * Starts the build once the design and the answers are both in.
@@ -658,10 +742,11 @@ export default function PromptComposer() {
    * Whichever is last triggers this.
    */
   useEffect(() => {
-    if (!pendingBuild || buildStartedRef.current) return;
+    if (!pendingBuild || buildStartedRef.current || !buildConfirmed) return;
     if (questionIndex < questions.length) return;
 
     buildStartedRef.current = true;
+    setPendingBuild(null);
     void runBuild(
       pendingBuild.id,
       pendingBuild.referenceImages,
@@ -670,9 +755,10 @@ export default function PromptComposer() {
     // `runBuild` is redefined every render and is not a dependency worth
     // chasing; the ref above is what guarantees one call.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingBuild, questionIndex, questions.length]);
+  }, [pendingBuild, buildConfirmed, questionIndex, questions.length]);
 
   const handleGenerate = () => {
+    if (phase !== "idle" || (user && creditsLoading)) return;
     if (prompt.trim().length < PROMPT_MIN_LENGTH) {
       toast.error("يرجى كتابة وصف أوضح لمتجرك");
       return;
@@ -696,6 +782,16 @@ export default function PromptComposer() {
     phase === "generating" ||
     phase === "polling";
 
+  useEffect(() => {
+    if (!busy) return;
+    const protectActiveRun = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protectActiveRun);
+    return () => window.removeEventListener("beforeunload", protectActiveRun);
+  }, [busy]);
+
   // Designing and reviewing are the design half; everything after the merchant
   // approves is the build.
   const mascotPhase: GenerationPhase =
@@ -717,11 +813,24 @@ export default function PromptComposer() {
           errorCode={errorCode}
           refunded={refunded}
           questions={questions}
+          questionsReady={questionsReady}
           answers={answers}
           questionIndex={questionIndex}
+          revisitedQuestion={Boolean(
+            questions[questionIndex] &&
+            visitedQuestions.has(questions[questionIndex].id),
+          )}
+          buildConfirmed={buildConfirmed}
           onAnswer={answerQuestion}
-          onNextQuestion={() => setQuestionIndex((i) => i + 1)}
-          onSkipQuestions={() => setQuestionIndex(questions.length)}
+          onNextQuestion={nextQuestion}
+          onPreviousQuestion={previousQuestion}
+          onSkipQuestions={() => {
+            const recommended = recommendedAnswers(questions);
+            answersRef.current = recommended;
+            setAnswers(recommended);
+            setQuestionIndex(questions.length);
+          }}
+          onConfirmBuild={() => setBuildConfirmed(true)}
           designReady={Boolean(pendingBuild)}
           onRetry={
             error
@@ -730,7 +839,24 @@ export default function PromptComposer() {
                 setErrorCode(null);
                 setPhase("idle");
                 setEntries([]);
+                setSteps([]);
+                stepsRef.current = [];
                 setActiveStep(0);
+                setQuestions([]);
+                setQuestionsReady(false);
+                setAnswers({});
+                answersRef.current = {};
+                setQuestionIndex(0);
+                setVisitedQuestions(new Set());
+                setBuildConfirmed(false);
+                setPendingBuild(null);
+                setPendingRefs(undefined);
+                setPendingLogo(undefined);
+                setGenerationId(null);
+                answerAdvanceRef.current = null;
+                buildStartedRef.current = false;
+                designTerminalRef.current = false;
+                buildTerminalRef.current = false;
               }
               : undefined
           }
@@ -741,7 +867,24 @@ export default function PromptComposer() {
                 setErrorCode(null);
                 setPhase("idle");
                 setEntries([]);
+                setSteps([]);
+                stepsRef.current = [];
                 setActiveStep(0);
+                setQuestions([]);
+                setQuestionsReady(false);
+                setAnswers({});
+                answersRef.current = {};
+                setQuestionIndex(0);
+                setVisitedQuestions(new Set());
+                setBuildConfirmed(false);
+                setPendingBuild(null);
+                setPendingRefs(undefined);
+                setPendingLogo(undefined);
+                setGenerationId(null);
+                answerAdvanceRef.current = null;
+                buildStartedRef.current = false;
+                designTerminalRef.current = false;
+                buildTerminalRef.current = false;
               }
               : undefined
           }
@@ -752,14 +895,33 @@ export default function PromptComposer() {
           subdomain={success?.subdomain}
           editorUrl={success?.editorUrl}
           storeUrl={success?.storeUrl}
+          published={success?.published}
           onClose={() => {
             // Back to a fresh composer; the store is safe in history.
             setSuccess(null);
             setPhase("idle");
             setEntries([]);
+            setSteps([]);
+            stepsRef.current = [];
+            setActiveStep(0);
             setPrompt("");
             setImages([]);
+            clearLogo();
+            setQuestions([]);
+            setQuestionsReady(false);
+            setAnswers({});
+            answersRef.current = {};
+            setQuestionIndex(0);
+            setVisitedQuestions(new Set());
+            setBuildConfirmed(false);
+            setPendingBuild(null);
+            setPendingRefs(undefined);
+            setPendingLogo(undefined);
             setGenerationId(null);
+            answerAdvanceRef.current = null;
+            buildStartedRef.current = false;
+            designTerminalRef.current = false;
+            buildTerminalRef.current = false;
           }}
         />
         <BuyCreditsModal open={buyOpen} onClose={() => setBuyOpen(false)} />
@@ -904,6 +1066,8 @@ export default function PromptComposer() {
             type="button"
             onClick={handleGenerate}
             disabled={
+              phase !== "idle" ||
+              (Boolean(user) && creditsLoading) ||
               prompt.trim().length < PROMPT_MIN_LENGTH ||
               prompt.length > PROMPT_MAX_LENGTH
             }
