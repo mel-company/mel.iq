@@ -528,7 +528,7 @@ export default function GenerationProgress({
           )}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 sm:px-6 sm:pb-6">
+        <div className="min-h-0 flex-1 no-scrollbar overflow-y-auto overscroll-contain px-4 pb-5 sm:px-6 sm:pb-6">
           {!error && (
             <div className="mb-2 flex justify-center">
               {reducedMotion ? (
@@ -902,7 +902,7 @@ function ConfirmationStep({
         راجع اختياراتك قبل البناء
       </h3>
       {questions.length > 0 ? (
-        <ul className="mt-3 max-h-28 space-y-2 overflow-y-auto">
+        <ul className="mt-3 max-h-28 space-y-2 no-scrollbar overflow-y-auto">
           {questions.map((question) => {
             const selected = question.options
               .filter((option) => (answers[question.id] ?? []).includes(option.value))

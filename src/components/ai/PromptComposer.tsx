@@ -1,5 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ImagePlus, Loader2, Sparkle, X } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  ArrowUp,
+  ImagePlus,
+  Loader2,
+  Paperclip,
+  Sparkle,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
@@ -44,6 +51,18 @@ const PROMPT_MIN_LENGTH = 10;
 const MAX_IMAGES = 3;
 /** Downscaled before upload — a phone photo is megabytes of no extra signal. */
 const MAX_IMAGE_EDGE = 1600;
+
+/**
+ * A picked reference, with the object url its thumbnail is drawn from.
+ *
+ * The url is carried alongside the file rather than derived at render time:
+ * `URL.createObjectURL` in a render body mints a new url on every keystroke in
+ * the prompt and leaks every one of them.
+ */
+interface ReferenceImage {
+  file: File;
+  url: string;
+}
 
 /** Same pattern the server uses to spot a Figma link in free text. */
 const FIGMA_URL =
@@ -141,7 +160,7 @@ export default function PromptComposer() {
   const [prompt, setPrompt] = useState(
     () => sessionStorage.getItem(DRAFT_KEY) || "",
   );
-  const [images, setImages] = useState<File[]>([]);
+  const [images, setImages] = useState<ReferenceImage[]>([]);
   /**
    * The merchant's own logo.
    *
@@ -241,6 +260,15 @@ export default function PromptComposer() {
   }, []);
 
 
+  /**
+   * The attach menu, open.
+   *
+   * Two icons side by side asked the merchant to know that a sparkle means
+   * "logo" before they had clicked either. One paperclip that opens two
+   * labelled rows asks them to know nothing.
+   */
+  const [attachOpen, setAttachOpen] = useState(false);
+  const attachRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const logoInput = useRef<HTMLInputElement>(null);
   // Survives the auth modal without being a render dependency.
@@ -299,6 +327,23 @@ export default function PromptComposer() {
     };
   }, [phase, generationId, storeName]);
 
+  // The attach menu closes the way every other menu does: click away, or Esc.
+  useEffect(() => {
+    if (!attachOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!attachRef.current?.contains(event.target as Node)) setAttachOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAttachOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [attachOpen]);
+
   // Lift a pasted Figma link out of the text into its own chip.
   useEffect(() => {
     const match = prompt.match(FIGMA_URL);
@@ -322,8 +367,25 @@ export default function PromptComposer() {
       .filter((f) => f.type.startsWith("image/"))
       .slice(0, room);
     const processed = await Promise.all(accepted.map(downscale));
-    setImages((prev) => [...prev, ...processed]);
+    setImages((prev) => [
+      ...prev,
+      ...processed.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    ]);
   };
+
+  /** Drops one reference and the object url it was drawn from. */
+  const removeImage = (index: number) =>
+    setImages((prev) => {
+      const dropped = prev[index];
+      if (dropped) URL.revokeObjectURL(dropped.url);
+      return prev.filter((_, i) => i !== index);
+    });
+
+  const clearImages = () =>
+    setImages((prev) => {
+      prev.forEach((image) => URL.revokeObjectURL(image.url));
+      return [];
+    });
 
   const handleLogo = async (files: FileList | null) => {
     const file = files?.[0];
@@ -403,7 +465,7 @@ export default function PromptComposer() {
         // whichever went last.
         const [refs, logoUrls] = await Promise.all([
           images.length
-            ? aiStoreGeneratorAPI.uploadReferences(images)
+            ? aiStoreGeneratorAPI.uploadReferences(images.map((i) => i.file))
             : Promise.resolve({ urls: [] as string[] }),
           logo
             ? aiStoreGeneratorAPI.uploadReferences([logo])
@@ -905,7 +967,7 @@ export default function PromptComposer() {
             stepsRef.current = [];
             setActiveStep(0);
             setPrompt("");
-            setImages([]);
+            clearImages();
             clearLogo();
             setQuestions([]);
             setQuestionsReady(false);
@@ -959,25 +1021,26 @@ export default function PromptComposer() {
           </p>
         )}
 
-        {(images.length > 0 || figmaUrl) && (
-          <div className="flex flex-wrap gap-2 px-3 pb-2">
-            {images.map((file, index) => (
-              <span
-                key={`${file.name}-${index}`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70"
-              >
-                {file.name.slice(0, 22)}
-                <button
-                  type="button"
-                  aria-label={`إزالة ${file.name}`}
-                  onClick={() =>
-                    setImages((prev) => prev.filter((_, i) => i !== index))
-                  }
-                  className="text-white/40 hover:text-white"
-                >
-                  <X size={12} />
-                </button>
-              </span>
+        {/* One strip for everything attached. A filename in a pill told the
+            merchant nothing about which photo they had picked — the whole
+            point of a reference is what it looks like. */}
+        {(images.length > 0 || logoPreview || figmaUrl) && (
+          <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
+            {logoPreview && (
+              <Attachment
+                url={logoPreview}
+                label="الشعار"
+                accent
+                onRemove={clearLogo}
+              />
+            )}
+            {images.map((image, index) => (
+              <Attachment
+                key={image.url}
+                url={image.url}
+                label={`مرجع ${index + 1}`}
+                onRemove={() => removeImage(index)}
+              />
             ))}
             {figmaUrl && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-[#00c8ff]/30 bg-[#00c8ff]/10 px-3 py-1 text-xs text-[#00c8ff]">
@@ -995,39 +1058,56 @@ export default function PromptComposer() {
           </div>
         )}
 
-        {logoPreview && (
-          <div className="mb-2 flex flex-wrap gap-2 px-1">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#00c8ff]/30 bg-[#00c8ff]/10 py-1 pe-2 ps-1 text-xs text-white/80">
-              <img
-                src={logoPreview}
-                alt=""
-                className="h-6 w-6 rounded-full object-contain"
-              />
-              شعار المتجر
-              <button
-                type="button"
-                onClick={clearLogo}
-                aria-label="إزالة الشعار"
-                className="rounded-full p-0.5 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                <X size={12} />
-              </button>
-            </span>
-          </div>
-        )}
-
         <div className="flex items-center justify-between gap-3 px-1">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => fileInput.current?.click()}
-              disabled={images.length >= MAX_IMAGES}
-              title="أرفق صورة مرجعية للتصميم"
-              aria-label="أرفق صورة مرجعية"
-              className="rounded-full p-2 text-white/40 transition-colors hover:bg-white/5 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ImagePlus size={18} />
-            </button>
+            <div className="relative" ref={attachRef}>
+              <button
+                type="button"
+                onClick={() => setAttachOpen((open) => !open)}
+                aria-haspopup="menu"
+                aria-expanded={attachOpen}
+                aria-label="إرفاق"
+                title="إرفاق"
+                className={`rounded-full p-2 transition-colors hover:bg-white/5 ${attachOpen || images.length || logo
+                  ? "text-[#00c8ff]"
+                  : "text-white/40 hover:text-white/80"
+                  }`}
+              >
+                <Paperclip size={18} />
+              </button>
+
+              {attachOpen && (
+                <div
+                  role="menu"
+                  aria-label="نوع المرفق"
+                  className="absolute bottom-full start-0 z-20 mb-2 w-64 overflow-hidden rounded-2xl border border-white/10 bg-[#241f56] p-1 shadow-2xl"
+                >
+                  <AttachOption
+                    icon={<ImagePlus size={16} />}
+                    title="صور مرجعية"
+                    hint={
+                      images.length
+                        ? `${images.length} من ${MAX_IMAGES} — يحاكي المتجر تصميمها`
+                        : `حتى ${MAX_IMAGES} صور يحاكي المتجر تصميمها`
+                    }
+                    disabled={images.length >= MAX_IMAGES}
+                    onSelect={() => {
+                      setAttachOpen(false);
+                      fileInput.current?.click();
+                    }}
+                  />
+                  <AttachOption
+                    icon={<Sparkle size={16} />}
+                    title="شعار المتجر"
+                    hint={logo ? "استبدال الشعار الحالي" : "صورة واحدة تُستخدم كشعار"}
+                    onSelect={() => {
+                      setAttachOpen(false);
+                      logoInput.current?.click();
+                    }}
+                  />
+                </div>
+              )}
+            </div>
             <input
               ref={fileInput}
               type="file"
@@ -1039,16 +1119,6 @@ export default function PromptComposer() {
                 e.target.value = "";
               }}
             />
-            <button
-              type="button"
-              onClick={() => logoInput.current?.click()}
-              title="أرفق شعار متجرك ليُستخدم مباشرة"
-              aria-label="أرفق شعار المتجر"
-              className={`rounded-full p-2 transition-colors hover:bg-white/5 ${logo ? "text-[#00c8ff]" : "text-white/40 hover:text-white/80"
-                }`}
-            >
-              <Sparkle size={18} />
-            </button>
             <input
               ref={logoInput}
               type="file"
@@ -1084,7 +1154,7 @@ export default function PromptComposer() {
       </div>
 
       <p className="mt-3 text-center text-xs text-white/30">
-        أرفق صورة تصميم أو رابط Figma ليحاكيها المتجر
+        أرفق صور تصميم أو شعارك أو رابط Figma من زر المشبك
       </p>
 
       <AuthModal
@@ -1109,5 +1179,89 @@ export default function PromptComposer() {
           merchant arrived at the landing page with no way to top up. */}
       <BuyCreditsModal open={buyOpen} onClose={() => setBuyOpen(false)} />
     </div>
+  );
+}
+
+/**
+ * One row of the attach menu.
+ *
+ * The hint line is what makes the menu worth opening: "صور مرجعية" alone does
+ * not say that three is the limit, or that the store will be designed to look
+ * like them.
+ */
+function AttachOption({
+  icon,
+  title,
+  hint,
+  disabled,
+  onSelect,
+}: {
+  icon: ReactNode;
+  title: string;
+  hint: string;
+  disabled?: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onSelect}
+      disabled={disabled}
+      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start transition-colors hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#00c8ff]/12 text-[#00c8ff]">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm text-white/90">{title}</span>
+        <span className="block truncate text-[11px] text-white/40">{hint}</span>
+      </span>
+    </button>
+  );
+}
+
+/**
+ * An attached image, as its own thumbnail.
+ *
+ * The remove button is always visible rather than revealed on hover: half the
+ * merchants are on a phone, where there is no hover and an attachment you
+ * cannot take back is a reason to reload the page.
+ */
+function Attachment({
+  url,
+  label,
+  accent,
+  onRemove,
+}: {
+  url: string;
+  label: string;
+  accent?: boolean;
+  onRemove: () => void;
+}) {
+  return (
+    <span
+      className={`relative block h-14 w-14 shrink-0 overflow-hidden rounded-xl border ${accent ? "border-[#00c8ff]/50 bg-[#00c8ff]/8" : "border-white/12 bg-white/5"
+        }`}
+    >
+      <img
+        src={url}
+        alt={label}
+        // A logo is usually a mark on empty space — cropping it to fill the
+        // square is how you lose half of it.
+        className={`h-full w-full ${accent ? "object-contain p-1.5" : "object-cover"}`}
+      />
+      <span className="absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-[9px] leading-tight text-white/85">
+        {label}
+      </span>
+      <button
+        type="button"
+        aria-label={`إزالة ${label}`}
+        onClick={onRemove}
+        className="absolute end-0.5 top-0.5 rounded-full bg-black/70 p-0.5 text-white/80 transition-colors hover:bg-black hover:text-white"
+      >
+        <X size={11} />
+      </button>
+    </span>
   );
 }

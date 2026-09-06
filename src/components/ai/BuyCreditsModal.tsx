@@ -174,19 +174,17 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
                       aria-checked={isSelected}
                       disabled={purchase.isPending}
                       onClick={() => setSelected(pack.id)}
-                      className={`group relative flex w-full items-center gap-4 rounded-xl border p-4 text-start transition-all disabled:opacity-50 ${
-                        isSelected
-                          ? "border-[#00c8ff]/60 bg-[#00c8ff]/[0.07] shadow-[0_0_24px_rgba(0,200,255,0.12)]"
-                          : "border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.07]"
-                      }`}
+                      className={`group relative flex w-full items-center gap-4 rounded-xl border p-4 text-start transition-all disabled:opacity-50 ${isSelected
+                        ? "border-[#00c8ff]/60 bg-[#00c8ff]/[0.07] shadow-[0_0_24px_rgba(0,200,255,0.12)]"
+                        : "border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.07]"
+                        }`}
                     >
                       <span
                         aria-hidden
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                          isSelected
-                            ? "border-[#00c8ff] bg-[#00c8ff] text-[#1e1b4b]"
-                            : "border-white/25 text-transparent"
-                        }`}
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${isSelected
+                          ? "border-[#00c8ff] bg-[#00c8ff] text-[#1e1b4b]"
+                          : "border-white/25 text-transparent"
+                          }`}
                       >
                         <Check size={12} strokeWidth={3} />
                       </span>
@@ -222,9 +220,8 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
                           their own LTR run rather than being reordered by bidi. */}
                       <div dir="ltr" className="shrink-0 text-left">
                         <div
-                          className={`text-lg font-bold transition-colors ${
-                            isSelected ? "text-[#00c8ff]" : "text-white"
-                          }`}
+                          className={`text-lg font-bold transition-colors ${isSelected ? "text-[#00c8ff]" : "text-white"
+                            }`}
                         >
                           {pack.price.toLocaleString()}{" "}
                           <span className="text-[11px] font-normal text-white/45">

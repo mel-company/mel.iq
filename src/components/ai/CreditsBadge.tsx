@@ -24,7 +24,7 @@ export default function CreditsBadge() {
         onClick={() => out && setBuyOpen(true)}
         className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${out
           ? "border-amber-400/30 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20"
-          : "border-white/10 bg-white/[0.04] text-white/60 hover:bg-white/[0.08]"
+          : "border-white/10 text-white/60 hover:bg-white/[0.08]"
           }`}
       >
         <Sparkles size={12} />

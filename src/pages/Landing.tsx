@@ -20,7 +20,7 @@ function Landing() {
                 dir="ltr"
                 className="inline-flex items-center justify-center gap-2 sm:gap-3 mb-5 sm:mb-7"
               >
-                <div className="relative w-14 h-14 sm:w-[4.5rem] sm:h-[4.5rem] shrink-0 overflow-hidden">
+                <div className="relative w-14 h-14 sm:w-[4.5rem] shrink-0 overflow-hidden">
                   <img
                     src="/images/hero-tagline.png"
                     alt=""
