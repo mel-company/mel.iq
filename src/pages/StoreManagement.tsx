@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useFetchStores, useUpdateStore } from "@/api/wrappers/store.wrappers";
 import DomainSettingsFields from "@/components/DomainSettingsFields";
+import BringYourOwnDomain from "@/components/BringYourOwnDomain";
 import {
   getStoreDomainInputValue,
   getStoreDomainType,
@@ -9,9 +10,11 @@ import {
   useDomainCheck,
 } from "@/hooks/useDomainCheck";
 import {
-  getDomainPurchasePricing,
   formatUsd,
+  getDomainPurchasePricing,
 } from "@/utils/domainPricing";
+
+type DomainPath = "subdomain" | "buy" | "owned";
 import {
   useFetchSubscriptions,
   useRenewSubscription,
@@ -557,6 +560,7 @@ function StoreManagement() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [deleteStoreName, setDeleteStoreName] = useState<string>("");
   const [activeTab, setActiveTab] = useState<ManageTab>("overview");
+  const [domainPath, setDomainPath] = useState<DomainPath>("subdomain");
 
   const stores = useMemo(() => {
     const normalized = normalizeApiResponse<Store>(storesData);
@@ -797,7 +801,7 @@ function StoreManagement() {
     if (!storeId || !store) return;
 
     const normalizedDomain = domain.trim().toLowerCase();
-    const isCustomPurchase = domainType === "custom";
+    const isCustomPurchase = domainPath === "buy";
     const customDomainAlreadyLinked =
       (store.customDomain || "").trim().toLowerCase() === normalizedDomain;
 
@@ -819,7 +823,7 @@ function StoreManagement() {
       return;
     }
 
-    if (domainType === "custom") {
+    if (domainPath === "buy") {
       const pricing = getDomainPurchasePricing(dynadotResult?.price);
       if (!pricing) {
         toast.error("تعذر حساب سعر الدومين. أعد التحقق من التوفر.");
@@ -923,14 +927,14 @@ function StoreManagement() {
     normalizedDomainInput !== normalizePlatformSlug(store.domain).toLowerCase();
 
   const canPurchaseCustomDomain =
-    domainType === "custom" &&
+    domainPath === "buy" &&
     domainChecked &&
     domainAvailable === true &&
     !customDomainAlreadyLinked &&
     getDomainPurchasePricing(dynadotResult?.price) != null;
 
   const canUpdateSubdomain =
-    domainType === "subdomain" &&
+    domainPath === "subdomain" &&
     subdomainChanged &&
     domainChecked &&
     domainAvailable === true;
@@ -939,7 +943,7 @@ function StoreManagement() {
   const isSavingDomain =
     updateStoreMutation.isPending || initPaymentMutation.isPending;
   const domainPricing =
-    domainType === "custom" ? getDomainPurchasePricing(dynadotResult?.price) : null;
+    domainPath === "buy" ? getDomainPurchasePricing(dynadotResult?.price) : null;
 
   const platformSlug = normalizePlatformSlug(store.domain);
   const platformUrl = platformSlug ? `https://${platformSlug}.mel.iq` : null;
@@ -1180,10 +1184,10 @@ function StoreManagement() {
 
         {/* Tab: Domain */}
         {activeTab === "domain" && (
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto max-w-3xl space-y-6">
             <SectionCard
               title="إعدادات الدومين"
-              description="سلاج المنصة للروابط الافتراضية، والدومين المخصص للمتاجر التي تملك دوميناً خاصاً"
+              description="اختر المسار المناسب: سلاج MEL، شراء دومين جديد، أو ربط دومين تملكه مسبقاً"
             >
               <div className="mb-6 grid gap-3 sm:grid-cols-2">
                 <StatCard
@@ -1196,32 +1200,87 @@ function StoreManagement() {
                 />
               </div>
 
-              <form onSubmit={handleDomainSubmit} className="space-y-4">
-                <DomainSettingsFields
-                  variant="management"
-                  inputNamePrefix="manage-"
-                  domain={domain}
-                  domainType={domainType}
-                  domainChecked={domainChecked}
-                  domainAvailable={domainAvailable}
-                  isCheckingDomain={isCheckingDomain}
-                  dynadotResult={dynadotResult}
-                  onDomainChange={handleDomainChange}
-                  onDomainTypeChange={handleDomainTypeChange}
-                  onCheck={checkDomain}
-                />
-                <button
-                  type="submit"
-                  disabled={!canSaveDomain || isSavingDomain}
-                  className="w-full rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-gray-200"
-                >
-                  {isSavingDomain
-                    ? "جاري التحويل لزين كاش..."
-                    : domainType === "custom" && domainPricing
-                      ? `الدفع عبر زين كاش — ${formatUsd(domainPricing.totalUsd)}`
-                      : "حفظ سلاج المنصة"}
-                </button>
-              </form>
+              <div className="mb-6 grid gap-3 sm:grid-cols-3">
+                {(
+                  [
+                    {
+                      id: "subdomain" as const,
+                      title: "دومين فرعي",
+                      subtitle: "storename.mel.iq",
+                    },
+                    {
+                      id: "buy" as const,
+                      title: "شراء من Mel",
+                      subtitle: "example.com عبر Dynadot",
+                    },
+                    {
+                      id: "owned" as const,
+                      title: "عندي دومين جاهز",
+                      subtitle: "ربط دومين موجود",
+                    },
+                  ] as const
+                ).map((path) => (
+                  <button
+                    key={path.id}
+                    type="button"
+                    onClick={() => {
+                      setDomainPath(path.id);
+                      if (path.id !== "owned") {
+                        handleDomainTypeChange(
+                          path.id === "buy" ? "custom" : "subdomain",
+                        );
+                      }
+                    }}
+                    className={`rounded-xl border-2 p-4 text-right transition-all ${
+                      domainPath === path.id
+                        ? "border-black bg-gray-50 dark:border-white dark:bg-gray-900"
+                        : "border-gray-200 hover:border-gray-300 dark:border-gray-800 dark:hover:border-gray-700"
+                    }`}
+                  >
+                    <div className="font-semibold text-black dark:text-white">
+                      {path.title}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {path.subtitle}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {domainPath === "owned" ? (
+                <BringYourOwnDomain />
+              ) : (
+                <form onSubmit={handleDomainSubmit} className="space-y-4">
+                  <DomainSettingsFields
+                    variant="management"
+                    inputNamePrefix="manage-"
+                    hideTypePicker
+                    domain={domain}
+                    domainType={domainPath === "buy" ? "custom" : "subdomain"}
+                    domainChecked={domainChecked}
+                    domainAvailable={domainAvailable}
+                    isCheckingDomain={isCheckingDomain}
+                    dynadotResult={dynadotResult}
+                    onDomainChange={handleDomainChange}
+                    onDomainTypeChange={(type) => {
+                      setDomainPath(type === "custom" ? "buy" : "subdomain");
+                      handleDomainTypeChange(type);
+                    }}
+                    onCheck={checkDomain}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!canSaveDomain || isSavingDomain}
+                    className="w-full rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                  >
+                    {isSavingDomain
+                      ? "جاري التحويل لزين كاش..."
+                      : domainPath === "buy" && domainPricing
+                        ? `الدفع عبر زين كاش — ${formatUsd(domainPricing.totalUsd)}`
+                        : "حفظ سلاج المنصة"}
+                  </button>
+                </form>
+              )}
             </SectionCard>
           </div>
         )}

@@ -1,5 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { domainAPI } from "../endpoints/domain.endpoints";
+import {
+  domainAPI,
+  type DomainConnectDiscovery,
+} from "../endpoints/domain.endpoints";
 import { storeKeys } from "./store.wrappers";
 
 export const useSetCustomDomain = () => {
@@ -10,5 +13,12 @@ export const useSetCustomDomain = () => {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: storeKeys.all });
     },
+  });
+};
+
+/** Path 3: discover connection mode for an owned domain (check only). */
+export const useDiscoverDomainConnect = () => {
+  return useMutation<DomainConnectDiscovery, Error, { domain: string }>({
+    mutationFn: ({ domain }) => domainAPI.discoverConnect(domain),
   });
 };

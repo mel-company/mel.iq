@@ -14,6 +14,8 @@ type DomainSettingsFieldsProps = {
   onCheck: () => void;
   variant?: "checkout" | "management";
   inputNamePrefix?: string;
+  /** When parent already picks the path (subdomain / buy / owned). */
+  hideTypePicker?: boolean;
 };
 
 const VARIANT_STYLES = {
@@ -61,6 +63,7 @@ export default function DomainSettingsFields({
   onCheck,
   variant = "checkout",
   inputNamePrefix = "",
+  hideTypePicker = false,
 }: DomainSettingsFieldsProps) {
   const styles = VARIANT_STYLES[variant];
   const domainInputName = `${inputNamePrefix}domain`;
@@ -68,60 +71,68 @@ export default function DomainSettingsFields({
 
   return (
     <div>
-      <label
-        className={`block text-sm font-semibold mb-4 ${styles.label}`}
-      >
-        نوع الدومين
-      </label>
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <label
-          className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
-            domainType === "subdomain" ? styles.radioSelected : styles.radioDefault
-          }`}
-        >
-          <input
-            type="radio"
-            name={domainTypeInputName}
-            value="subdomain"
-            checked={domainType === "subdomain"}
-            onChange={() => onDomainTypeChange("subdomain")}
-            className="sr-only"
-          />
-          <div className="text-center">
-            <div className={`font-semibold mb-1 ${styles.radioTitle}`}>
-              دومين فرعي
-            </div>
-            <div className={`text-xs ${styles.radioSubtitle}`}>
-              example.mel.iq
-            </div>
+      {!hideTypePicker && (
+        <>
+          <label
+            className={`mb-4 block text-sm font-semibold ${styles.label}`}
+          >
+            نوع الدومين
+          </label>
+          <div className="mb-4 grid grid-cols-2 gap-4">
+            <label
+              className={`cursor-pointer rounded-lg border-2 p-4 transition-all duration-300 ${
+                domainType === "subdomain"
+                  ? styles.radioSelected
+                  : styles.radioDefault
+              }`}
+            >
+              <input
+                type="radio"
+                name={domainTypeInputName}
+                value="subdomain"
+                checked={domainType === "subdomain"}
+                onChange={() => onDomainTypeChange("subdomain")}
+                className="sr-only"
+              />
+              <div className="text-center">
+                <div className={`mb-1 font-semibold ${styles.radioTitle}`}>
+                  دومين فرعي
+                </div>
+                <div className={`text-xs ${styles.radioSubtitle}`}>
+                  example.mel.iq
+                </div>
+              </div>
+            </label>
+            <label
+              className={`cursor-pointer rounded-lg border-2 p-4 transition-all duration-300 ${
+                domainType === "custom"
+                  ? styles.radioSelected
+                  : styles.radioDefault
+              }`}
+            >
+              <input
+                type="radio"
+                name={domainTypeInputName}
+                value="custom"
+                checked={domainType === "custom"}
+                onChange={() => onDomainTypeChange("custom")}
+                className="sr-only"
+              />
+              <div className="text-center">
+                <div className={`mb-1 font-semibold ${styles.radioTitle}`}>
+                  دومين مخصص
+                </div>
+                <div className={`text-xs ${styles.radioSubtitle}`}>
+                  example.com
+                </div>
+              </div>
+            </label>
           </div>
-        </label>
-        <label
-          className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
-            domainType === "custom" ? styles.radioSelected : styles.radioDefault
-          }`}
-        >
-          <input
-            type="radio"
-            name={domainTypeInputName}
-            value="custom"
-            checked={domainType === "custom"}
-            onChange={() => onDomainTypeChange("custom")}
-            className="sr-only"
-          />
-          <div className="text-center">
-            <div className={`font-semibold mb-1 ${styles.radioTitle}`}>
-              دومين مخصص
-            </div>
-            <div className={`text-xs ${styles.radioSubtitle}`}>
-              example.com
-            </div>
-          </div>
-        </label>
-      </div>
+        </>
+      )}
 
       <div>
-        <label className={`block text-sm font-semibold mb-2 ${styles.label}`}>
+        <label className={`mb-2 block text-sm font-semibold ${styles.label}`}>
           {domainType === "subdomain"
             ? "اسم الدومين الفرعي"
             : "الدومين المخصص"}
@@ -131,7 +142,7 @@ export default function DomainSettingsFields({
             <>
               <span
                 dir="ltr"
-                className={`px-4 py-3 border-2 border-l-0 rounded-r-xl ${styles.suffix}`}
+                className={`rounded-r-xl border-2 border-l-0 px-4 py-3 ${styles.suffix}`}
               >
                 .mel.iq
               </span>
@@ -141,7 +152,7 @@ export default function DomainSettingsFields({
                 value={domain}
                 onChange={(e) => onDomainChange(e.target.value)}
                 required
-                className={`flex-1 px-4 py-2 border-2 border-r-0 rounded-l-xl focus:ring-2 focus:border-transparent outline-none transition-all duration-300 ${styles.input}`}
+                className={`flex-1 rounded-l-xl border-2 border-r-0 px-4 py-2 outline-none transition-all duration-300 focus:border-transparent focus:ring-2 ${styles.input}`}
                 placeholder="example"
               />
             </>
@@ -152,7 +163,7 @@ export default function DomainSettingsFields({
               value={domain}
               onChange={(e) => onDomainChange(e.target.value)}
               required
-              className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:border-transparent outline-none transition-all duration-300 ${styles.input}`}
+              className={`w-full rounded-lg border-2 px-4 py-2 outline-none transition-all duration-300 focus:border-transparent focus:ring-2 ${styles.input}`}
               placeholder="example.com"
             />
           )}
