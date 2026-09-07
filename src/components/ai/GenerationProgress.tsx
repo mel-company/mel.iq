@@ -528,7 +528,7 @@ export default function GenerationProgress({
           )}
         </div>
 
-        <div className="min-h-0 flex-1 no-scrollbar overflow-y-auto overscroll-contain px-4 pb-5 sm:px-6 sm:pb-6">
+        <div className="min-h-0 flex-1 no-scrollbar overflow-y-auto px-4 pb-5 sm:px-6 sm:pb-6">
           {!error && (
             <div className="mb-2 flex justify-center">
               {reducedMotion ? (
@@ -557,7 +557,7 @@ export default function GenerationProgress({
           )}
 
           {storeName && !error && (
-            <p className="mb-3 text-center text-base text-white/90">{storeName}</p>
+            <p className="mb-3 text-center text-md text-white/90 font-medium">{storeName}</p>
           )}
 
           {!error && (
@@ -682,7 +682,7 @@ export default function GenerationProgress({
                 </div>
               )}
 
-              <p className="mt-3 text-center text-sm text-white/55">
+              <p className="mt-3 text-center text-sm text-white/75">
                 {waitingHint(
                   segment,
                   percents[segment],
@@ -805,7 +805,7 @@ function QuestionStep({
         {question.question}
       </p>
       {multi && (
-        <p className="mb-3 text-xs text-white/45">يمكنك اختيار أكثر من إجابة، ثم اضغط التالي.</p>
+        <p className="mb-3 text-xs text-white/45">يمكنك اختيار أكثر من إجابة، ثم اضغط التالي. اتركها فارغة لاستخدام توصيتنا.</p>
       )}
 
       <div
@@ -834,6 +834,11 @@ function QuestionStep({
                 {active && <Check size={11} className="text-[#0b0f19]" />}
               </span>
               <span className="min-w-0 flex-1">{option.label}</span>
+              {option.recommended && (
+                <span className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/45">
+                  موصى به
+                </span>
+              )}
             </button>
           );
         })}
@@ -844,8 +849,7 @@ function QuestionStep({
           <button
             type="button"
             onClick={onNext}
-            disabled={!chosen.length}
-            className="min-h-11 flex-1 rounded-full bg-[#00c8ff] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#33d4ff] disabled:cursor-not-allowed disabled:opacity-40"
+            className="min-h-11 flex-1 rounded-full bg-[#00c8ff] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#33d4ff]"
           >
             التالي
           </button>

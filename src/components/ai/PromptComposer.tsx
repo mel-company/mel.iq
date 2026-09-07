@@ -538,11 +538,13 @@ export default function PromptComposer() {
               setQuestions(event.questions);
               setQuestionsReady(true);
               addStatus("جهزنا أسئلة قصيرة لتخصيص تصميم متجرك");
-              // Seeded with the recommendations so the step is genuinely
-              // optional: build now and you get the model's own answers.
-              const seeded = recommendedAnswers(event.questions);
-              answersRef.current = seeded;
-              setAnswers(seeded);
+              // Deliberately unanswered. Pre-seeding the recommendations put a
+              // filled radio next to choices the merchant had never made, and
+              // shipped them to the server as `answers` — which the designer
+              // reads as "قرارات التاجر", outranking the description and the
+              // reference. Leaving this empty keeps the step optional without
+              // claiming an answer: the server falls back to `defaultAnswers`
+              // and weighs it as a recommendation instead of a decision.
               setQuestionIndex(0);
               break;
             }
