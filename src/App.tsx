@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import DevProgressPreview from "./pages/__DevProgressPreview";
 import Navbar from "./components/Navbar";
 import { MarketingShell } from "./components/LandingNavbar";
 import Landing from "./pages/Landing";
@@ -93,6 +94,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/__dev/progress" element={<DevProgressPreview />} />
         <Route path="/" element={<Landing />} />
         <Route
           path="/pricing"

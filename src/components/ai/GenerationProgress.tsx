@@ -1,5 +1,16 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, AlertCircle, Sparkles } from "lucide-react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import {
+  AlertCircle,
+  Check,
+  Clock,
+  Coffee,
+  FileText,
+  LayoutGrid,
+  Loader2,
+  Rocket,
+  Sparkles,
+  X,
+} from "lucide-react";
 import type {
   DesignAnswers,
   DesignQuestion,
@@ -15,18 +26,18 @@ import type {
  * costs them the run. So this shows three things at once: which stage is
  * running, how much of the whole is left, and that time is still passing.
  *
- * Two deliberate choices about the bars:
+ * Two deliberate choices about the progress it draws:
  *
- * - There are three of them, one per phase, rather than one bar for the run.
+ * - The run is shown as a numbered stepper of phases rather than as one bar.
  *   A single bar that is 40% full says nothing about *what* is happening; a
- *   full cyan bar next to a moving blue one says the design is settled and the
- *   store is being built.
- * - Each fills against a time budget rather than against the server's step
- *   weights. Steps land minutes apart, so a weight-driven bar sits frozen for
- *   the entire length of the step it is describing — which is exactly the
- *   silence the bar exists to break. The server still owns which phase is
- *   running; time only decides how far into it the fill has crept, and the
- *   fill never reaches 100% until the phase actually ends.
+ *   finished cyan node next to a lit blue one says the design is settled and
+ *   the store is being built.
+ * - Each phase advances against a time budget rather than against the server's
+ *   step weights. Steps land minutes apart, so a weight-driven ring sits frozen
+ *   for the entire length of the step it is describing — which is exactly the
+ *   silence it exists to break. The server still owns which phase is running;
+ *   time only decides how far into it the fill has crept, and the fill never
+ *   reaches 100% until the phase actually ends.
  */
 
 export interface ProgressEntry {
@@ -132,24 +143,39 @@ const formatClock = (seconds: number) => {
 const SEGMENTS = [
   {
     key: "plan",
-    label: "التخطيط والتصميم",
+    label: "تحليل الطلب وهوية المتجر",
+    /** Shown in the stage card under the label, when nothing live has arrived. */
+    hint: "نحلل المعلومات ونستخرج هوية متجرك…",
+    icon: FileText,
     seconds: 150,
     fill: "bg-[#00c8ff]",
     text: "text-[#00c8ff]",
+    // Hex rather than a class: the ring is an SVG stroke, and Tailwind's
+    // arbitrary-value classes do not reach `stroke` on a raw <circle>.
+    stroke: "#00c8ff",
+    glow: "shadow-[0_0_0_4px_rgba(0,200,255,0.10),0_0_22px_-4px_rgba(0,200,255,0.7)]",
   },
   {
     key: "code",
-    label: "البرمجة",
+    label: "الهيكلة والتصميم",
+    hint: "نبني صفحات متجرك ونرتّب أقسامه…",
+    icon: LayoutGrid,
     seconds: 210,
     fill: "bg-[#3b82f6]",
     text: "text-[#3b82f6]",
+    stroke: "#3b82f6",
+    glow: "shadow-[0_0_0_4px_rgba(59,130,246,0.10),0_0_22px_-4px_rgba(59,130,246,0.7)]",
   },
   {
     key: "publish",
     label: "المراجعة والنشر",
+    hint: "نراجع كل صفحة ثم ننشر متجرك…",
+    icon: Rocket,
     seconds: 120,
     fill: "bg-[#a855f7]",
     text: "text-[#a855f7]",
+    stroke: "#a855f7",
+    glow: "shadow-[0_0_0_4px_rgba(168,85,247,0.10),0_0_22px_-4px_rgba(168,85,247,0.7)]",
   },
 ] as const;
 
@@ -319,6 +345,19 @@ export default function GenerationProgress({
   const pausedRef = useRef(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  /**
+   * When each planned step first started, in run-seconds.
+   *
+   * The log reads as a log only if its rows are stamped; without a time beside
+   * them four Arabic sentences look like a static list and say nothing about
+   * whether anything has moved in the last two minutes. Stamped on arrival
+   * rather than derived, because a step's start is not recoverable afterwards.
+   *
+   * Keyed by phase and position as well as by the server's key: the build
+   * re-announces a `foundation` step of its own, and a key-only map would stamp
+   * it with the design half's time.
+   */
+  const stepStartedAt = useRef<Record<string, number>>({});
 
   // One question at a time. A list of six would be a form, and a form during a
   // wait is worse than the wait.
@@ -448,6 +487,22 @@ export default function GenerationProgress({
     });
   }, [open, questionIndex, questionsReady]);
 
+  // Stamp every step up to the running one: a plan can jump forward by more
+  // than a step between polls, and an unstamped completed row would read as
+  // never having run.
+  useEffect(() => {
+    if (!open) {
+      stepStartedAt.current = {};
+      return;
+    }
+    for (let i = 0; i <= Math.min(activeStep, steps.length - 1); i += 1) {
+      const id = `${phase}-${i}-${steps[i]?.key}`;
+      if (stepStartedAt.current[id] === undefined) {
+        stepStartedAt.current[id] = elapsedRef.current;
+      }
+    }
+  }, [open, phase, steps, activeStep]);
+
   if (!open) return null;
 
   // Finished phases are full, later ones empty, and the running one fills
@@ -479,13 +534,23 @@ export default function GenerationProgress({
   const clockIsUseful = remaining > 5;
 
   const latest = entries.filter((e) => !e.done).slice(-1)[0] ?? entries.slice(-1)[0];
-  const activity = entries.slice(-4);
   const advice = FAILURE_ADVICE[errorCode ?? "unknown"];
 
   const chosen = current ? (answers[current.id] ?? []) : [];
 
+  const stage = SEGMENTS[segment];
+  const StageIcon = stage.icon;
+  const stagePercent = Math.round(percents[segment]);
+  const hint = waitingHint(
+    segment,
+    percents[segment],
+    Boolean(current),
+    designReady,
+    buildConfirmed,
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070f]/85 p-0 backdrop-blur-sm animate-[modal-fade_160ms_ease-out] sm:p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -493,51 +558,102 @@ export default function GenerationProgress({
         aria-labelledby="gen-progress-title"
         tabIndex={-1}
         dir="rtl"
-        className="flex h-dvh max-h-dvh w-full max-w-lg flex-col overflow-hidden border border-white/10 bg-[#1e1b4b] text-start shadow-2xl outline-none sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl"
+        className="relative flex h-dvh max-h-dvh w-full max-w-2xl flex-col overflow-hidden border border-[#00c8ff]/15 bg-gradient-to-b from-[#161c46] via-[#111637] to-[#0b0f2b] text-start shadow-[0_30px_90px_-20px_rgba(0,0,0,0.8)] outline-none animate-[modal-rise_200ms_ease-out] sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-[28px]"
       >
-        <div className="flex shrink-0 items-center justify-between px-4 pb-3 pt-4 sm:px-6 sm:pt-6">
-          <h2
-            id="gen-progress-title"
-            data-modal-autofocus="true"
-            tabIndex={-1}
-            className="flex items-center gap-2 text-lg font-bold text-white outline-none"
-          >
-            {error ? "تعذر إنشاء المتجر" : "جاري إنشاء متجرك"}
-            {!error && <Sparkles size={16} className="text-[#00c8ff]" />}
-          </h2>
-          {!error && (
-            <span className="flex flex-col items-end leading-tight">
+        {/* Ambient glow. Purely decorative, and behind everything that reads. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-32 start-1/2 h-64 w-[28rem] -translate-x-1/2 rounded-full bg-[#00c8ff]/15 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-40 end-0 h-64 w-72 rounded-full bg-[#a855f7]/10 blur-3xl"
+        />
+
+        <div className="relative flex shrink-0 items-start justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-6">
+          {!error ? (
+            <div className="flex flex-col items-center gap-0.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-2">
               {clockIsUseful ? (
                 <>
-                  <span
-                    className="font-mono text-sm tabular-nums text-white/45"
-                    aria-label="الوقت المتبقي التقريبي"
-                    dir="ltr"
-                  >
-                    ~{formatClock(remaining)}
+                  <span className="flex items-center gap-1.5">
+                    <Clock size={13} className="text-white/40" />
+                    <span
+                      className="font-mono text-sm tabular-nums text-white/70"
+                      aria-label="الوقت المتبقي التقريبي"
+                      dir="ltr"
+                    >
+                      ~{formatClock(remaining)}
+                    </span>
                   </span>
-                  <span className="text-[10px] text-white/30">
+                  <span className="text-[10px] text-white/35">
                     {paused ? "متوقف بانتظارك" : "متبقٍ تقريباً"}
                   </span>
                 </>
               ) : (
                 // The estimate is spent but the run is not done.
-                <span className="text-[11px] text-white/35">نكمل بعد قليل</span>
+                <span className="flex items-center gap-1.5 text-[11px] text-white/40">
+                  <Clock size={13} />
+                  نكمل بعد قليل
+                </span>
               )}
-            </span>
+            </div>
+          ) : (
+            <span />
+          )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="إغلاق"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/45 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <X size={16} />
+            </button>
           )}
         </div>
 
-        <div className="min-h-0 flex-1 no-scrollbar overflow-y-auto px-4 pb-5 sm:px-6 sm:pb-6">
+        <div className="relative min-h-0 flex-1 no-scrollbar overflow-y-auto px-4 pb-5 sm:px-6 sm:pb-6">
           {!error && (
-            <div className="mb-2 flex justify-center">
+            <div className="relative mb-1 flex justify-center">
+              {/* Wave and spark field behind the mascot, as in the design. */}
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 400 120"
+                className="pointer-events-none absolute inset-x-0 top-6 mx-auto h-24 w-full max-w-md opacity-60"
+              >
+                <path
+                  d="M0 70 C 60 40, 110 92, 170 62"
+                  fill="none"
+                  stroke="url(#gp-wave)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M230 62 C 290 92, 340 40, 400 70"
+                  fill="none"
+                  stroke="url(#gp-wave)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+                <circle cx="118" cy="34" r="2.5" fill="#00c8ff" opacity="0.8" />
+                <circle cx="292" cy="42" r="2" fill="#22d3ee" opacity="0.7" />
+                <circle cx="64" cy="86" r="1.6" fill="#a855f7" opacity="0.6" />
+                <circle cx="344" cy="88" r="1.6" fill="#00c8ff" opacity="0.5" />
+                <defs>
+                  <linearGradient id="gp-wave" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#00c8ff" stopOpacity="0" />
+                    <stop offset="50%" stopColor="#00c8ff" stopOpacity="0.45" />
+                    <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+              </svg>
               {reducedMotion ? (
                 <div
-                  className="flex h-16 w-16 items-center justify-center rounded-full bg-[#00c8ff]/10"
+                  className="relative flex h-20 w-20 items-center justify-center rounded-full border border-[#00c8ff]/25 bg-[#00c8ff]/10"
                   role="img"
                   aria-label={MASCOTS[phase].alt}
                 >
-                  <Sparkles size={28} className="text-[#00c8ff]" />
+                  <Sparkles size={30} className="text-[#00c8ff]" />
                 </div>
               ) : (
                 <img
@@ -549,96 +665,116 @@ export default function GenerationProgress({
                   alt={MASCOTS[phase].alt}
                   width={150}
                   height={150}
-                  className="h-28 w-auto select-none sm:h-36"
+                  className="relative h-24 w-auto select-none sm:h-32"
                   draggable={false}
                 />
               )}
             </div>
           )}
 
-          {storeName && !error && (
-            <p className="mb-3 text-center text-md text-white/90 font-medium">{storeName}</p>
+          <h2
+            id="gen-progress-title"
+            data-modal-autofocus="true"
+            tabIndex={-1}
+            className="flex items-center justify-center gap-2 text-center text-xl font-bold text-white outline-none sm:text-2xl"
+          >
+            {error ? "تعذر إنشاء متجرك" : "جاري إنشاء متجرك"}
+            {!error && <Sparkles size={18} className="text-[#00c8ff]" />}
+          </h2>
+
+          {!error && (
+            <p className="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-white/45">
+              {storeName ? (
+                <>
+                  <span className="font-medium text-white/85">{storeName}</span>
+                  {" — "}
+                </>
+              ) : null}
+              نحلل طلبك ونصمم متجرك بالذكاء الاصطناعي، وتستغرق العملية بضع دقائق
+              فقط.
+            </p>
           )}
 
           {!error && (
             <>
-              <div className="mb-3 grid grid-cols-3 gap-2">
+              {/* The run as numbered phases: which are behind us, which is lit. */}
+              <ol className="mt-5 mb-4 flex items-start" aria-label="مراحل الإنشاء">
                 {SEGMENTS.map((seg, index) => {
                   const value = Math.round(percents[index]);
                   const done = index < segment;
                   const running = index === segment;
                   return (
-                    <div key={seg.key}>
-                      <div className="mb-1 flex items-baseline justify-between gap-1">
-                        <span
-                          className={`truncate text-[10px] ${running
-                            ? "font-medium text-white/85"
-                            : done
-                              ? "text-white/40"
-                              : "text-white/25"
-                            }`}
+                    <Fragment key={seg.key}>
+                      {index > 0 && (
+                        <li
+                          aria-hidden="true"
+                          className="mt-[2.35rem] h-0.5 min-w-4 flex-1 overflow-hidden rounded-full bg-white/10"
                         >
-                          {seg.label}
-                        </span>
+                          <div
+                            className={`h-full rounded-full ${SEGMENTS[index - 1].fill} transition-[width] duration-500 ease-linear motion-reduce:transition-none`}
+                            style={{ width: done || running ? "100%" : "0%" }}
+                          />
+                        </li>
+                      )}
+                      <li
+                        className="flex w-[5.5rem] shrink-0 flex-col items-center gap-1.5 sm:w-36"
+                        aria-current={running ? "step" : undefined}
+                      >
                         <span
-                          className={`shrink-0 font-mono text-[10px] tabular-nums ${running ? seg.text : "text-white/25"
+                          className={`font-mono text-[11px] tabular-nums ${running ? seg.text : done ? "text-white/40" : "text-white/20"
                             }`}
                           dir="ltr"
                         >
                           {value}%
                         </span>
-                      </div>
-                      <div
-                        className="h-1.5 w-full overflow-hidden rounded-full bg-white/10"
-                        role="progressbar"
-                        aria-label={seg.label}
-                        aria-valuenow={value}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                      >
-                        <div
-                          // Linear over the tick interval, so consecutive
-                          // updates read as one continuous crawl rather than
-                          // a series of eased hops.
-                          className={`h-full rounded-full ${seg.fill} transition-[width] duration-500 ease-linear motion-reduce:transition-none`}
-                          style={{ width: `${percents[index]}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <ol className="mb-3 grid gap-1.5 rounded-xl border border-white/10 bg-white/3 p-3 sm:grid-cols-2">
-                {steps.map((step, index) => {
-                  const done = index < activeStep;
-                  const active = index === activeStep;
-                  return (
-                    <li key={step.key} className="flex items-center gap-2 text-xs">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                        {done ? (
-                          <Check size={14} className="text-[#00c8ff]" />
-                        ) : active ? (
-                          <Loader2 size={14} className="animate-spin text-white motion-reduce:animate-none" />
-                        ) : (
-                          <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
-                        )}
-                      </span>
-                      <span
-                        className={
-                          done
-                            ? "text-white/40"
-                            : active
-                              ? "font-medium text-white"
+                        <span
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border text-sm font-semibold transition-colors motion-reduce:transition-none ${running
+                            ? `border-transparent ${seg.fill} text-[#0b0f2b] ${seg.glow}`
+                            : done
+                              ? "border-[#00c8ff]/40 bg-[#00c8ff]/10 text-[#00c8ff]"
+                              : "border-white/12 bg-white/[0.03] text-white/30"
+                            }`}
+                        >
+                          {done ? <Check size={16} /> : <span dir="ltr">{index + 1}</span>}
+                        </span>
+                        <span
+                          className={`text-center text-[10px] leading-tight sm:text-[11px] ${running
+                            ? "font-medium text-white"
+                            : done
+                              ? "text-white/45"
                               : "text-white/25"
-                        }
-                      >
-                        {step.label}
-                      </span>
-                    </li>
+                            }`}
+                        >
+                          {seg.label}
+                        </span>
+                      </li>
+                    </Fragment>
                   );
                 })}
               </ol>
+
+              {/* The running phase, spelled out: what it is and how far in. */}
+              <div className="mb-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:gap-4 sm:p-4">
+                <span
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#00c8ff]/25 bg-[#00c8ff]/10 sm:h-12 sm:w-12"
+                  aria-hidden="true"
+                >
+                  <StageIcon size={20} className={stage.text} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-white sm:text-base">
+                    {stage.label}
+                  </p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-white/45">
+                    {latest?.message ?? stage.hint}
+                  </p>
+                </div>
+                <ProgressRing
+                  percent={percents[segment]}
+                  color={stage.stroke}
+                  label={stage.label}
+                />
+              </div>
 
               {current && (
                 <QuestionStep
@@ -666,31 +802,67 @@ export default function GenerationProgress({
                 />
               )}
 
-              {activity.length > 0 && (
-                <div className="max-h-28 no-scrollbar overflow-y-auto rounded-xl border border-white/10 bg-black/10 px-3 py-2" aria-label="آخر نشاطات الإنشاء">
-                  <ul className="space-y-1">
-                    {activity.map((entry, index) => (
-                      <li
-                        key={`${entries.length - activity.length + index}-${entry.message}`}
-                        className="flex items-start gap-2 text-xs text-white/45"
-                      >
-                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#00c8ff]/70" />
-                        <span className="min-w-0 wrap-break-word">{entry.message}</span>
-                      </li>
-                    ))}
+              {steps.length > 0 && (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <p className="mb-2 px-1 text-[11px] text-white/35">سجل العمليات</p>
+                  <ul className="max-h-40 space-y-1 no-scrollbar overflow-y-auto">
+                    {steps.map((step, index) => {
+                      const done = index < activeStep;
+                      const active = index === activeStep;
+                      const startedAt =
+                        stepStartedAt.current[`${phase}-${index}-${step.key}`];
+                      return (
+                        <li
+                          key={step.key}
+                          className={`flex items-center gap-3 rounded-xl px-3 py-2 ${active ? "bg-white/[0.05]" : ""
+                            }`}
+                        >
+                          <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                            {done ? (
+                              <Check size={14} className="text-[#22c55e]" />
+                            ) : active ? (
+                              <Loader2
+                                size={13}
+                                className="animate-spin text-[#00c8ff] motion-reduce:animate-none"
+                              />
+                            ) : (
+                              <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
+                            )}
+                          </span>
+                          <span
+                            className={`min-w-0 flex-1 truncate text-xs ${done
+                              ? "text-white/45"
+                              : active
+                                ? "font-medium text-white"
+                                : "text-white/25"
+                              }`}
+                          >
+                            {step.label}
+                          </span>
+                          <span
+                            className="shrink-0 font-mono text-[10px] tabular-nums text-white/30"
+                            dir="ltr"
+                          >
+                            {startedAt === undefined
+                              ? "…"
+                              : formatClock(startedAt).padStart(5, "0")}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}
 
-              <p className="mt-3 text-center text-sm text-white/75">
-                {waitingHint(
-                  segment,
-                  percents[segment],
-                  Boolean(current),
-                  designReady,
-                  buildConfirmed,
-                )}
-              </p>
+              <div className="mt-3 flex items-center justify-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+                <div className="min-w-0 text-center">
+                  <p className="text-sm text-white/75">{hint}</p>
+                  <p className="mt-0.5 text-[11px] text-white/35">
+                    سنعلمك فور الانتهاء
+                  </p>
+                </div>
+                <Coffee size={20} className="shrink-0 text-[#00c8ff]/70" aria-hidden="true" />
+              </div>
               <div className="sr-only" aria-live="polite" aria-atomic="true">
                 {latest?.message}
               </div>
@@ -698,7 +870,7 @@ export default function GenerationProgress({
           )}
 
           {error && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-start">
+            <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-start">
               <div className="flex items-start gap-2 text-sm text-red-300">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" />
                 <div>
@@ -742,6 +914,68 @@ export default function GenerationProgress({
   );
 }
 
+/**
+ * The running phase's fill, as a ring.
+ *
+ * A ring rather than a fourth bar: the stepper above already carries the shape
+ * of the run, and repeating it as a bar beside the stage name would say the
+ * same thing twice. The number sits in the middle so the ring never has to be
+ * read for precision.
+ */
+function ProgressRing({
+  percent,
+  color,
+  label,
+}: {
+  percent: number;
+  color: string;
+  label: string;
+}) {
+  const radius = 26;
+  const circumference = 2 * Math.PI * radius;
+  const value = Math.round(percent);
+  return (
+    <div
+      className="relative flex h-16 w-16 shrink-0 items-center justify-center"
+      role="progressbar"
+      aria-label={label}
+      aria-valuenow={value}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90" aria-hidden="true">
+        <circle
+          cx="32"
+          cy="32"
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.10)"
+          strokeWidth="5"
+        />
+        <circle
+          cx="32"
+          cy="32"
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          // Linear over the tick interval, so consecutive updates read as one
+          // continuous crawl rather than a series of eased hops.
+          strokeDashoffset={circumference * (1 - Math.min(1, percent / 100))}
+          className="transition-[stroke-dashoffset] duration-500 ease-linear motion-reduce:transition-none"
+        />
+      </svg>
+      <span
+        className="absolute font-mono text-xs tabular-nums text-white"
+        dir="ltr"
+      >
+        {value}%
+      </span>
+    </div>
+  );
+}
 
 /**
  * One decision, asked while the store is being designed.
@@ -776,7 +1010,7 @@ function QuestionStep({
   const multi = question.kind === "multi";
 
   return (
-    <div className="mb-4 rounded-xl border border-white/10 bg-white/3 p-3 sm:p-4">
+    <div className="mb-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:p-4">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-xs text-white/40">
           سؤال {index + 1} من {total}
@@ -897,7 +1131,7 @@ function ConfirmationStep({
   onConfirm?: () => void;
 }) {
   return (
-    <div className="mb-4 rounded-xl border border-[#00c8ff]/25 bg-[#00c8ff]/6 p-4">
+    <div className="mb-3 rounded-2xl border border-[#00c8ff]/25 bg-[#00c8ff]/[0.06] p-4">
       <h3
         data-question-heading="true"
         tabIndex={-1}
