@@ -814,12 +814,12 @@ export default function GenerationProgress({
                       return (
                         <li
                           key={step.key}
-                          className={`flex items-center gap-3 rounded-xl px-3 py-2 ${active ? "bg-white/[0.05]" : ""
+                          className={`flex items-center gap-3 rounded-xl px-3 py-2 ${active ? "bg-white/5" : ""
                             }`}
                         >
                           <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                             {done ? (
-                              <Check size={14} className="text-[#22c55e]" />
+                              <Check size={14} className="text-emerald-400" />
                             ) : active ? (
                               <Loader2
                                 size={13}
@@ -854,14 +854,14 @@ export default function GenerationProgress({
                 </div>
               )}
 
-              <div className="mt-3 flex items-center justify-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+              <div className="mt-3 flex items-center justify-center gap-3 rounded-2xl border border-white/8 bg-white/2 px-4 py-3">
+                <Coffee size={20} className="shrink-0 text-[#00c8ff]/70" aria-hidden="true" />
                 <div className="min-w-0 text-center">
                   <p className="text-sm text-white/75">{hint}</p>
                   <p className="mt-0.5 text-[11px] text-white/35">
                     سنعلمك فور الانتهاء
                   </p>
                 </div>
-                <Coffee size={20} className="shrink-0 text-[#00c8ff]/70" aria-hidden="true" />
               </div>
               <div className="sr-only" aria-live="polite" aria-atomic="true">
                 {latest?.message}

@@ -3,8 +3,10 @@ import {
   ArrowUp,
   ImagePlus,
   Loader2,
+  Mic,
   Paperclip,
   Sparkle,
+  Square,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -271,6 +273,13 @@ export default function PromptComposer() {
   const attachRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const logoInput = useRef<HTMLInputElement>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const microphoneStreamRef = useRef<MediaStream | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [voicePhase, setVoicePhase] = useState<
+    "idle" | "recording" | "transcribing"
+  >("idle");
   // Survives the auth modal without being a render dependency.
   const pendingSubmit = useRef(false);
   // The SSE callback closes over state from when the run started, so the step
@@ -283,6 +292,21 @@ export default function PromptComposer() {
   useEffect(() => {
     sessionStorage.setItem(DRAFT_KEY, prompt);
   }, [prompt]);
+
+  // Microphone capture belongs only to this composer. Tear down its tracks if
+  // the page changes; an unmounted prompt must never leave the mic active.
+  useEffect(
+    () => () => {
+      if (recordingTimerRef.current) clearTimeout(recordingTimerRef.current);
+      const recorder = recorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.onstop = null;
+        recorder.stop();
+      }
+      microphoneStreamRef.current?.getTracks().forEach((track) => track.stop());
+    },
+    [],
+  );
 
   // If the SSE connection drops before the server finishes, fall back to
   // polling the generation status so the modal stays open until the run is
@@ -419,6 +443,112 @@ export default function PromptComposer() {
         ((credits.generations?.remaining ?? 0) +
           (credits.generations?.purchased ?? 0)) > 0),
     );
+
+  const stopRecording = () => {
+    if (recordingTimerRef.current) {
+      clearTimeout(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    const recorder = recorderRef.current;
+    if (recorder?.state === "recording") recorder.stop();
+  };
+
+  const toggleVoiceInput = async () => {
+    if (voicePhase === "recording") {
+      stopRecording();
+      return;
+    }
+    if (voicePhase === "transcribing") return;
+
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      toast.error("التسجيل الصوتي غير مدعوم في هذا المتصفح");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      microphoneStreamRef.current = stream;
+
+      const supportedType = [
+        "audio/webm;codecs=opus",
+        "audio/mp4",
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+      ].find((type) => MediaRecorder.isTypeSupported(type));
+      const recorder = new MediaRecorder(
+        stream,
+        supportedType ? { mimeType: supportedType } : undefined,
+      );
+      recorderRef.current = recorder;
+      recordingChunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) recordingChunksRef.current.push(event.data);
+      };
+      recorder.onerror = () => {
+        recorder.onstop = null;
+        stream.getTracks().forEach((track) => track.stop());
+        recorderRef.current = null;
+        microphoneStreamRef.current = null;
+        setVoicePhase("idle");
+        toast.error("تعذر تسجيل الصوت — حاول مرة أخرى");
+      };
+      recorder.onstop = async () => {
+        if (recordingTimerRef.current) clearTimeout(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+        stream.getTracks().forEach((track) => track.stop());
+        microphoneStreamRef.current = null;
+        recorderRef.current = null;
+
+        const audio = new Blob(recordingChunksRef.current, {
+          type: recorder.mimeType || supportedType || "audio/webm",
+        });
+        recordingChunksRef.current = [];
+        if (!audio.size) {
+          setVoicePhase("idle");
+          toast.error("لم يتم تسجيل أي صوت — حاول مرة أخرى");
+          return;
+        }
+
+        setVoicePhase("transcribing");
+        try {
+          const { text } = await aiStoreGeneratorAPI.transcribeVoice(audio);
+          setPrompt((current) => {
+            const base = current.trimEnd();
+            return base ? `${base} ${text}` : text;
+          });
+        } catch (error) {
+          const message =
+            typeof error === "object" && error && "response" in error
+              ? (error as { response?: { data?: { message?: string } } }).response
+                  ?.data?.message
+              : undefined;
+          toast.error(message || "تعذر تحويل التسجيل إلى نص — حاول مرة أخرى");
+        } finally {
+          setVoicePhase("idle");
+        }
+      };
+
+      recorder.start();
+      setVoicePhase("recording");
+      recordingTimerRef.current = setTimeout(stopRecording, 30_000);
+    } catch (error) {
+      microphoneStreamRef.current?.getTracks().forEach((track) => track.stop());
+      microphoneStreamRef.current = null;
+      recorderRef.current = null;
+      setVoicePhase("idle");
+      const name = error instanceof DOMException ? error.name : "";
+      toast.error(
+        name === "NotAllowedError" || name === "SecurityError"
+          ? "اسمح للموقع باستخدام الميكروفون ثم حاول مرة أخرى"
+          : name === "NotFoundError"
+            ? "لم يتم العثور على ميكروفون في جهازك"
+            : name === "NotReadableError"
+              ? "الميكروفون مستخدم من تطبيق آخر"
+              : "تعذر تشغيل الميكروفون — حاول مرة أخرى",
+      );
+    }
+  };
 
   const run = async () => {
     setError(null);
@@ -823,6 +953,11 @@ export default function PromptComposer() {
 
   const handleGenerate = () => {
     if (phase !== "idle" || (user && creditsLoading)) return;
+    if (voicePhase !== "idle") {
+      if (voicePhase === "recording") stopRecording();
+      toast.info("انتظر لحظة حتى نضيف كلامك إلى الوصف");
+      return;
+    }
     if (prompt.trim().length < PROMPT_MIN_LENGTH) {
       toast.error("يرجى كتابة وصف أوضح لمتجرك");
       return;
@@ -1062,6 +1197,43 @@ export default function PromptComposer() {
 
         <div className="flex items-center justify-between gap-3 px-1">
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleVoiceInput}
+              disabled={voicePhase === "transcribing"}
+              aria-label={
+                voicePhase === "recording"
+                  ? "إيقاف التسجيل"
+                  : voicePhase === "transcribing"
+                    ? "جاري تحويل الصوت إلى نص"
+                    : "اكتب صوتياً"
+              }
+              aria-pressed={voicePhase === "recording"}
+              title={voicePhase === "recording" ? "إيقاف التسجيل" : "اكتب صوتياً"}
+              className={`relative rounded-full p-2 transition-colors ${
+                voicePhase === "recording"
+                  ? "bg-red-500/15 text-red-400 hover:bg-red-500/25"
+                  : "text-white/40 hover:bg-white/5 hover:text-white/80 disabled:cursor-wait"
+              }`}
+            >
+              {voicePhase === "recording" ? (
+                <Square size={16} fill="currentColor" />
+              ) : voicePhase === "transcribing" ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Mic size={18} />
+              )}
+              {voicePhase === "recording" && (
+                <span className="absolute inset-0 -z-10 animate-ping rounded-full bg-red-400/20" />
+              )}
+            </button>
+            <span className="sr-only" aria-live="polite">
+              {voicePhase === "recording"
+                ? "جاري التسجيل"
+                : voicePhase === "transcribing"
+                  ? "جاري تحويل الصوت إلى نص"
+                  : ""}
+            </span>
             <div className="relative" ref={attachRef}>
               <button
                 type="button"
@@ -1139,6 +1311,7 @@ export default function PromptComposer() {
             onClick={handleGenerate}
             disabled={
               phase !== "idle" ||
+              voicePhase !== "idle" ||
               (Boolean(user) && creditsLoading) ||
               prompt.trim().length < PROMPT_MIN_LENGTH ||
               prompt.length > PROMPT_MAX_LENGTH
@@ -1156,7 +1329,7 @@ export default function PromptComposer() {
       </div>
 
       <p className="mt-3 text-center text-xs text-white/30">
-        أرفق صور تصميم أو شعارك أو رابط Figma من زر المشبك
+        اكتب وصف متجرك أو استخدم الميكروفون، وأرفق صوراً أو شعارك عند الحاجة
       </p>
 
       <AuthModal

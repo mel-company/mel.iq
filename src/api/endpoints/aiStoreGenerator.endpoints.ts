@@ -264,6 +264,20 @@ async function streamPost(
 }
 
 export const aiStoreGeneratorAPI = {
+  /** Converts a short browser microphone recording into Arabic text. */
+  transcribeVoice: async (audio: Blob): Promise<{ text: string }> => {
+    const form = new FormData();
+    const extension = audio.type.includes('mp4') ? 'm4a' :
+      audio.type.includes('ogg') ? 'ogg' : 'webm';
+    form.append('audio', audio, `voice-prompt.${extension}`);
+    const { data } = await axiosInstance.post(
+      '/ai-agent/store-generator/voice/transcribe',
+      form,
+      { timeout: 75_000 },
+    );
+    return data;
+  },
+
   /** Uploads reference images and returns their public URLs. */
   uploadReferences: async (files: File[]): Promise<{ urls: string[] }> => {
     const form = new FormData();
