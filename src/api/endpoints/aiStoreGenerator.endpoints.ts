@@ -30,7 +30,15 @@ export interface PageDesign {
 }
 
 /** Why a run failed, in the only terms the client needs. */
-export type FailureCode = "ai-unavailable" | "ai-busy" | "timeout" | "unknown";
+export type FailureCode =
+  | "ai-unavailable"
+  | "ai-busy"
+  | "timeout"
+  /** The storefront was built but failed the server's terminal quality gate. */
+  | "qa-gate"
+  /** Too many free design/revision calls in a short window. */
+  | "rate-limited"
+  | "unknown";
 
 export type QuestionKind = "boolean" | "single" | "multi";
 
@@ -226,8 +234,20 @@ async function streamPost(
     } catch {
       /* keep the default */
     }
+    // Both of these are answers, not transport failures, so they reach the
+    // caller as an `error` event the panel can render rather than as a thrown
+    // exception it reports as a lost connection. 429 carries a code so the
+    // panel can offer a retry; the server already sends Arabic wording.
     if (response.status === 402) {
       onEvent({ type: "error", message: message || "لا يوجد رصيد كافٍ" });
+      return;
+    }
+    if (response.status === 429) {
+      onEvent({
+        type: "error",
+        code: "rate-limited",
+        message: message || "طلبات كثيرة خلال وقت قصير. انتظر قليلاً ثم أعد المحاولة.",
+      });
       return;
     }
     throw new Error(message);

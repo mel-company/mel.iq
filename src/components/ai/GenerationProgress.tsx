@@ -244,6 +244,19 @@ const FAILURE_ADVICE: Record<FailureCode, { title: string; advice?: string; retr
     advice: "تحقق من اتصالك ثم أعد المحاولة.",
     retry: true,
   },
+  "qa-gate": {
+    title: "لم يجتز التصميم فحص الجودة",
+    // The server refunds on this path, and saying so is the difference between
+    // a merchant retrying and a merchant assuming they have been charged for
+    // nothing.
+    advice: "أعدنا رصيدك. أعد المحاولة أو عدّل وصف متجرك قليلاً.",
+    retry: true,
+  },
+  "rate-limited": {
+    title: "طلبات كثيرة",
+    advice: "انتظر قليلاً ثم أعد المحاولة.",
+    retry: true,
+  },
   unknown: { title: "تعذر إنشاء المتجر", retry: true },
 };
 
