@@ -8,6 +8,7 @@ import {
   ImageIcon,
   Loader2,
   RotateCcw,
+  Sparkle,
 } from "@/components/icons";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,6 +19,7 @@ import {
 } from "@/api/wrappers/aiStoreGenerator.wrappers";
 import type { GenerationHistoryItem } from "@/api/endpoints/aiStoreGenerator.endpoints";
 import SectionEyebrow from "../landing/SectionEyebrow";
+import { requestResume } from "./activeRun";
 
 /**
  * Past generations as a scroll-snapped carousel, in the landing page's card
@@ -188,6 +190,9 @@ export default function GenerationHistory() {
           {items.map((item, i) => {
             const busy = busyId === item.id;
             const restorable = item.status === "SUCCEEDED" && !!item.store?.domain;
+            // A build the server still has in flight. Its card is the way back
+            // to the progress modal when the tab that started it is gone.
+            const inFlight = item.status === "PENDING" || item.status === "RUNNING";
             const status = STATUS[item.status];
 
             return (
@@ -250,6 +255,24 @@ export default function GenerationHistory() {
                     )}
                     {item.figmaUrl && <span>Figma</span>}
                   </div>
+
+                  {inFlight && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        requestResume({
+                          id: item.id,
+                          storeName: item.storeName ?? item.store?.name ?? undefined,
+                          prompt: item.prompt,
+                          startedAt: Date.parse(item.createdAt) || Date.now(),
+                        })
+                      }
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-linear-to-l from-brand-violet to-brand-indigo px-3 py-2.5 text-xs font-bold text-white transition-opacity hover:opacity-90"
+                    >
+                      <Sparkle size={13} />
+                      متابعة الإنشاء
+                    </button>
+                  )}
 
                   {restorable && (
                     <div className="flex items-center gap-2">

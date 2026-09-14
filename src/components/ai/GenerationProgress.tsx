@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import ModalPortal from "./ModalPortal";
 import {
   AlertCircle,
   Check,
@@ -85,6 +86,44 @@ interface GenerationProgressProps {
   /** Index of the running step within `steps`. */
   activeStep: number;
   storeName?: string;
+  /**
+   * Seconds the run had already been going when this modal opened.
+   *
+   * Non-zero only for a run resumed after a reload: the work started before
+   * the page did, and a clock beginning at zero would promise the full
+   * eight-minute estimate to someone already twenty minutes in. Feeding the
+   * real figure in lets the existing overrun handling do its job — the bar
+   * creeps asymptotically instead of claiming completion, and the countdown
+   * takes itself off screen once it has nothing useful left to say.
+   */
+  initialElapsedSeconds?: number;
+  /**
+   * False when there is no basis for a remaining-time estimate.
+   *
+   * The countdown is derived from which phase is running, and a run picked
+   * back up after a reload has no phase: the status endpoint reports only that
+   * it is still going, so every segment past the first reads as untouched and
+   * the arithmetic would quote most of the original estimate no matter how
+   * long the merchant has actually been waiting. The panel already has the
+   * right thing to say when it cannot put a number on the wait.
+   */
+  etaKnown?: boolean;
+  /**
+   * The run is a finished design that was never approved for building.
+   *
+   * Reached by resuming: the server parks a completed proposal and waits, so
+   * there is nothing in flight to report. The panel drops the language of work
+   * underway and puts the decision in front of the merchant instead.
+   */
+  awaitingApproval?: boolean;
+  /**
+   * The run being resumed had already died — `RUNNING` with nothing behind it.
+   *
+   * Continuing it is a fresh build and a fresh charge, since the credit the
+   * abandoned run took is not refunded, so the panel says both plainly instead
+   * of presenting it as picking up where things left off.
+   */
+  stalled?: boolean;
   /** Which half of the run is on screen; picks the mascot. */
   phase?: GenerationPhase;
   error?: string | null;
@@ -246,10 +285,11 @@ const FAILURE_ADVICE: Record<FailureCode, { title: string; advice?: string; retr
   },
   "qa-gate": {
     title: "لم يجتز التصميم فحص الجودة",
-    // The server refunds on this path, and saying so is the difference between
-    // a merchant retrying and a merchant assuming they have been charged for
-    // nothing.
-    advice: "أعدنا رصيدك. أعد المحاولة أو عدّل وصف متجرك قليلاً.",
+    // No advice line: the server's own message for this code already says both
+    // halves — that nothing was charged, and to retry or reword — and the two
+    // were rendering one under the other, word for word. The panel showed the
+    // same sentence three times over, which reads as a glitch and buries the
+    // one line that differs.
     retry: true,
   },
   "rate-limited": {
@@ -325,6 +365,10 @@ export default function GenerationProgress({
   steps,
   activeStep,
   storeName,
+  initialElapsedSeconds = 0,
+  etaKnown = true,
+  awaitingApproval = false,
+  stalled = false,
   phase = "design",
   error,
   errorCode,
@@ -345,13 +389,17 @@ export default function GenerationProgress({
   onClose,
 }: GenerationProgressProps) {
   /** Seconds the run has actually been working — question time excluded. */
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsed, setElapsed] = useState(initialElapsedSeconds);
   const [segment, setSegment] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(
     () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
   const lastTick = useRef<number | null>(null);
-  const elapsedRef = useRef(0);
+  const elapsedRef = useRef(initialElapsedSeconds);
+  // Read through a ref so the offset is applied at the moment the modal opens
+  // and never mid-run, whether the parent recomputes it every render or not.
+  const initialElapsedRef = useRef(initialElapsedSeconds);
+  initialElapsedRef.current = initialElapsedSeconds;
   const segmentRef = useRef(0);
   /** `elapsed` at the moment the running phase started. */
   const segmentStart = useRef(0);
@@ -375,12 +423,13 @@ export default function GenerationProgress({
   // One question at a time. A list of six would be a form, and a form during a
   // wait is worse than the wait.
   const current = error ? undefined : questions[questionIndex];
+  // `!current` is the shared condition: while a question is on screen it owns
+  // the panel, and the approval comes after the last one either way.
   const showingConfirmation =
     !error &&
-    phase === "design" &&
-    questionsReady &&
-    questions.length > 0 &&
-    !current;
+    !current &&
+    (awaitingApproval ||
+      (phase === "design" && questionsReady && questions.length > 0));
 
   /**
    * The clock stops while we are waiting on the merchant.
@@ -407,6 +456,8 @@ export default function GenerationProgress({
       return;
     }
     lastTick.current = Date.now();
+    elapsedRef.current = initialElapsedRef.current;
+    setElapsed(elapsedRef.current);
     // Wall-clock deltas rather than a tick count: a backgrounded tab throttles
     // the interval, and a counted clock would drift slow by however long the
     // merchant spent on another tab.
@@ -544,7 +595,7 @@ export default function GenerationProgress({
    * clock frozen on `0:01` for two minutes reads as a hang; a sentence does
    * not, and it is the more honest thing to say anyway.
    */
-  const clockIsUseful = remaining > 5;
+  const clockIsUseful = etaKnown && remaining > 5;
 
   const latest = entries.filter((e) => !e.done).slice(-1)[0] ?? entries.slice(-1)[0];
   const advice = FAILURE_ADVICE[errorCode ?? "unknown"];
@@ -563,367 +614,390 @@ export default function GenerationProgress({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070f]/85 p-0 backdrop-blur-sm animate-[modal-fade_160ms_ease-out] sm:p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="gen-progress-title"
-        tabIndex={-1}
-        dir="rtl"
-        className="relative flex h-dvh max-h-dvh w-full max-w-2xl flex-col overflow-hidden border border-[#00c8ff]/15 bg-gradient-to-b from-[#161c46] via-[#111637] to-[#0b0f2b] text-start shadow-[0_30px_90px_-20px_rgba(0,0,0,0.8)] outline-none animate-[modal-rise_200ms_ease-out] sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-[28px]"
-      >
-        {/* Ambient glow. Purely decorative, and behind everything that reads. */}
+    <ModalPortal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070f]/85 p-0 backdrop-blur-sm animate-[modal-fade_160ms_ease-out] sm:p-4">
         <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -top-32 start-1/2 h-64 w-[28rem] -translate-x-1/2 rounded-full bg-[#00c8ff]/15 blur-3xl"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-40 end-0 h-64 w-72 rounded-full bg-[#a855f7]/10 blur-3xl"
-        />
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gen-progress-title"
+          tabIndex={-1}
+          dir="rtl"
+          className="relative flex h-dvh max-h-dvh w-full max-w-2xl flex-col overflow-hidden border border-[#00c8ff]/15 bg-gradient-to-b from-[#161c46] via-[#111637] to-[#0b0f2b] text-start shadow-[0_30px_90px_-20px_rgba(0,0,0,0.8)] outline-none animate-[modal-rise_200ms_ease-out] sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-[28px]"
+        >
+          {/* Ambient glow. Purely decorative, and behind everything that reads. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-32 start-1/2 h-64 w-[28rem] -translate-x-1/2 rounded-full bg-[#00c8ff]/15 blur-3xl"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -bottom-40 end-0 h-64 w-72 rounded-full bg-[#a855f7]/10 blur-3xl"
+          />
 
-        <div className="relative flex shrink-0 items-start justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-6">
-          {!error ? (
-            <div className="flex flex-col items-center gap-0.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-2">
-              {clockIsUseful ? (
-                <>
-                  <span className="flex items-center gap-1.5">
-                    <Clock size={13} className="text-white/40" />
-                    <span
-                      className="font-mono text-sm tabular-nums text-white/70"
-                      aria-label="الوقت المتبقي التقريبي"
-                      dir="ltr"
-                    >
-                      ~{formatClock(remaining)}
-                    </span>
+          <div className="relative flex shrink-0 items-start justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-6">
+            {!error ? (
+              <div className="flex flex-col items-center gap-0.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-2">
+                {awaitingApproval ? (
+                  <span className="flex items-center gap-1.5 text-[11px] text-white/40">
+                    <Clock size={13} />
+                    {stalled ? "توقف" : "بانتظار تأكيدك"}
                   </span>
-                  <span className="text-[10px] text-white/35">
-                    {paused ? "متوقف بانتظارك" : "متبقٍ تقريباً"}
-                  </span>
-                </>
-              ) : (
-                // The estimate is spent but the run is not done.
-                <span className="flex items-center gap-1.5 text-[11px] text-white/40">
-                  <Clock size={13} />
-                  نكمل بعد قليل
-                </span>
-              )}
-            </div>
-          ) : (
-            <span />
-          )}
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="إغلاق"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/45 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
-
-        <div className="relative min-h-0 flex-1 no-scrollbar overflow-y-auto px-4 pb-5 sm:px-6 sm:pb-6">
-          {!error && (
-            <div className="relative mb-1 flex justify-center">
-              {/* Wave and spark field behind the mascot, as in the design. */}
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 400 120"
-                className="pointer-events-none absolute inset-x-0 top-6 mx-auto h-24 w-full max-w-md opacity-60"
-              >
-                <path
-                  d="M0 70 C 60 40, 110 92, 170 62"
-                  fill="none"
-                  stroke="url(#gp-wave)"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M230 62 C 290 92, 340 40, 400 70"
-                  fill="none"
-                  stroke="url(#gp-wave)"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-                <circle cx="118" cy="34" r="2.5" fill="#00c8ff" opacity="0.8" />
-                <circle cx="292" cy="42" r="2" fill="#22d3ee" opacity="0.7" />
-                <circle cx="64" cy="86" r="1.6" fill="#a855f7" opacity="0.6" />
-                <circle cx="344" cy="88" r="1.6" fill="#00c8ff" opacity="0.5" />
-                <defs>
-                  <linearGradient id="gp-wave" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#00c8ff" stopOpacity="0" />
-                    <stop offset="50%" stopColor="#00c8ff" stopOpacity="0.45" />
-                    <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              {reducedMotion ? (
-                <div
-                  className="relative flex h-20 w-20 items-center justify-center rounded-full border border-[#00c8ff]/25 bg-[#00c8ff]/10"
-                  role="img"
-                  aria-label={MASCOTS[phase].alt}
-                >
-                  <Sparkles size={30} className="text-[#00c8ff]" />
-                </div>
-              ) : (
-                <img
-                  // Keyed so React swaps the element rather than reusing it: an
-                  // unkeyed src change leaves the old GIF's last frame on screen
-                  // until the new one has decoded.
-                  key={phase}
-                  src={MASCOTS[phase].src}
-                  alt={MASCOTS[phase].alt}
-                  width={150}
-                  height={150}
-                  className="relative h-24 w-auto select-none sm:h-32"
-                  draggable={false}
-                />
-              )}
-            </div>
-          )}
-
-          <h2
-            id="gen-progress-title"
-            data-modal-autofocus="true"
-            tabIndex={-1}
-            className="flex items-center justify-center gap-2 text-center text-xl font-bold text-white outline-none sm:text-2xl"
-          >
-            {error ? "تعذر إنشاء متجرك" : "جاري إنشاء متجرك"}
-            {!error && <Sparkles size={18} className="text-[#00c8ff]" />}
-          </h2>
-
-          {!error && (
-            <p className="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-white/45">
-              {storeName ? (
-                <>
-                  <span className="font-medium text-white/85">{storeName}</span>
-                  {" — "}
-                </>
-              ) : null}
-              نحلل طلبك ونصمم متجرك بالذكاء الاصطناعي، وتستغرق العملية بضع دقائق
-              فقط.
-            </p>
-          )}
-
-          {!error && (
-            <>
-              {/* The run as numbered phases: which are behind us, which is lit. */}
-              <ol className="mt-5 mb-4 flex items-start" aria-label="مراحل الإنشاء">
-                {SEGMENTS.map((seg, index) => {
-                  const value = Math.round(percents[index]);
-                  const done = index < segment;
-                  const running = index === segment;
-                  return (
-                    <Fragment key={seg.key}>
-                      {index > 0 && (
-                        <li
-                          aria-hidden="true"
-                          className="mt-[2.35rem] h-0.5 min-w-4 flex-1 overflow-hidden rounded-full bg-white/10"
-                        >
-                          <div
-                            className={`h-full rounded-full ${SEGMENTS[index - 1].fill} transition-[width] duration-500 ease-linear motion-reduce:transition-none`}
-                            style={{ width: done || running ? "100%" : "0%" }}
-                          />
-                        </li>
-                      )}
-                      <li
-                        className="flex w-[5.5rem] shrink-0 flex-col items-center gap-1.5 sm:w-36"
-                        aria-current={running ? "step" : undefined}
+                ) : clockIsUseful ? (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <Clock size={13} className="text-white/40" />
+                      <span
+                        className="font-mono text-sm tabular-nums text-white/70"
+                        aria-label="الوقت المتبقي التقريبي"
+                        dir="ltr"
                       >
-                        <span
-                          className={`font-mono text-[11px] tabular-nums ${running ? seg.text : done ? "text-white/40" : "text-white/20"
-                            }`}
-                          dir="ltr"
-                        >
-                          {value}%
-                        </span>
-                        <span
-                          className={`flex h-9 w-9 items-center justify-center rounded-full border text-sm font-semibold transition-colors motion-reduce:transition-none ${running
-                            ? `border-transparent ${seg.fill} text-[#0b0f2b] ${seg.glow}`
-                            : done
-                              ? "border-[#00c8ff]/40 bg-[#00c8ff]/10 text-[#00c8ff]"
-                              : "border-white/12 bg-white/[0.03] text-white/30"
-                            }`}
-                        >
-                          {done ? <Check size={16} /> : <span dir="ltr">{index + 1}</span>}
-                        </span>
-                        <span
-                          className={`text-center text-[10px] leading-tight sm:text-[11px] ${running
-                            ? "font-medium text-white"
-                            : done
-                              ? "text-white/45"
-                              : "text-white/25"
-                            }`}
-                        >
-                          {seg.label}
-                        </span>
-                      </li>
-                    </Fragment>
-                  );
-                })}
-              </ol>
-
-              {/* The running phase, spelled out: what it is and how far in. */}
-              <div className="mb-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:gap-4 sm:p-4">
-                <span
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#00c8ff]/25 bg-[#00c8ff]/10 sm:h-12 sm:w-12"
-                  aria-hidden="true"
-                >
-                  <StageIcon size={20} className={stage.text} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-white sm:text-base">
-                    {stage.label}
-                  </p>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-white/45">
-                    {latest?.message ?? stage.hint}
-                  </p>
-                </div>
-                <ProgressRing
-                  percent={percents[segment]}
-                  color={stage.stroke}
-                  label={stage.label}
-                />
+                        ~{formatClock(remaining)}
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-white/35">
+                      {paused ? "متوقف بانتظارك" : "متبقٍ تقريباً"}
+                    </span>
+                  </>
+                ) : (
+                  // The estimate is spent but the run is not done.
+                  <span className="flex items-center gap-1.5 text-[11px] text-white/40">
+                    <Clock size={13} />
+                    نكمل بعد قليل
+                  </span>
+                )}
               </div>
+            ) : (
+              <span />
+            )}
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="إغلاق"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/45 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
 
-              {current && (
-                <QuestionStep
-                  question={current}
-                  chosen={chosen}
-                  index={questionIndex}
-                  total={questions.length}
-                  revisited={revisitedQuestion}
-                  onAnswer={(value) => onAnswer?.(current, value)}
-                  onNext={onNextQuestion}
-                  onPrevious={onPreviousQuestion}
-                  onSkip={onSkipQuestions}
-                  designReady={designReady}
-                />
-              )}
+          <div className="relative min-h-0 flex-1 no-scrollbar overflow-y-auto px-4 pb-5 sm:px-6 sm:pb-6">
+            {!error && (
+              <div className="relative mb-1 flex justify-center">
+                {/* Wave and spark field behind the mascot, as in the design. */}
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 400 120"
+                  className="pointer-events-none absolute inset-x-0 top-6 mx-auto h-24 w-full max-w-md opacity-60"
+                >
+                  <path
+                    d="M0 70 C 60 40, 110 92, 170 62"
+                    fill="none"
+                    stroke="url(#gp-wave)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M230 62 C 290 92, 340 40, 400 70"
+                    fill="none"
+                    stroke="url(#gp-wave)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                  <circle cx="118" cy="34" r="2.5" fill="#00c8ff" opacity="0.8" />
+                  <circle cx="292" cy="42" r="2" fill="#22d3ee" opacity="0.7" />
+                  <circle cx="64" cy="86" r="1.6" fill="#a855f7" opacity="0.6" />
+                  <circle cx="344" cy="88" r="1.6" fill="#00c8ff" opacity="0.5" />
+                  <defs>
+                    <linearGradient id="gp-wave" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#00c8ff" stopOpacity="0" />
+                      <stop offset="50%" stopColor="#00c8ff" stopOpacity="0.45" />
+                      <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                {reducedMotion ? (
+                  <div
+                    className="relative flex h-20 w-20 items-center justify-center rounded-full border border-[#00c8ff]/25 bg-[#00c8ff]/10"
+                    role="img"
+                    aria-label={MASCOTS[phase].alt}
+                  >
+                    <Sparkles size={30} className="text-[#00c8ff]" />
+                  </div>
+                ) : (
+                  <img
+                    // Keyed so React swaps the element rather than reusing it: an
+                    // unkeyed src change leaves the old GIF's last frame on screen
+                    // until the new one has decoded.
+                    key={phase}
+                    src={MASCOTS[phase].src}
+                    alt={MASCOTS[phase].alt}
+                    width={150}
+                    height={150}
+                    className="relative h-24 w-auto select-none sm:h-32"
+                    draggable={false}
+                  />
+                )}
+              </div>
+            )}
 
-              {showingConfirmation && (
-                <ConfirmationStep
-                  questions={questions}
-                  answers={answers}
-                  designReady={designReady}
-                  confirmed={buildConfirmed}
-                  onEdit={questions.length ? onPreviousQuestion : undefined}
-                  onConfirm={onConfirmBuild}
-                />
-              )}
+            <h2
+              id="gen-progress-title"
+              data-modal-autofocus="true"
+              tabIndex={-1}
+              className="flex items-center justify-center gap-2 text-center text-xl font-bold text-white outline-none sm:text-2xl"
+            >
+              {error
+                ? "تعذر إنشاء متجرك"
+                : awaitingApproval
+                  ? current
+                    ? "أكمل خيارات تصميمك"
+                    : stalled
+                      ? "توقف بناء متجرك"
+                      : "تصميم متجرك جاهز"
+                  : "جاري إنشاء متجرك"}
+              {!error && <Sparkles size={18} className="text-[#00c8ff]" />}
+            </h2>
 
-              {steps.length > 0 && (
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                  <p className="mb-2 px-1 text-[11px] text-white/35">سجل العمليات</p>
-                  <ul className="max-h-40 space-y-1 no-scrollbar overflow-y-auto">
-                    {steps.map((step, index) => {
-                      const done = index < activeStep;
-                      const active = index === activeStep;
-                      const startedAt =
-                        stepStartedAt.current[`${phase}-${index}-${step.key}`];
-                      return (
+            {!error && (
+              <p className="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-white/45">
+                {storeName ? (
+                  <>
+                    <span className="font-medium text-white/85">{storeName}</span>
+                    {" — "}
+                  </>
+                ) : null}
+                نحلل طلبك ونصمم متجرك بالذكاء الاصطناعي، وتستغرق العملية بضع دقائق
+                فقط.
+              </p>
+            )}
+
+            {!error && (
+              <>
+                {/* The run as numbered phases: which are behind us, which is lit. */}
+                <ol className="mt-5 mb-4 flex items-start" aria-label="مراحل الإنشاء">
+                  {SEGMENTS.map((seg, index) => {
+                    const value = Math.round(percents[index]);
+                    const done = index < segment;
+                    const running = index === segment;
+                    return (
+                      <Fragment key={seg.key}>
+                        {index > 0 && (
+                          <li
+                            aria-hidden="true"
+                            className="mt-[2.35rem] h-0.5 min-w-4 flex-1 overflow-hidden rounded-full bg-white/10"
+                          >
+                            <div
+                              className={`h-full rounded-full ${SEGMENTS[index - 1].fill} transition-[width] duration-500 ease-linear motion-reduce:transition-none`}
+                              style={{ width: done || running ? "100%" : "0%" }}
+                            />
+                          </li>
+                        )}
                         <li
-                          key={step.key}
-                          className={`flex items-center gap-3 rounded-xl px-3 py-2 ${active ? "bg-white/5" : ""
-                            }`}
+                          className="flex w-[5.5rem] shrink-0 flex-col items-center gap-1.5 sm:w-36"
+                          aria-current={running ? "step" : undefined}
                         >
-                          <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                            {done ? (
-                              <Check size={14} className="text-emerald-400" />
-                            ) : active ? (
-                              <Loader2
-                                size={13}
-                                className="animate-spin text-[#00c8ff] motion-reduce:animate-none"
-                              />
-                            ) : (
-                              <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
-                            )}
+                          <span
+                            className={`font-mono text-[11px] tabular-nums ${running ? seg.text : done ? "text-white/40" : "text-white/20"
+                              }`}
+                            dir="ltr"
+                          >
+                            {value}%
                           </span>
                           <span
-                            className={`min-w-0 flex-1 truncate text-xs ${done
-                              ? "text-white/45"
-                              : active
-                                ? "font-medium text-white"
+                            className={`flex h-9 w-9 items-center justify-center rounded-full border text-sm font-semibold transition-colors motion-reduce:transition-none ${running
+                              ? `border-transparent ${seg.fill} text-[#0b0f2b] ${seg.glow}`
+                              : done
+                                ? "border-[#00c8ff]/40 bg-[#00c8ff]/10 text-[#00c8ff]"
+                                : "border-white/12 bg-white/[0.03] text-white/30"
+                              }`}
+                          >
+                            {done ? <Check size={16} /> : <span dir="ltr">{index + 1}</span>}
+                          </span>
+                          <span
+                            className={`text-center text-[10px] leading-tight sm:text-[11px] ${running
+                              ? "font-medium text-white"
+                              : done
+                                ? "text-white/45"
                                 : "text-white/25"
                               }`}
                           >
-                            {step.label}
-                          </span>
-                          <span
-                            className="shrink-0 font-mono text-[10px] tabular-nums text-white/30"
-                            dir="ltr"
-                          >
-                            {startedAt === undefined
-                              ? "…"
-                              : formatClock(startedAt).padStart(5, "0")}
+                            {seg.label}
                           </span>
                         </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
+                      </Fragment>
+                    );
+                  })}
+                </ol>
 
-              <div className="mt-3 flex items-center justify-center gap-3 rounded-2xl border border-white/8 bg-white/2 px-4 py-3">
-                <Coffee size={20} className="shrink-0 text-[#00c8ff]/70" aria-hidden="true" />
-                <div className="min-w-0 text-center">
-                  <p className="text-sm text-white/75">{hint}</p>
-                  <p className="mt-0.5 text-[11px] text-white/35">
-                    سنعلمك فور الانتهاء
-                  </p>
-                </div>
-              </div>
-              <div className="sr-only" aria-live="polite" aria-atomic="true">
-                {latest?.message}
-              </div>
-            </>
-          )}
-
-          {error && (
-            <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-start">
-              <div className="flex items-start gap-2 text-sm text-red-300">
-                <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                <div>
-                  <p className="font-medium">{advice.title}</p>
-                  <p className="mt-1 text-red-300/85">{error}</p>
-                  {advice.advice && (
-                    <p className="mt-1 text-xs text-red-300/60">{advice.advice}</p>
-                  )}
-                  {refunded && (
-                    <p className="mt-2 text-xs text-red-300/70">
-                      تمت إعادة الرصيد إلى حسابك.
+                {/* The running phase, spelled out: what it is and how far in. */}
+                <div className="mb-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:gap-4 sm:p-4">
+                  <span
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#00c8ff]/25 bg-[#00c8ff]/10 sm:h-12 sm:w-12"
+                    aria-hidden="true"
+                  >
+                    <StageIcon size={20} className={stage.text} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white sm:text-base">
+                      {stage.label}
                     </p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-white/45">
+                      {latest?.message ?? stage.hint}
+                    </p>
+                  </div>
+                  <ProgressRing
+                    percent={percents[segment]}
+                    color={stage.stroke}
+                    label={stage.label}
+                  />
+                </div>
+
+                {current && (
+                  <QuestionStep
+                    question={current}
+                    chosen={chosen}
+                    index={questionIndex}
+                    total={questions.length}
+                    revisited={revisitedQuestion}
+                    onAnswer={(value) => onAnswer?.(current, value)}
+                    onNext={onNextQuestion}
+                    onPrevious={onPreviousQuestion}
+                    onSkip={onSkipQuestions}
+                    designReady={designReady}
+                  />
+                )}
+
+                {showingConfirmation && (
+                  <ConfirmationStep
+                    questions={questions}
+                    answers={answers}
+                    designReady={designReady}
+                    stalled={stalled}
+                    confirmed={buildConfirmed}
+                    onEdit={questions.length ? onPreviousQuestion : undefined}
+                    onConfirm={onConfirmBuild}
+                  />
+                )}
+
+                {steps.length > 0 && (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                    <p className="mb-2 px-1 text-[11px] text-white/35">سجل العمليات</p>
+                    <ul className="max-h-40 space-y-1 no-scrollbar overflow-y-auto">
+                      {steps.map((step, index) => {
+                        const done = index < activeStep;
+                        const active = index === activeStep;
+                        const startedAt =
+                          stepStartedAt.current[`${phase}-${index}-${step.key}`];
+                        return (
+                          <li
+                            key={step.key}
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2 ${active ? "bg-white/5" : ""
+                              }`}
+                          >
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                              {done ? (
+                                <Check size={14} className="text-emerald-400" />
+                              ) : active && stalled ? (
+                                <AlertCircle size={13} className="text-amber-400" />
+                              ) : active ? (
+                                <Loader2
+                                  size={13}
+                                  className="animate-spin text-[#00c8ff] motion-reduce:animate-none"
+                                />
+                              ) : (
+                                <span className="h-1.5 w-1.5 rounded-full bg-white/20" />
+                              )}
+                            </span>
+                            <span
+                              className={`min-w-0 flex-1 truncate text-xs ${done
+                                ? "text-white/45"
+                                : active
+                                  ? "font-medium text-white"
+                                  : "text-white/25"
+                                }`}
+                            >
+                              {step.label}
+                            </span>
+                            <span
+                              className="shrink-0 font-mono text-[10px] tabular-nums text-white/30"
+                              dir="ltr"
+                            >
+                              {startedAt === undefined
+                                ? "…"
+                                : formatClock(startedAt).padStart(5, "0")}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Nothing is running while we wait on the merchant, so the
+                    card that promises to tell them when it finishes has
+                    nothing to promise. */}
+                {!awaitingApproval && (
+                  <div className="mt-3 flex items-center justify-center gap-3 rounded-2xl border border-white/8 bg-white/2 px-4 py-3">
+                    <Coffee size={20} className="shrink-0 text-[#00c8ff]/70" aria-hidden="true" />
+                    <div className="min-w-0 text-center">
+                      <p className="text-sm text-white/75">{hint}</p>
+                      <p className="mt-0.5 text-[11px] text-white/35">
+                        سنعلمك فور الانتهاء
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <div className="sr-only" aria-live="polite" aria-atomic="true">
+                  {latest?.message}
+                </div>
+              </>
+            )}
+
+            {error && (
+              <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-start">
+                <div className="flex items-start gap-2 text-sm text-red-300">
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-medium">{advice.title}</p>
+                    <p className="mt-1 text-red-300/85">{error}</p>
+                    {advice.advice && (
+                      <p className="mt-1 text-xs text-red-300/60">{advice.advice}</p>
+                    )}
+                    {refunded && (
+                      <p className="mt-2 text-xs text-red-300/70">
+                        تمت إعادة الرصيد إلى حسابك.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  {onRetry && advice.retry && (
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="min-h-11 flex-1 rounded-full bg-[#00c8ff] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#33d4ff]"
+                    >
+                      إعادة المحاولة
+                    </button>
+                  )}
+                  {onClose && (
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="min-h-11 flex-1 rounded-full border border-white/15 px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/5"
+                    >
+                      إغلاق
+                    </button>
                   )}
                 </div>
               </div>
-              <div className="mt-4 flex gap-2">
-                {onRetry && advice.retry && (
-                  <button
-                    type="button"
-                    onClick={onRetry}
-                    className="min-h-11 flex-1 rounded-full bg-[#00c8ff] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#33d4ff]"
-                  >
-                    إعادة المحاولة
-                  </button>
-                )}
-                {onClose && (
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="min-h-11 flex-1 rounded-full border border-white/15 px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/5"
-                  >
-                    إغلاق
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -1132,6 +1206,7 @@ function ConfirmationStep({
   questions,
   answers,
   designReady,
+  stalled = false,
   confirmed,
   onEdit,
   onConfirm,
@@ -1139,6 +1214,7 @@ function ConfirmationStep({
   questions: DesignQuestion[];
   answers: DesignAnswers;
   designReady: boolean;
+  stalled?: boolean;
   confirmed: boolean;
   onEdit?: () => void;
   onConfirm?: () => void;
@@ -1150,7 +1226,7 @@ function ConfirmationStep({
         tabIndex={-1}
         className="text-base font-semibold text-white outline-none"
       >
-        راجع اختياراتك قبل البناء
+        {stalled ? "أكمل بناء متجرك" : "راجع اختياراتك قبل البناء"}
       </h3>
       {questions.length > 0 ? (
         <ul className="mt-3 max-h-28 space-y-2 no-scrollbar overflow-y-auto">
@@ -1172,9 +1248,11 @@ function ConfirmationStep({
         <p className="mt-2 text-sm text-white/60">سنستخدم توصيات التصميم المناسبة لوصف متجرك.</p>
       )}
       <p className="mt-3 text-xs text-white/40">
-        {designReady
-          ? "التصميم جاهز، وسيبدأ البناء بعد التأكيد."
-          : "يمكنك التأكيد الآن، وسيبدأ البناء فور اكتمال التصميم."}
+        {stalled
+          ? "توقفت المحاولة السابقة قبل أن تكتمل، وستُستأنف من تصميمك المحفوظ. يُحتسب رصيد إنشاء جديد."
+          : designReady
+            ? "التصميم جاهز، وسيبدأ البناء بعد التأكيد."
+            : "يمكنك التأكيد الآن، وسيبدأ البناء فور اكتمال التصميم."}
       </p>
       <div className="mt-4 flex gap-2">
         <button
@@ -1183,7 +1261,7 @@ function ConfirmationStep({
           disabled={confirmed}
           className="min-h-11 flex-1 rounded-full bg-[#00c8ff] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#33d4ff] disabled:opacity-60"
         >
-          {confirmed ? "تم التأكيد" : "تأكيد وبدء البناء"}
+          {confirmed ? "تم التأكيد" : stalled ? "متابعة البناء" : "تأكيد وبدء البناء"}
         </button>
         {onEdit && !confirmed && (
           <button

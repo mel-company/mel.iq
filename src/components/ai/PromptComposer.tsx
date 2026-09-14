@@ -24,6 +24,13 @@ import {
   type GenerationEvent,
 } from "@/api/endpoints/aiStoreGenerator.endpoints";
 import AuthModal from "./AuthModal";
+import {
+  type ActiveRun,
+  clearActiveRun,
+  onResumeRequest,
+  readActiveRun,
+  writeActiveRun,
+} from "./activeRun";
 import GenerationProgress, {
   preloadMascot,
   type GenerationPhase,
@@ -46,6 +53,7 @@ import BuyCreditsModal from "./BuyCreditsModal";
  */
 
 const DRAFT_KEY = "ai-store-prompt-draft";
+
 /** Mirrors PROMPT_MAX_LENGTH on the server, so the limit is visible while
  *  typing rather than arriving as a 400 after a submit. */
 const PROMPT_MAX_LENGTH = 8000;
@@ -110,6 +118,16 @@ type Phase =
   | "designing"
   | "generating"
   | "polling"
+  /**
+   * A design that is finished and waiting on the merchant to approve its build.
+   *
+   * This is what a resumed run turns out to be more often than not. The server
+   * marks a completed proposal `PENDING` and leaves it there — the row is the
+   * input `/generate` consumes — so nothing is executing and no amount of
+   * polling will move it. Only the merchant can, and only by spending a
+   * credit, so the modal asks rather than deciding for them.
+   */
+  | "awaiting"
   | "done";
 
 /** Re-encodes an image to at most MAX_IMAGE_EDGE on its long side. */
@@ -190,11 +208,39 @@ export default function PromptComposer() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [figmaUrl, setFigmaUrl] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
-  const [phase, setPhase] = useState<Phase>("idle");
+  // A stored handle means a build was already running when the page went
+  // away; come back up straight into polling so the progress modal
+  // reappears instead of the composer pretending nothing happened.
+  const [phase, setPhase] = useState<Phase>(() =>
+    readActiveRun() ? "polling" : "idle",
+  );
   const [entries, setEntries] = useState<ProgressEntry[]>([]);
   const [steps, setSteps] = useState<PlannedStep[]>([]);
   const [activeStep, setActiveStep] = useState(0);
-  const [storeName, setStoreName] = useState<string>();
+  const [storeName, setStoreName] = useState<string | undefined>(
+    () => readActiveRun()?.storeName,
+  );
+  /**
+   * Set at mount when this page came up onto a run that was already going.
+   *
+   * `elapsed` is the age of the stored handle — real time the merchant has
+   * been waiting, which the progress clock starts from instead of zero. The
+   * remaining estimate is a different matter: polling reports only that the
+   * run is alive, never which phase it reached, so the modal is told to say
+   * so rather than quote a number derived from a phase we are guessing at.
+   */
+  const [resumed, setResumed] = useState<{
+    elapsed: number;
+    /** Flips once the poll brings back a real step, which the estimate needs. */
+    etaKnown: boolean;
+  } | null>(() => {
+    const run = readActiveRun();
+    if (!run) return null;
+    return {
+      elapsed: Math.max(0, Math.round((Date.now() - run.startedAt) / 1000)),
+      etaKnown: false,
+    };
+  });
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<FailureCode | null>(null);
   const [refunded, setRefunded] = useState(false);
@@ -206,7 +252,9 @@ export default function PromptComposer() {
     /** True when the run deployed the storefront itself. */
     published?: boolean;
   } | null>(null);
-  const [generationId, setGenerationId] = useState<string | null>(null);
+  const [generationId, setGenerationId] = useState<string | null>(
+    () => readActiveRun()?.id ?? null,
+  );
   /** Uploaded reference urls, carried from the design phase into the build. */
   const [pendingRefs, setPendingRefs] = useState<string[] | undefined>();
   const [pendingLogo, setPendingLogo] = useState<string | undefined>();
@@ -249,6 +297,14 @@ export default function PromptComposer() {
     logoUrl?: string;
   } | null>(null);
   const [buildConfirmed, setBuildConfirmed] = useState(false);
+  /**
+   * The resumed run had died: `RUNNING`, but abandoned long enough that the
+   * server counts it as takeable. Restarting it is a second charge, because
+   * the credit the dead run consumed is never refunded — nothing reaches the
+   * refund path when the process simply disappears — so the panel says so
+   * rather than spending it quietly.
+   */
+  const [stalled, setStalled] = useState(false);
   const [visitedQuestions, setVisitedQuestions] = useState<Set<string>>(
     () => new Set(),
   );
@@ -326,9 +382,53 @@ export default function PromptComposer() {
     [],
   );
 
+  // Said once, on the resumed run only — a modal that reappears after a reload
+  // with no explanation reads as a bug.
+  useEffect(() => {
+    if (!readActiveRun()) return;
+    setEntries([
+      { message: "جاري متابعة إنشاء متجرك من حيث توقفت…", done: false },
+    ]);
+  }, []);
+
+  /**
+   * Pick up a run the merchant chose from their history.
+   *
+   * The same landing spot as a reload — poll the status, show the progress
+   * modal — but reached deliberately, and without the constraints a stored
+   * handle carries: this works on a second device, after storage was cleared,
+   * and past the window a local handle expires in, because the server has just
+   * said the run is alive.
+   */
+  useEffect(
+    () =>
+      onResumeRequest((run: ActiveRun) => {
+        writeActiveRun(run);
+        setResumed({
+          elapsed: Math.max(0, Math.round((Date.now() - run.startedAt) / 1000)),
+          etaKnown: false,
+        });
+        setGenerationId(run.id);
+        setStoreName(run.storeName);
+        // Needed if this turns out to be a design awaiting approval: the build
+        // request carries the prompt even when everything else comes off the row.
+        if (run.prompt) setPrompt(run.prompt);
+        setError(null);
+        setErrorCode(null);
+        setSuccess(null);
+        setSteps([]);
+        setActiveStep(0);
+        setEntries([
+          { message: "جاري متابعة إنشاء متجرك من حيث توقفت…", done: false },
+        ]);
+        setPhase("polling");
+      }),
+    [],
+  );
+
   // If the SSE connection drops before the server finishes, fall back to
   // polling the generation status so the modal stays open until the run is
-  // actually complete.
+  // actually complete. This is also how a reloaded page re-attaches.
   useEffect(() => {
     if (phase !== "polling" || !generationId) return;
 
@@ -337,6 +437,47 @@ export default function PromptComposer() {
       try {
         const data = await aiStoreGeneratorAPI.getGeneration(generationId);
         if (cancelled) return;
+
+        // A run in flight now reports where it is. The SSE stream is gone —
+        // it died with the tab — so this poll is the only thing feeding the
+        // modal, and without it the bars sit still for the whole build.
+        const live = data.progress as
+          | {
+            plan?: PlannedStep[];
+            index?: number | null;
+            message?: string;
+          }
+          | null
+          | undefined;
+        if (live) {
+          if (Array.isArray(live.plan) && live.plan.length) {
+            setSteps(live.plan);
+            stepsRef.current = live.plan;
+          }
+          if (typeof live.index === "number") setActiveStep(live.index);
+          if (live.message) {
+            setEntries([{ message: live.message, done: false }]);
+          }
+          // Real steps mean the countdown has something to work from again.
+          setResumed((current) =>
+            !current || current.etaKnown ? current : { ...current, etaKnown: true },
+          );
+        }
+
+        if (data.stalled) {
+          // `RUNNING` with nothing behind it: the request that was driving the
+          // build is gone and the row will never move on its own. Polling it
+          // is the forever-spinner this whole feature exists to avoid, so the
+          // modal stops and offers the one thing that can actually finish it.
+          setStalled(true);
+          if (data.prompt) setPrompt(data.prompt);
+          if (data.storeName) setStoreName(data.storeName);
+          setEntries([
+            { message: "توقف بناء متجرك قبل أن يكتمل.", done: true },
+          ]);
+          setPhase("awaiting");
+          return;
+        }
 
         if (data.status === "SUCCEEDED") {
           const { redirectUrl } = await aiStoreGeneratorAPI.openGeneration(
@@ -351,13 +492,49 @@ export default function PromptComposer() {
             subdomain,
           });
           sessionStorage.removeItem(DRAFT_KEY);
+          clearActiveRun();
           setPhase("done");
         } else if (data.status === "FAILED") {
           setError(data.error || "فشل إنشاء المتجر.");
+          clearActiveRun();
           setPhase("idle");
+        } else if (data.status === "PENDING") {
+          // Not work in progress. The server marks a finished proposal
+          // `PENDING` and leaves it there until a build is approved, so there
+          // is no process to wait on and the spinner would never end. What the
+          // run needs is the merchant — first for the questions the design
+          // asked, then for the approval — and both come back off the row.
+          const asked: DesignQuestion[] = Array.isArray(data.questions)
+            ? data.questions
+            : [];
+          setQuestions(asked);
+          setQuestionIndex(0);
+          setQuestionsReady(true);
+          if (data.storeName) setStoreName(data.storeName);
+          if (data.prompt) setPrompt(data.prompt);
+          setEntries([
+            {
+              message: asked.length
+                ? "تصميم متجرك جاهز — بقيت بعض الخيارات."
+                : "تصميم متجرك جاهز ولم يبدأ البناء بعد.",
+              done: true,
+            },
+          ]);
+          setPhase("awaiting");
         }
       } catch (e) {
-        // Polling errors are transient — the next tick will retry.
+        // Network blips are transient and the next tick retries, but a 404
+        // means this generation is gone — keep polling and the modal spins
+        // forever with no way out.
+        const status = (e as { response?: { status?: number } })?.response?.status;
+        if (status === 401 || status === 403 || status === 404) {
+          if (cancelled) return;
+          clearActiveRun();
+          setError(
+            "تعذّر متابعة هذه العملية. تحقق من تسجيل دخولك أو أنشئ متجرك مرة أخرى.",
+          );
+          setPhase("idle");
+        }
       }
     };
 
@@ -725,6 +902,14 @@ export default function PromptComposer() {
 
       setGenerationId(decided.generationId);
       setStoreName(decided.storeName);
+      // From here the run lives on the server. Record the handle so a reload
+      // or a closed tab can re-attach instead of orphaning the build.
+      writeActiveRun({
+        id: decided.generationId,
+        storeName: decided.storeName,
+        startedAt: Date.now(),
+        prompt: prompt.trim(),
+      });
       setQuestionsReady(true);
       setPendingRefs(referenceImages);
 
@@ -855,6 +1040,7 @@ export default function PromptComposer() {
       if (result) {
         setPhase("done");
         sessionStorage.removeItem(DRAFT_KEY);
+        clearActiveRun();
         setSuccess(result);
         return;
       }
@@ -1016,7 +1202,7 @@ export default function PromptComposer() {
       ? "code"
       : "design";
 
-  if (busy || phase === "done" || error) {
+  if (busy || phase === "awaiting" || phase === "done" || error) {
     return (
       <div className="w-full">
         <GenerationProgress
@@ -1024,6 +1210,8 @@ export default function PromptComposer() {
           entries={entries}
           steps={steps}
           activeStep={activeStep}
+          initialElapsedSeconds={resumed?.elapsed ?? 0}
+          etaKnown={!resumed || resumed.etaKnown}
           storeName={storeName}
           phase={mascotPhase}
           error={error}
@@ -1042,13 +1230,45 @@ export default function PromptComposer() {
           onNextQuestion={nextQuestion}
           onPreviousQuestion={previousQuestion}
           onSkipQuestions={() => {
-            const recommended = recommendedAnswers(questions);
-            answersRef.current = recommended;
-            setAnswers(recommended);
+            // "Use the recommendations" fills in what is still unanswered; it
+            // does not revisit a decision the merchant has already made. It
+            // used to overwrite every answer wholesale, so anyone who picked
+            // an option and then skipped the rest had their own choice quietly
+            // replaced by the default they had just declined.
+            const merged = {
+              ...recommendedAnswers(questions),
+              ...answersRef.current,
+            };
+            answersRef.current = merged;
+            setAnswers(merged);
             setQuestionIndex(questions.length);
           }}
-          onConfirmBuild={() => setBuildConfirmed(true)}
-          designReady={Boolean(pendingBuild)}
+          awaitingApproval={phase === "awaiting"}
+          stalled={stalled}
+          onConfirmBuild={() => {
+            if (phase !== "awaiting") {
+              setBuildConfirmed(true);
+              return;
+            }
+            // Resuming an unapproved design: there is no pending build to
+            // release, so this starts one against the existing row. The
+            // server reloads the references and the Figma link from it; the
+            // prompt is the one thing it still validates, so a handle too old
+            // to carry one says so instead of failing at the request.
+            if (!generationId) return;
+            if (prompt.trim().length < 10) {
+              setError(
+                "تعذّر متابعة هذا التصميم لأن وصف المتجر لم يعد محفوظاً. ابدأ إنشاء متجر جديد.",
+              );
+              setPhase("idle");
+              return;
+            }
+            buildStartedRef.current = true;
+            void runBuild(generationId);
+            setQuestions([]);
+            setStalled(false);
+          }}
+          designReady={Boolean(pendingBuild) || phase === "awaiting"}
           onRetry={
             error
               ? () => {

@@ -3,13 +3,42 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useLogin, useValidateUser, useVerify } from "@/api/wrappers/auth.wrappers";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
-import { ArrowLeftIcon } from "@/components/icons";
+import { ArrowRightIcon, Loader2 } from "@/components/icons";
 import { getApiErrorMessage } from "@/utils/otp";
+import AuthShell from "@/components/auth/AuthShell";
+import OtpInputs from "@/components/auth/OtpInputs";
+
+/**
+ * Digits in the code.
+ *
+ * The Figma frame draws six boxes, but the server issues four
+ * (`codes.service.ts`: `faker.number.int({ min: 1000, max: 9999 })`), and six
+ * boxes the merchant can never fill is a dead end. Raise this the day the
+ * backend does.
+ */
+const OTP_LENGTH = 4;
+
+const RESEND_SECONDS = 60;
+
+/** 65 -> "01:05", which is the countdown format the frame uses. */
+function formatCountdown(total: number): string {
+  const mm = String(Math.floor(total / 60)).padStart(2, "0");
+  const ss = String(total % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+/**
+ * "+9647701234567" -> "+964 770 123 4567", the grouping the frame shows.
+ *
+ * Anything that isn't a full Iraqi mobile is returned as-is rather than
+ * mangled into the wrong shape.
+ */
+function formatPhone(e164: string): string {
+  if (!e164) return "—";
+  const local = e164.replace(/^\+?964/, "");
+  if (local.length !== 10) return e164;
+  return `+964 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`;
+}
 
 function OTPVerification() {
   const location = useLocation();
@@ -26,13 +55,11 @@ function OTPVerification() {
   const storeFromQuery =
     new URLSearchParams(window.location.search).get("store")?.trim() || "";
   const storeSlug = storeFromState || storeFromQuery;
-  const maskedPhone = phone
-    ? phone.replace(/(^\+?964)/, "+964 ")
-    : "—";
+  const maskedPhone = formatPhone(phone);
 
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
-  const [resendCooldown, setResendCooldown] = useState(60);
+  const [resendCooldown, setResendCooldown] = useState(RESEND_SECONDS);
   const [canResend, setCanResend] = useState(false);
   const isBusy = isVerifyingPending || isValidatingUser;
 
@@ -88,7 +115,7 @@ function OTPVerification() {
 
   const submitOtp = (otpValue: string) => {
     if (isBusy || !phone) return;
-    if (otpValue.length !== 4) {
+    if (otpValue.length !== OTP_LENGTH) {
       setError("يرجى إدخال جميع الأرقام");
       return;
     }
@@ -170,7 +197,7 @@ function OTPVerification() {
   const handleResendOtp = () => {
     if (!canResend || !phone) return;
 
-    setResendCooldown(60);
+    setResendCooldown(RESEND_SECONDS);
     setCanResend(false);
     setError("");
 
@@ -190,139 +217,94 @@ function OTPVerification() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 p-4">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">
-            MEL.IQ
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-            التحقق من الهوية
-          </p>
-        </div>
+    <AuthShell>
+      <div className="w-full max-w-[520px] rounded-[32px] bg-ink-raised p-6 text-right sm:p-9">
+        <div className="flex flex-col items-start gap-[22px]">
+          {/* Back to the phone step. The arrow points right — the direction
+              "back" runs in an RTL page. */}
+          <button
+            type="button"
+            onClick={() => navigate("/login")}
+            className="flex items-center gap-3 text-sm text-muted transition-colors hover:text-frost"
+          >
+            <span
+              aria-hidden
+              className="flex size-9 items-center justify-center rounded-[10px] bg-slate"
+            >
+              <ArrowRightIcon size={20} />
+            </span>
+            العودة الى تسجيل الدخول
+          </button>
 
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-800">
-          <div className="h-1 w-full bg-gray-100 dark:bg-gray-800">
-            <div className="h-full w-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-500" />
+          <div className="flex w-full flex-col gap-1.5">
+            <h1 className="text-[30px] font-extrabold leading-[45px] text-frost">
+              أدخل رمز التحقق
+            </h1>
+            <p className="flex flex-wrap items-center justify-start gap-1.5 text-sm leading-[21px] text-muted">
+              أرسلنا رمزاً من {OTP_LENGTH} أرقام إلى
+              <span dir="ltr" className="font-semibold text-frost">
+                {maskedPhone}
+              </span>
+            </p>
           </div>
 
-          <div className="p-8 space-y-6">
-            <div className="space-y-1">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                أدخل رمز التحقق
-              </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                تم إرسال رمز مكون من 4 أرقام إلى:
-              </p>
-              <p
-                dir="ltr"
-                className="text-sm text-right font-medium text-violet-600 dark:text-violet-400"
-              >
-                {maskedPhone}
-              </p>
-            </div>
-
-            <form
-              className="space-y-6"
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitOtp(otp);
+          <form
+            className="flex w-full flex-col gap-[22px]"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitOtp(otp);
+            }}
+          >
+            <OtpInputs
+              value={otp}
+              length={OTP_LENGTH}
+              status={error ? "error" : "default"}
+              disabled={isBusy}
+              autoFocus
+              onChange={(value) => {
+                setOtp(value);
+                setError("");
               }}
+              onComplete={submitOtp}
+            />
+
+            {error && (
+              <p className="text-[13px] text-[#ff5252]">{error}</p>
+            )}
+            <button
+              type="submit"
+              disabled={isBusy || otp.length !== OTP_LENGTH}
+              className="flex h-[52px] w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-l from-brand-violet to-brand-indigo px-5 text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             >
-              <div className="space-y-4">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  رمز التحقق
-                </label>
-                <div dir="ltr">
-                  <InputOTP
-                    maxLength={4}
-                    value={otp}
-                    onChange={(value) => {
-                      if (!/^\d*$/.test(value)) return;
-                      setOtp(value);
-                      setError("");
-                    }}
-                    containerClassName="justify-between"
-                  >
-                    <InputOTPGroup className="w-full justify-between">
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                      <InputOTPSlot index={3} />
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
-                <p className="text-xs text-gray-400 dark:text-gray-500">
-                  أدخل الرمز الذي تلقيته على واتساب
-                </p>
-              </div>
+              {isBusy ? <Loader2 size={18} className="animate-spin" /> : "تأكيد والدخول"}
+            </button>
+            <div className="flex items-center justify-between text-[13px] leading-5">
 
-              {error && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                  <p className="text-sm text-red-600 dark:text-red-400">
-                    {error}
-                  </p>
-                </div>
-              )}
 
-              <div className="flex items-center justify-center gap-2">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  لم تصلك الرسالة؟
-                </p>
+              {canResend ? (
                 <button
                   type="button"
                   onClick={handleResendOtp}
-                  disabled={!canResend || isBusy}
-                  className={`text-sm font-medium transition-colors ${
-                    canResend
-                      ? "text-violet-600 dark:text-violet-400 hover:text-violet-700"
-                      : "text-gray-400 cursor-not-allowed"
-                  }`}
+                  disabled={isBusy}
+                  className="font-bold text-brand-primary transition-opacity hover:opacity-80 disabled:opacity-40"
                 >
-                  {canResend
-                    ? "إعادة إرسال"
-                    : `إعادة إرسال (${resendCooldown})`}
+                  إعادة إرسال الرمز
                 </button>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isBusy || otp.length !== 4}
-                className={`w-full py-4 px-4 rounded-xl font-medium text-white transition-all ${
-                  isBusy || otp.length !== 4
-                    ? "bg-gray-300 dark:bg-gray-700 cursor-not-allowed"
-                    : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg"
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  {isBusy ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>جاري التحقق...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>تحقق من الرمز</span>
-                      <ArrowLeftIcon className="w-5 h-5" />
-                    </>
-                  )}
-                </div>
-              </button>
-            </form>
-
-            <div className="pt-6 border-t border-gray-100 dark:border-gray-800">
-              <button
-                type="button"
-                onClick={() => navigate("/login")}
-                className="w-full text-center text-sm text-gray-500 hover:text-gray-700"
-              >
-                تغيير رقم الهاتف
-              </button>
+              ) : (
+                <span className="flex items-center gap-1.5 text-muted">
+                  إعادة الإرسال خلال
+                  <span dir="ltr" className="font-semibold tabular-nums text-frost">
+                    {formatCountdown(resendCooldown)}
+                  </span>
+                </span>
+              )}
             </div>
-          </div>
+
+
+          </form>
         </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }
 

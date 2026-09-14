@@ -28,6 +28,69 @@ import {
 } from "@/utils/otp";
 import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
 import StoreProvisioningGate from "@/components/StoreProvisioningGate";
+import { Loader2, Upload, X } from "@/components/icons";
+import CheckoutStepper from "@/components/checkout/CheckoutStepper";
+import OtpInputs from "@/components/auth/OtpInputs";
+import {
+  CheckBox,
+  Field,
+  PhoneInput,
+  SelectInput,
+  StepFooter,
+  TextInput,
+} from "@/components/checkout/fields";
+
+/**
+ * Digits in the verification code.
+ *
+ * The frames draw six boxes; the server issues four
+ * (`codes.service.ts`: `faker.number.int({ min: 1000, max: 9999 })`), and the
+ * existing verify call here already checks for four.
+ */
+const CHECKOUT_OTP_LENGTH = 4;
+
+/** Iraq's governorates, for the account step's picker. */
+const GOVERNORATES = [
+  "بغداد", "البصرة", "نينوى", "أربيل", "النجف", "كربلاء", "بابل", "ذي قار",
+  "الأنبار", "ديالى", "كركوك", "واسط", "صلاح الدين", "المثنى", "القادسية",
+  "ميسان", "دهوك", "السليمانية",
+];
+
+/**
+ * The payment tiles the frame draws.
+ *
+ * Only ZainCash is integrated: `/platform-payments/init` takes no provider and
+ * the server has a single `zaincash` module. The rest are rendered so the step
+ * matches the design, but disabled — a card form that cannot charge a card is
+ * worse than no card form.
+ */
+const PAYMENT_METHODS = [
+  { id: "card", title: "بطاقة بنكية", detail: "Visa · Mastercard", mark: "VC", tint: "bg-brand-primary/15 text-brand-primary", available: false },
+  { id: "zaincash", title: "زين كاش", detail: "ZainCash", mark: "Z", tint: "bg-[#ff5252]/15 text-[#ff5252]", available: true },
+  { id: "qicard", title: "كي كارد", detail: "Qi Card", mark: "Q", tint: "bg-amber/15 text-amber", available: false },
+  { id: "fib", title: "FIB", detail: "المصرف الأول", mark: "F", tint: "bg-brand-secondary/15 text-brand-secondary", available: false },
+];
+
+/** Business categories offered on the account step. */
+const BUSINESS_TYPES = [
+  "ملابس وأزياء", "إلكترونيات وهواتف", "مستحضرات تجميل وعطور", "أغذية ومشروبات",
+  "أثاث ومستلزمات منزل", "رياضة ولياقة", "كتب وقرطاسية", "صحة وأدوية", "أخرى",
+];
+
+/**
+ * A plan's feature labels.
+ *
+ * `plan.features` comes back through the FeaturePlan join, so each row wraps
+ * the feature rather than being one; older payloads inline it. Both shapes are
+ * read here so the cards are not silently blank either way.
+ */
+function planFeatures(plan: any): string[] {
+  return (plan?.features || [])
+    .map((row: any) => row?.feature ?? row)
+    .filter((f: any) => f && f.enabled !== false)
+    .map((f: any) => String(f.name || "").trim())
+    .filter(Boolean);
+}
 
 /** Normalize Iraqi mobile input to E.164 (+964…) for the API. */
 function normalizeToIqE164(input: string): string | null {
@@ -138,6 +201,11 @@ function Checkout() {
       logo: null as string | null,
       logoFile: null as File | null,
       storeName: draft?.storeName || "",
+      // Collected on the account step because the frame asks for them. The
+      // register endpoint takes only name/email/phone, so they are not
+      // persisted yet — wire them through when the API grows the fields.
+      businessType: "",
+      governorate: "",
       domain: draft?.domain || "",
       domainType: draft?.domainType || "subdomain",
       websiteUrl: "",
@@ -147,6 +215,9 @@ function Checkout() {
   });
 
   const [otpSent, setOtpSent] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(true);
+  /** Drives the success pill the frame shows once the code checks out. */
+  const [otpVerified, setOtpVerified] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(
     () => Boolean(location.state?.paymentCompleted),
   );
@@ -157,6 +228,16 @@ function Checkout() {
   const [dynadotResult, setDynadotResult] = useState<DynadotSearchResult | null>(
     null,
   );
+
+  const monthlyPrice = Number(formData.plan?.monthly_price ?? 0);
+  const isPlanFree = Boolean(formData.plan?.is_free) || monthlyPrice === 0;
+  const planPriceLabel = monthlyPrice ? monthlyPrice.toLocaleString("en-IQ") : "0";
+  /** End of the 14-day trial — the date the first charge actually lands. */
+  const firstChargeDate = new Date(Date.now() + 14 * 864e5).toLocaleDateString("ar", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
   const goToTemplates = (nav: {
     websiteType: string;
@@ -225,19 +306,26 @@ function Checkout() {
 
   const steps = [
     { number: 1, title: "المعلومات", icon: "👤" },
-    { number: 2, title: "التحقق من OTP", icon: "🔐" },
+    { number: 2, title: "التحقق", icon: "🔐" },
     { number: 3, title: "اختيار الخطة", icon: "📦" },
     { number: 4, title: "الدفع", icon: "💳" },
-    { number: 5, title: "تخصيص الموقع", icon: "⚙️" },
+    { number: 5, title: "تخصيص المتجر", icon: "⚙️" },
   ];
 
   const checkDomainAvailabilityMutation = useCheckStoreDomainAvailability();
   const dynadotSearchMutation = useDynadotSearch();
 
-  // Show loading or error states
-  if (plans.isLoading) return <div>Loading...</div>;
-  if (plans.isError) return <div>Error: {plans.error.message}</div>;
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // The plans query is deliberately NOT gated on here. It used to short-circuit
+  // the whole component to a bare "Loading..." / "Error:" div, which blanked
+  // all five steps — including the account and verification steps, which never
+  // touch plans — and left the wizard stuck behind an unreachable API. Step 3
+  // is the only step that needs plans, and it renders its own loading, empty
+  // and failed states.
+  // Widened to cover the account step's two <select>s as well as its inputs —
+  // they all just write their `name` into formData.
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+  ) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     // Reset domain check when domain changes
     if (e.target.name === "domain" || e.target.name === "domainType") {
@@ -457,7 +545,7 @@ function Checkout() {
 
   const handleOTPVerify = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (formData.otp && formData.otp.length === 4) {
+    if (formData.otp && formData.otp.length === CHECKOUT_OTP_LENGTH) {
       const phone = resolveOtpPhone(user, formData.phone);
       if (!phone) {
         toast.error("رقم الهاتف غير صالح. ارجع للخطوة السابقة وأعد المحاولة.");
@@ -474,6 +562,7 @@ function Checkout() {
             accessToken?: string;
             username?: string;
           }) => {
+            setOtpVerified(true);
             const token = result?.token || result?.accessToken;
             const username = result?.username || formData.name || phone;
             if (token) {
@@ -768,152 +857,193 @@ function Checkout() {
   };
 
   return (
-    <div className="w-full min-h-screen py-20 bg-white dark:bg-black">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Steps Indicator - Only show if not skipping */}
+    <div className="relative min-h-screen overflow-hidden bg-ink py-14 font-setar text-white">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(149, 158, 254, 0.025) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(149, 158, 254, 0.025) 1px, transparent 1px)
+          `,
+          backgroundSize: "109px 109px",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-[383px] end-[-120px] size-[759px] rounded-full bg-[#1b5c8f]/25 blur-[180px]"
+      />
+
+      <div className="relative mx-auto flex max-w-[1064px] flex-col gap-5 px-4 sm:px-6">
         {!location.state?.skipToStep && (
-          <div className="mb-12">
-            <div className="flex items-center justify-between">
-              {steps.map((step, index) => (
-                <div key={step.number} className="flex items-center flex-1">
-                  <div className="flex flex-col items-center flex-1">
-                    <div
-                      className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold transition-all border-2 ${
-                        currentStep >= step.number
-                          ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white"
-                          : "bg-white dark:bg-black text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-800"
-                      }`}
-                    >
-                      {step.number <= currentStep ? step.icon : step.number}
-                    </div>
-                    <span
-                      className={`mt-2 text-sm font-medium text-center ${
-                        currentStep >= step.number
-                          ? "text-black dark:text-white"
-                          : "text-gray-500 dark:text-gray-400"
-                      }`}
-                    >
-                      {step.title}
-                    </span>
-                  </div>
-                  {index < steps.length - 1 && (
-                    <div
-                      className={`flex-1 h-1 mx-2 ${
-                        currentStep > step.number
-                          ? "bg-black dark:bg-white"
-                          : "bg-gray-200 dark:bg-gray-800"
-                      }`}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+          <CheckoutStepper steps={steps} currentStep={currentStep} />
         )}
 
         {/* Step Content */}
-        <div className="bg-white dark:bg-black rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 p-8 md:p-12">
+        <div className="rounded-3xl bg-ink-raised p-6 text-right sm:p-9">
           {/* Step 1: User Info - Only for non-logged in users */}
           {currentStep === 1 && !location.state?.skipToStep && (
-            <div>
-              <h2 className="text-3xl font-bold text-black dark:text-gray-400 mb-6 text-center">
-                {user ? "المتابعة إلى التحقق" : "أدخل معلوماتك"}
-              </h2>
+            <div className="flex flex-col gap-[22px]">
+              <div className="flex flex-col gap-1.5">
+                <h2 className="text-[30px] font-extrabold leading-[45px] text-frost">
+                  {user ? "المتابعة إلى التحقق" : "أنشئ حسابك"}
+                </h2>
+                <p className="text-sm leading-[21px] text-muted">
+                  {user
+                    ? "سنرسل رمز تحقق إلى رقمك المسجل للمتابعة"
+                    : "تجربة مجانية 14 يوماً — بدون بطاقة ائتمانية، وتقدر تلغي في أي وقت"}
+                </p>
+              </div>
+
               {user ? (
-                <div className="text-center">
-                  <p className="text-gray-600 dark:text-gray-300 mb-6">
-                    مرحباً بك! سيتم إرسال رمز OTP إلى رقمك المسجل
-                  </p>
-                  <button
-                    onClick={() => {
-                      const phone = resolveOtpPhone(user, formData.phone);
-                      if (phone) {
-                        sendOtpMutation(
-                          { phone },
-                          {
-                            onSuccess: () => {
-                              setFormData((prev) => ({ ...prev, phone, otp: "" }));
-                              setOtpSent(true);
-                              setCurrentStep(2);
-                            },
-                            onError: (error) => {
-                              toast.error(
-                                getApiErrorMessage(
-                                  error,
-                                  "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
-                                ),
-                              );
-                            },
-                          },
-                        );
-                      } else {
-                        toast.error(
-                          "لم يُعثر على رقم هاتف صالح في حسابك. تواصل مع الدعم.",
-                        );
-                      }
-                    }}
-                    disabled={isSendingOtp}
-                    className="w-full bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white py-3 px-6 rounded-lg font-semibold text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isSendingOtp ? "جاري الإرسال..." : "المتابعة إلى التحقق"}
-                  </button>
-                </div>
+                <StepFooter
+                  submitLabel="المتابعة إلى التحقق"
+                  busy={isSendingOtp}
+                  onSubmit={() => {
+                    const phone = resolveOtpPhone(user, formData.phone);
+                    if (!phone) {
+                      toast.error(
+                        "لم يُعثر على رقم هاتف صالح في حسابك. تواصل مع الدعم.",
+                      );
+                      return;
+                    }
+                    sendOtpMutation(
+                      { phone },
+                      {
+                        onSuccess: () => {
+                          setFormData((prev) => ({ ...prev, phone, otp: "" }));
+                          setOtpSent(true);
+                          setCurrentStep(2);
+                        },
+                        onError: (error) => {
+                          toast.error(
+                            getApiErrorMessage(
+                              error,
+                              "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
+                            ),
+                          );
+                        },
+                      },
+                    );
+                  }}
+                />
               ) : (
-                <form onSubmit={handleStep1Submit} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
-                        الاسم الكامل
-                      </label>
-                      <input
-                        type="text"
+                <form onSubmit={handleStep1Submit} className="flex flex-col gap-[22px]">
+                  {/* Two per row on desktop; RTL puts the first field on the
+                      right, which is the order the frame reads in. */}
+                  <div className="flex flex-col gap-5 sm:flex-row">
+                    <Field label="الاسم الكامل" htmlFor="name">
+                      <TextInput
+                        id="name"
                         name="name"
                         value={formData.name}
                         onChange={handleInputChange}
                         required
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white500 focus:border-transparent outline-none transition"
-                        placeholder="أدخل اسمك الكامل"
+                        autoComplete="name"
+                        placeholder="محمد علي يوسف"
+                        state={formData.name.trim().length >= 2 ? "valid" : "default"}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
-                        البريد الإلكتروني
-                      </label>
-                      <input
-                        type="email"
+                    </Field>
+                    <Field label="البريد الإلكتروني" htmlFor="email">
+                      <TextInput
+                        id="email"
                         name="email"
+                        type="email"
+                        dir="ltr"
                         value={formData.email}
                         onChange={handleInputChange}
                         required
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white500 focus:border-transparent outline-none transition"
-                        placeholder="example@email.com"
+                        autoComplete="email"
+                        placeholder="you@store.iq"
                       />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
-                      رقم الجوال (واتساب)
-                    </label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white500 focus:border-transparent outline-none transition"
-                      placeholder="7xx xxx xxxx (عراقي)"
-                    />
+                    </Field>
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={isRegistering || isLoggingIn || isSendingOtp}
-                    className="w-full bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white py-3 px-6 rounded-lg font-semibold text-lg transition-colors mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                  <div className="flex flex-col gap-5 sm:flex-row">
+                    <Field
+                      label="رقم الهاتف"
+                      htmlFor="phone"
+                      hint="سنرسل رمز التحقق إلى هذا الرقم"
+                    >
+                      <PhoneInput
+                        id="phone"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        required
+                        autoComplete="tel-national"
+                        placeholder="7XX XXX XXXX"
+                      />
+                    </Field>
+                    <Field label="اسم المتجر" htmlFor="storeName">
+                      <TextInput
+                        id="storeName"
+                        name="storeName"
+                        value={formData.storeName}
+                        onChange={handleInputChange}
+                        placeholder="مثال: متجر البركة"
+                      />
+                    </Field>
+                  </div>
+
+                  {/* These two are in the frame but the register endpoint takes
+                      only name / email / phone, so they are collected and not
+                      yet persisted — hence optional rather than required. */}
+                  <div className="flex flex-col gap-5 sm:flex-row">
+                    <Field label="نوع النشاط التجاري" htmlFor="businessType">
+                      <SelectInput
+                        id="businessType"
+                        name="businessType"
+                        value={formData.businessType}
+                        onChange={handleInputChange}
+                        placeholder="اختر نوع النشاط"
+                      >
+                        {BUSINESS_TYPES.map((type) => (
+                          <option key={type} value={type} className="bg-ink-raised text-frost">
+                            {type}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    </Field>
+                    <Field label="المحافظة" htmlFor="governorate">
+                      <SelectInput
+                        id="governorate"
+                        name="governorate"
+                        value={formData.governorate}
+                        onChange={handleInputChange}
+                        placeholder="اختر المحافظة"
+                      >
+                        {GOVERNORATES.map((name) => (
+                          <option key={name} value={name} className="bg-ink-raised text-frost">
+                            {name}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    </Field>
+                  </div>
+
+                  <CheckBox checked={acceptedTerms} onChange={setAcceptedTerms}>
+                    أوافق على{" "}
+                    <span className="font-bold text-brand-primary">الشروط والأحكام</span>{" "}
+                    و <span className="font-bold text-brand-primary">سياسة الخصوصية</span>
+                  </CheckBox>
+
+                  <StepFooter
+                    submitLabel="متابعة"
+                    busy={isRegistering || isLoggingIn || isSendingOtp}
+                    disabled={!acceptedTerms}
                   >
-                    {isRegistering || isLoggingIn || isSendingOtp
-                      ? "جاري المتابعة..."
-                      : "المتابعة إلى التحقق"}
-                  </button>
+                    <p className="text-[13px] leading-5 text-muted">
+                      لديك حساب؟{" "}
+                      <button
+                        type="button"
+                        onClick={() => navigate("/login")}
+                        className="font-bold text-brand-primary hover:underline"
+                      >
+                        تسجيل الدخول
+                      </button>
+                    </p>
+                  </StepFooter>
                 </form>
               )}
             </div>
@@ -921,493 +1051,512 @@ function Checkout() {
 
           {/* Step 2: OTP Verification */}
           {currentStep === 2 && (
-            <div>
-              <h2 className="text-3xl font-bold text-black dark:text-white mb-2 text-center">
-                التحقق من الرمز
-              </h2>
-              <p className="text-center text-gray-500 dark:text-gray-400 mb-8">
-                أدخل رمز التحقق المرسل إلى واتساب
-                {formData.phone ? (
-                  <span dir="ltr" className="block mt-1 font-medium text-black dark:text-white">
-                    {formData.phone}
+            <div className="flex flex-col items-center gap-[22px] py-6 text-center">
+              <div className="flex flex-col items-center gap-1.5">
+                <h2 className="text-[30px] font-extrabold leading-[45px] text-frost">
+                  تحقق من رقمك
+                </h2>
+                <p className="flex flex-wrap items-center justify-center gap-1.5 text-sm leading-[21px] text-muted">
+                  أرسلنا رمزاً من {CHECKOUT_OTP_LENGTH} أرقام إلى
+                  <span dir="ltr" className="font-semibold text-frost">
+                    {formData.phone || "—"}
                   </span>
-                ) : null}
-              </p>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(1)}
+                    className="text-[13px] font-bold text-brand-primary hover:underline"
+                  >
+                    تعديل
+                  </button>
+                </p>
+              </div>
 
-              <form onSubmit={handleOTPVerify} className="max-w-sm mx-auto space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2 text-center">
-                    رمز OTP (4 أرقام)
-                  </label>
-                  <input
-                    type="text"
-                    name="otp"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={4}
-                    value={formData.otp}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-                      setFormData((prev) => ({ ...prev, otp: value }));
-                    }}
-                    dir="ltr"
-                    className="w-full px-4 py-4 text-center text-2xl tracking-[0.5em] border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-black dark:focus:ring-white outline-none"
-                    placeholder="••••"
-                    required
-                  />
+              <form
+                onSubmit={handleOTPVerify}
+                className="flex w-full max-w-[444px] flex-col items-center gap-[22px]"
+              >
+                <OtpInputs
+                  value={formData.otp}
+                  length={CHECKOUT_OTP_LENGTH}
+                  disabled={isVerifyingOtp}
+                  autoFocus
+                  status={otpVerified ? "success" : "default"}
+                  onChange={(value) =>
+                    setFormData((prev) => ({ ...prev, otp: value }))
+                  }
+                />
+
+                <div className="flex w-full items-center justify-between text-[13px] leading-5">
+                  {/* The frame offers a voice fallback; there is no voice
+                      endpoint, so it keeps the frame's disabled tone. */}
+                  <span className="font-bold text-dim" title="غير متاح حالياً">
+                    اتصال صوتي
+                  </span>
+                  <span className="flex items-center gap-1.5 text-muted">
+                    لم يصلك الرمز؟
+                    <button
+                      type="button"
+                      onClick={resendOTP}
+                      disabled={isSendingOtp}
+                      className="font-bold text-brand-primary transition-opacity hover:opacity-80 disabled:opacity-40"
+                    >
+                      {isSendingOtp ? "جاري الإرسال…" : "إعادة الإرسال"}
+                    </button>
+                  </span>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={isVerifyingOtp || formData.otp.length !== 4}
-                  className="w-full bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black py-3 px-6 rounded-lg font-semibold text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isVerifyingOtp ? "جاري التحقق..." : "تأكيد الرمز"}
-                </button>
+                {otpVerified && (
+                  <p className="flex items-center gap-2 rounded-full border border-mint/35 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
+                    <span aria-hidden>✓</span>
+                    تم التحقق بنجاح
+                  </p>
+                )}
 
-                <button
-                  type="button"
-                  onClick={resendOTP}
-                  disabled={isSendingOtp}
-                  className="w-full text-sm text-gray-500 hover:text-black dark:hover:text-white transition-colors disabled:opacity-50"
-                >
-                  {isSendingOtp ? "جاري إعادة الإرسال..." : "إعادة إرسال الرمز"}
-                </button>
+                <div className="w-full pt-4">
+                  <StepFooter
+                    submitLabel="متابعة"
+                    busy={isVerifyingOtp}
+                    disabled={formData.otp.length !== CHECKOUT_OTP_LENGTH}
+                    onBack={() => setCurrentStep(1)}
+                  />
+                </div>
               </form>
             </div>
           )}
 
           {/* Step 3: Plan Selection */}
           {currentStep === 3 && (
-            <div>
-              <h2 className="text-3xl font-bold text-black dark:text-white mb-6 text-center">
-                اختر خطتك
-              </h2>
-              <div className="space-y-6">
-                {!formData.plan && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {plansData.map((plan: any) => (
-                      <div
-                        key={plan.id}
-                        onClick={() => handlePlanSelect(plan)}
-                        className={`cursor-pointer p-4 rounded-lg border-2 transition-colors ${
-                          formData.plan?.id === plan.id
-                            ? "border-black dark:border-white bg-gray-100 dark:bg-gray-900"
-                            : "border-gray-200 dark:border-gray-800 hover:border-gray-400 dark:hover:border-gray-600"
-                        }`}
-                      >
-                        <h4 className="text-lg font-bold text-black dark:text-white mb-2">
-                          {plan.name || ""}
-                        </h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                          {plan.description || ""}
-                        </p>
-                        <p className="text-2xl font-bold text-black dark:text-white mb-4">
-                          {plan.monthly_price
-                            ? plan.monthly_price.toLocaleString("en-IQ")
-                            : "0"}{" "}
-                          د.ع
-                        </p>
-                        <ul className="space-y-2">
-                          {plan.features
-                            .filter((feature: any) => feature.enabled !== false)
-                            .map((feature: any, idx: number) => (
-                              <li
-                                key={idx}
-                                className="flex items-center text-sm text-gray-700 dark:text-gray-400"
-                              >
-                                <svg
-                                  className="w-4 h-4 text-black dark:text-white mr-2"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                                {feature.name || ""}
-                              </li>
-                            ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {formData.plan && (
-                  <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-6 border-2 border-slate-900 dark:border-slate-100">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                          الخطة المختارة
-                        </h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          {formData.plan.name || ""}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">
-                          {formData.plan.monthly_price
-                            ? formData.plan.monthly_price.toLocaleString(
-                                "en-IQ",
-                              )
-                            : "0"}{" "}
-                          <span className="text-lg font-normal text-slate-600 dark:text-slate-400">
-                            د.ع
-                          </span>
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-500">
-                          شهرياً
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={handlePlanSelection}
-                      disabled={!formData.plan}
-                      className="w-full bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 hover:from-slate-800 hover:to-slate-600 dark:hover:from-slate-200 dark:hover:to-slate-400 text-white dark:text-slate-900 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                    >
-                      المتابعة إلى الدفع
-                    </button>
-                  </div>
-                )}
+            <div className="flex flex-col gap-8">
+              <div className="flex flex-col gap-1.5">
+                {/* The frame heads this step "طريقة الدفع", which is step 4's
+                    title left in by mistake — this is the plan picker. */}
+                <h2 className="text-[30px] font-extrabold leading-[45px] text-frost">
+                  اختر خطتك
+                </h2>
+                <p className="text-sm leading-[21px] text-muted">
+                  لن يُخصم أي مبلغ اليوم — تبدأ الفوترة بعد انتهاء التجربة المجانية
+                </p>
               </div>
+
+              {plans.isLoading ? (
+                <p className="py-10 text-center text-sm text-muted">جاري تحميل الباقات…</p>
+              ) : plansData.length === 0 ? (
+                <div className="flex flex-col items-center gap-4 py-10">
+                  <p className="text-sm text-muted">
+                    {plans.isError
+                      ? "تعذر تحميل الباقات."
+                      : "لا توجد باقات متاحة حالياً."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void plans.refetch()}
+                    disabled={plans.isFetching}
+                    className="flex h-[46px] items-center justify-center gap-2 rounded-[14px] border border-white/12 bg-white/[0.04] px-6 text-[13px] font-bold text-frost transition-colors hover:bg-white/[0.08] disabled:opacity-40"
+                  >
+                    {plans.isFetching ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      "إعادة المحاولة"
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="grid items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {plansData.map((plan: any) => {
+                    const selected = formData.plan?.id === plan.id;
+                    const price = plan.monthly_price
+                      ? Number(plan.monthly_price).toLocaleString("en-IQ")
+                      : null;
+                    return (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        onClick={() => handlePlanSelect(plan)}
+                        aria-pressed={selected}
+                        className={
+                          selected
+                            ? // A gradient 1px frame, as on the landing page's
+                              // featured tier.
+                              "relative rounded-3xl bg-gradient-to-b from-[#463bbf] via-[#9c96e3] to-[#463bbf] p-px text-right"
+                            : "relative rounded-3xl border border-hairline text-right transition-colors hover:border-brand-secondary/30"
+                        }
+                      >
+                        <div
+                          className={`flex h-full flex-col gap-6 rounded-3xl px-7 pb-8 pt-7 ${
+                            selected ? "bg-[#06051e]" : "bg-ink-panel"
+                          }`}
+                        >
+                          <div className="flex flex-col gap-4">
+                            <h3 className="text-3xl font-bold text-frost">
+                              {plan.name || ""}
+                            </h3>
+                            <p className="text-sm leading-6 text-[#cac9d1]">
+                              {plan.description || ""}
+                            </p>
+                            <span className="h-px w-full bg-gradient-to-l from-[#0c0f26] via-[#3f48d9] to-[#0c0f26]" />
+                          </div>
+
+                          <ul className="flex flex-col gap-4">
+                            {planFeatures(plan).map((feature, idx) => (
+                                <li key={idx} className="flex items-center gap-3">
+                                  <span className="flex-1 text-[15px] leading-snug text-frost">
+                                    {feature}
+                                  </span>
+                                  <span
+                                    aria-hidden
+                                    className="flex size-[29px] shrink-0 items-center justify-center rounded-[10px] bg-[#131331]"
+                                  >
+                                    <span className="size-[7px] rounded-full bg-brand-primary" />
+                                  </span>
+                                </li>
+                            ))}
+                          </ul>
+
+                          <p className="mt-auto flex items-end justify-end gap-1 pt-2">
+                            {price ? (
+                              <>
+                                <span className="text-4xl font-medium tracking-tight text-frost">
+                                  {price} د.ع
+                                </span>
+                                <span className="text-base text-[#73799b]">/شهرياً</span>
+                              </>
+                            ) : (
+                              <span className="text-4xl font-medium text-frost">اتصل بنا</span>
+                            )}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <StepFooter
+                submitLabel="متابعة إلى الدفع"
+                disabled={!formData.plan}
+                onSubmit={handlePlanSelection}
+                onBack={() => setCurrentStep(2)}
+              />
             </div>
           )}
 
           {currentStep === 4 && (
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2 text-center bg-gradient-to-r from-slate-900 to-slate-600 dark:from-slate-100 dark:to-slate-400 bg-clip-text text-transparent">
-                الدفع
-              </h2>
-              <p className="text-slate-600 dark:text-slate-400 text-center mb-10 text-sm sm:text-base">
-                أكمل عملية الدفع للمتابعة
-              </p>
+            <div className="flex flex-col gap-8">
+              <div className="flex flex-col gap-1.5">
+                <h2 className="text-[30px] font-extrabold leading-[45px] text-frost">
+                  طريقة الدفع
+                </h2>
+                <p className="text-sm leading-[21px] text-muted">
+                  لن يُخصم أي مبلغ اليوم — تبدأ الفوترة بعد انتهاء التجربة المجانية
+                </p>
+              </div>
+
               {processing ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200 border-t-slate-900 dark:border-slate-700 dark:border-t-slate-100 mx-auto mb-4"></div>
-                  <p className="text-slate-600 dark:text-slate-400 font-medium">
-                    جاري معالجة الدفع...
-                  </p>
+                <div className="flex flex-col items-center gap-4 py-16">
+                  <Loader2 size={40} className="animate-spin text-brand-primary" />
+                  <p className="text-sm text-muted">جاري معالجة الدفع…</p>
                 </div>
               ) : (
-                <div className="max-w-md mx-auto">
-                  <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-8 border-2 border-slate-200 dark:border-slate-700 mb-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-slate-600 dark:text-slate-400">
-                        الخطة:
-                      </span>
-                      <span className="font-bold text-slate-900 dark:text-slate-100 text-xl">
-                        {formData.plan?.name || ""}
-                      </span>
+                <div className="flex flex-col gap-8 lg:flex-row-reverse lg:items-start">
+                  <div className="flex flex-1 flex-col gap-5">
+                    {/* Only ZainCash is integrated — the platform payment
+                        endpoint takes no provider and the server has just the
+                        one module — so the other three are shown as the frame
+                        has them but marked unavailable rather than faked. */}
+                    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                      {PAYMENT_METHODS.map((method) => {
+                        const selected = formData.paymentMethod === method.id;
+                        return (
+                          <button
+                            key={method.id}
+                            type="button"
+                            disabled={!method.available}
+                            onClick={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                paymentMethod: method.id,
+                              }))
+                            }
+                            aria-pressed={selected}
+                            className={`flex flex-col gap-3 rounded-[18px] border p-4 text-right transition-colors ${
+                              selected
+                                ? "border-brand-primary bg-brand-primary/5"
+                                : "border-field-line bg-field hover:border-line"
+                            } disabled:cursor-not-allowed disabled:opacity-40`}
+                          >
+                            <span className="flex items-center justify-between">
+                              <span
+                                aria-hidden
+                                className={`flex size-[18px] items-center justify-center rounded-full border ${
+                                  selected ? "border-brand-indigo" : "border-line"
+                                }`}
+                              >
+                                {selected && (
+                                  <span className="size-2.5 rounded-full bg-brand-indigo" />
+                                )}
+                              </span>
+                              <span
+                                aria-hidden
+                                className={`flex size-7 items-center justify-center rounded-md text-xs font-bold ${method.tint}`}
+                              >
+                                {method.mark}
+                              </span>
+                            </span>
+                            <span className="flex flex-col">
+                              <span className="text-sm font-bold text-frost">
+                                {method.title}
+                              </span>
+                              <span className="text-[11px] text-muted">
+                                {method.available ? method.detail : "قريباً"}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-slate-600 dark:text-slate-400">
-                        المبلغ:
-                      </span>
-                      <span className="font-bold text-slate-900 dark:text-slate-100 text-xl">
-                        {formData.plan?.monthly_price
-                          ? formData.plan.monthly_price.toLocaleString("en-IQ")
-                          : "0"}{" "}
-                        د.ع /شهرياً
-                      </span>
-                    </div>
+
+                    <p className="text-xs leading-5 text-dim">
+                      ستُحوَّل إلى صفحة زين كاش الآمنة لإتمام الدفع، ثم تعود إلى
+                      هنا تلقائياً.
+                    </p>
                   </div>
-                  <button
-                    onClick={handlePayment}
-                    disabled={!formData.plan || isInitiatingPayment || processing}
-                    className="w-full bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 hover:from-slate-800 hover:to-slate-600 dark:hover:from-slate-200 dark:hover:to-slate-400 text-white dark:text-slate-900 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                  >
-                    {paymentCompleted
-                      ? "تم الدفع بنجاح"
-                      : formData.plan?.is_free ||
-                          Number(formData.plan?.monthly_price) === 0
-                        ? "متابعة مجاناً"
-                        : `ادفع عبر زين كاش ${
-                            formData.plan?.monthly_price
-                              ? formData.plan.monthly_price.toLocaleString(
-                                  "en-IQ",
-                                )
-                              : "0"
-                          } د.ع`}
-                  </button>
+
+                  {/* Subscription summary — every figure here comes from the
+                      selected plan, so it stays true when plans change. */}
+                  <aside className="flex w-full flex-col gap-4 rounded-[18px] bg-field p-5 lg:w-[320px]">
+                    <h3 className="text-sm font-bold text-frost">ملخص الاشتراك</h3>
+
+                    <div className="flex items-center justify-between rounded-xl bg-brand-primary/8 p-3">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentStep(3)}
+                        className="text-xs font-bold text-brand-primary hover:underline"
+                      >
+                        تغيير
+                      </button>
+                      <span className="flex flex-col text-right">
+                        <span className="text-sm font-bold text-frost">
+                          {formData.plan?.name || "لم تُختر خطة"}
+                        </span>
+                        <span className="text-[11px] text-muted">
+                          فوترة شهرية · تجديد تلقائي
+                        </span>
+                      </span>
+                    </div>
+
+                    <dl className="flex flex-col gap-2 text-[13px]">
+                      <div className="flex items-center justify-between">
+                        <dd className="text-frost">{planPriceLabel} د.ع</dd>
+                        <dt className="text-muted">الاشتراك / شهر</dt>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dd className="text-mint">-{planPriceLabel} د.ع</dd>
+                        <dt className="text-muted">تجربة مجانية 14 يوماً</dt>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dd className="text-frost">0 د.ع</dd>
+                        <dt className="text-muted">الضريبة</dt>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between border-t border-white/8 pt-3">
+                        <dd className="text-xl font-bold text-frost">0 د.ع</dd>
+                        <dt className="text-sm font-bold text-frost">المستحق اليوم</dt>
+                      </div>
+                    </dl>
+
+                    <p className="rounded-xl border border-mint/25 bg-mint/8 p-3 text-[11px] leading-5 text-muted">
+                      <span className="block font-bold text-mint">
+                        أول دفعة: {firstChargeDate}
+                      </span>
+                      سنذكّرك قبل 3 أيام من انتهاء التجربة، ويمكنك الإلغاء بدون رسوم.
+                    </p>
+                  </aside>
                 </div>
               )}
+
+              <StepFooter
+                submitLabel={
+                  paymentCompleted
+                    ? "تم الدفع بنجاح"
+                    : isPlanFree
+                      ? "متابعة مجاناً"
+                      : "متابعة"
+                }
+                busy={isInitiatingPayment || processing}
+                disabled={!formData.plan}
+                onSubmit={handlePayment}
+                onBack={() => setCurrentStep(3)}
+              />
             </div>
           )}
 
           {currentStep === 5 && (
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2 text-center bg-gradient-to-r from-slate-900 to-slate-600 dark:from-slate-100 dark:to-slate-400 bg-clip-text text-transparent">
-                تخصيص موقعك
-              </h2>
-              <p className="text-slate-600 dark:text-slate-400 text-center mb-10 text-sm sm:text-base">
-                قم بتخصيص موقعك الإلكتروني
-              </p>
+            <div className="flex flex-col gap-[22px]">
+              <div className="flex flex-col gap-1.5">
+                <h2 className="text-[30px] font-extrabold leading-[45px] text-frost">
+                  خصّص متجرك
+                </h2>
+                <p className="text-sm leading-[21px] text-muted">
+                  آخر خطوة — يمكنك تغيير كل هذا لاحقاً من الإعدادات
+                </p>
+              </div>
+
               <form
                 onSubmit={handleWebsiteCustomization}
-                className="max-w-2xl mx-auto space-y-6"
+                className="flex flex-col gap-[22px]"
               >
-                {/* Store Name */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    اسم المتجر
-                  </label>
-                  <input
-                    type="text"
-                    name="storeName"
-                    value={formData.storeName}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-xl focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-300 focus:border-transparent outline-none transition-all duration-300 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                    placeholder="أدخل اسم المتجر"
-                  />
-                </div>
+                <div className="flex flex-col gap-5 sm:flex-row">
+                  <Field label="اسم المتجر" htmlFor="storeName5">
+                    <TextInput
+                      id="storeName5"
+                      name="storeName"
+                      value={formData.storeName}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="متجر البركة للأطعمة"
+                    />
+                  </Field>
 
-                {/* Website Type */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-                    نوع الموقع
-                  </label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label
-                      className={`p-6 border-2 rounded-xl cursor-pointer transition-all duration-300 ${
-                        formData.websiteType === "store"
-                          ? "border-slate-900 dark:border-slate-100 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 shadow-xl"
-                          : "border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-800"
+                  <Field
+                    label="رابط المتجر"
+                    htmlFor="domain"
+                    error={
+                      domainChecked && domainAvailable === false
+                        ? "هذا الرابط محجوز، جرّب رابطاً آخر"
+                        : undefined
+                    }
+                  >
+                    {/* The `.mel.iq` suffix is fixed chrome, not typed — the
+                        field holds only the subdomain the merchant picks. */}
+                    <div
+                      className={`flex h-[52px] w-full items-center gap-2.5 rounded-[14px] bg-field px-4 text-sm transition-colors ${
+                        domainChecked && domainAvailable
+                          ? "border-[1.5px] border-mint"
+                          : domainChecked && domainAvailable === false
+                            ? "border-[1.5px] border-[#ff5252]"
+                            : "border border-field-line focus-within:border-[1.5px] focus-within:border-brand-primary"
                       }`}
                     >
+                      {domainChecked && domainAvailable && (
+                        <span className="shrink-0 text-xs font-bold text-mint">✓ متاح</span>
+                      )}
                       <input
-                        type="radio"
-                        name="websiteType"
-                        value="store"
-                        checked={formData.websiteType === "store"}
+                        id="domain"
+                        name="domain"
+                        dir="ltr"
+                        value={formData.domain}
                         onChange={handleInputChange}
-                        className="sr-only"
+                        required
+                        placeholder="albaraka"
+                        className="min-w-0 flex-1 bg-transparent text-left text-frost placeholder:text-dim focus:outline-none"
                       />
-                      <div className="text-center">
-                        <div className="text-4xl mb-3">🛍️</div>
-                        <span className="text-lg font-semibold text-slate-900 dark:text-slate-100 block mb-2">
-                          متجر إلكتروني
+                      {formData.domainType === "subdomain" && (
+                        <span dir="ltr" className="shrink-0 font-semibold text-muted">
+                          .mel.iq
                         </span>
-                        <span className="text-sm text-slate-600 dark:text-slate-400">
-                          لبيع المنتجات
-                        </span>
-                      </div>
-                    </label>
-                    <label
-                      className={`p-6 border-2 rounded-xl cursor-pointer transition-all duration-300 ${
-                        formData.websiteType === "restaurant"
-                          ? "border-slate-900 dark:border-slate-100 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 shadow-xl"
-                          : "border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-800"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="websiteType"
-                        value="restaurant"
-                        checked={formData.websiteType === "restaurant"}
-                        onChange={handleInputChange}
-                        className="sr-only"
-                      />
-                      <div className="text-center">
-                        <div className="text-4xl mb-3">🍽️</div>
-                        <span className="text-lg font-semibold text-slate-900 dark:text-slate-100 block mb-2">
-                          منيو مطعم
-                        </span>
-                        <span className="text-sm text-slate-600 dark:text-slate-400">
-                          لعرض قوائم الطعام
-                        </span>
-                      </div>
-                    </label>
-                  </div>
+                      )}
+                    </div>
+                  </Field>
                 </div>
 
-                {/* Logo Upload */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    رفع الشعار (اختياري)
-                  </label>
-                  <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center hover:border-slate-500 dark:hover:border-slate-400 transition-colors">
-                    {formData.logo ? (
-                      <div className="space-y-4">
+                {/* Not in the frame, but the flow and the Dynadot integration
+                    both still support bringing your own domain — dropping the
+                    control would quietly remove a paid feature. */}
+                <div className="flex items-center gap-2 self-end rounded-[14px] bg-field p-1">
+                  {[
+                    { id: "subdomain", label: "نطاق فرعي مجاني" },
+                    { id: "custom", label: "نطاق خاص بك" },
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() =>
+                        handleInputChange({
+                          target: { name: "domainType", value: option.id },
+                        } as React.ChangeEvent<HTMLInputElement>)
+                      }
+                      className={`rounded-[10px] px-4 py-2 text-[13px] font-bold transition-colors ${
+                        formData.domainType === option.id
+                          ? "bg-gradient-to-l from-brand-violet to-brand-indigo text-white"
+                          : "text-muted hover:text-frost"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-2 text-right">
+                  <span className="text-[13px] font-semibold leading-5 text-muted">
+                    شعار المتجر
+                  </span>
+                  <div className="flex items-center gap-4 rounded-[18px] border border-dashed border-field-line bg-field p-4">
+                    <label
+                      htmlFor="logo-upload"
+                      className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/12 bg-white/[0.04] px-4 py-2.5 text-[13px] font-bold text-frost transition-colors hover:bg-white/[0.08]"
+                    >
+                      <Upload size={16} />
+                      رفع
+                    </label>
+                    <input
+                      id="logo-upload"
+                      type="file"
+                      accept="image/png,image/svg+xml,image/webp,image/jpeg"
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                    />
+                    <span className="flex flex-1 flex-col text-right">
+                      <span className="text-[13px] text-frost">
+                        اسحب شعارك هنا أو اضغط للرفع
+                      </span>
+                      <span className="text-[11px] text-dim">
+                        PNG / SVG / WebP · حتى 2MB · يُفضّل مربع
+                      </span>
+                    </span>
+                    {formData.logo && (
+                      <span className="relative size-14 shrink-0 overflow-hidden rounded-xl bg-white/5">
                         <img
                           src={formData.logo as string}
-                          alt="Logo preview"
-                          className="max-w-32 max-h-32 mx-auto rounded-lg"
+                          alt="شعار المتجر"
+                          className="size-full object-contain p-1"
                         />
                         <button
                           type="button"
+                          aria-label="إزالة الشعار"
                           onClick={() =>
-                            setFormData({
-                              ...formData,
-                              logo: null,
-                              logoFile: null,
-                            })
+                            setFormData((prev) => ({ ...prev, logo: null, logoFile: null }))
                           }
-                          className="text-red-600 dark:text-red-400 hover:underline text-sm"
+                          className="absolute end-0.5 top-0.5 rounded-full bg-black/70 p-0.5 text-white/80 hover:text-white"
                         >
-                          إزالة الشعار
+                          <X size={11} />
                         </button>
-                      </div>
-                    ) : (
-                      <div>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleLogoUpload}
-                          className="hidden"
-                          id="logo-upload"
-                        />
-                        <label
-                          htmlFor="logo-upload"
-                          className="cursor-pointer flex flex-col items-center"
-                        >
-                          <svg
-                            className="w-12 h-12 text-slate-400 mb-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                            />
-                          </svg>
-                          <span className="text-slate-600 dark:text-slate-400">
-                            اضغط لرفع الشعار
-                          </span>
-                          <span className="text-sm text-slate-500 dark:text-slate-500 mt-1">
-                            PNG, JPG أو SVG
-                          </span>
-                        </label>
-                      </div>
+                      </span>
                     )}
                   </div>
                 </div>
 
-                {/* Domain Selection */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-                    نوع الدومين
-                  </label>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <label
-                      className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
-                        formData.domainType === "subdomain"
-                          ? "border-slate-900 dark:border-slate-100 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900"
-                          : "border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-800"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="domainType"
-                        value="subdomain"
-                        checked={formData.domainType === "subdomain"}
-                        onChange={handleInputChange}
-                        className="sr-only"
-                      />
-                      <div className="text-center">
-                        <div className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
-                          دومين فرعي
-                        </div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400">
-                          example.mel.iq
-                        </div>
-                      </div>
-                    </label>
-                    <label
-                      className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-300 ${
-                        formData.domainType === "custom"
-                          ? "border-slate-900 dark:border-slate-100 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900"
-                          : "border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 bg-white dark:bg-slate-800"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="domainType"
-                        value="custom"
-                        checked={formData.domainType === "custom"}
-                        onChange={handleInputChange}
-                        className="sr-only"
-                      />
-                      <div className="text-center">
-                        <div className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
-                          دومين مخصص
-                        </div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400">
-                          example.com
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                      {formData.domainType === "subdomain"
-                        ? "اسم الدومين الفرعي"
-                        : "الدومين المخصص"}
-                    </label>
-                    <div className="flex">
-                      {formData.domainType === "subdomain" ? (
-                        <>
-                          <span
-                            dir="ltr"
-                            className="px-4 py-3 bg-slate-100 right-0 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-2 border-l-0 border-slate-200 dark:border-slate-700 rounded-r-xl"
-                          >
-                            .mel.iq
-                          </span>
-                          <input
-                            type="text"
-                            name="domain"
-                            value={formData.domain}
-                            onChange={handleInputChange}
-                            required
-                            className="flex-1 px-4 py-3 border-2 border-r-0 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-l-xl focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-300 focus:border-transparent outline-none transition-all duration-300 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                            placeholder="example"
-                          />
-                        </>
-                      ) : (
-                        <input
-                          type="text"
-                          name="domain"
-                          value={formData.domain}
-                          onChange={handleInputChange}
-                          required
-                          className="w-full px-4 py-3 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-xl focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-300 focus:border-transparent outline-none transition-all duration-300 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                          placeholder="example.com"
-                        />
-                      )}
-                    </div>
-                  </div>
-                  {/* Domain Availability Check */}
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      onClick={handleCheckDomainAvailability}
-                      disabled={!formData.domain || isCheckingDomain}
-                      className="w-full bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-slate-100 py-2 px-4 rounded-lg font-medium text-sm transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isCheckingDomain ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-600 border-t-transparent"></div>
-                          جاري التحقق...
-                        </span>
-                      ) : (
-                        "التحقق من توفر الدومين"
-                      )}
-                    </button>
-                  </div>
+                <div className="flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCheckDomainAvailability}
+                    disabled={!formData.domain || isCheckingDomain}
+                    className="flex h-[46px] w-full items-center justify-center gap-2 rounded-[14px] border border-white/12 bg-white/[0.04] text-[13px] font-bold text-frost transition-colors hover:bg-white/[0.08] disabled:opacity-40"
+                  >
+                    {isCheckingDomain ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      "التحقق من توفر الرابط"
+                    )}
+                  </button>
+
                   {formData.domainType === "custom" && dynadotResult && (
                     <div
-                      className={`mt-3 rounded-lg border-2 p-3 text-sm ${
+                      className={`rounded-[14px] border p-3 text-[13px] ${
                         dynadotResult.available && dynadotResult.supported
-                          ? "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
-                          : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+                          ? "border-mint/30 bg-mint/8 text-mint"
+                          : "border-amber/30 bg-amber/8 text-amber"
                       }`}
                     >
-                      <p className="font-medium" dir="ltr">
+                      <p dir="ltr" className="font-semibold">
                         {dynadotResult.domain}
                       </p>
                       {!dynadotResult.supported && (
@@ -1430,13 +1579,11 @@ function Checkout() {
                   )}
                 </div>
 
-                <button
-                  type="submit"
+                <StepFooter
+                  submitLabel="متابعة"
                   disabled={!domainChecked || domainAvailable === false}
-                  className="w-full bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 hover:from-slate-800 hover:to-slate-600 dark:hover:from-slate-200 dark:hover:to-slate-400 text-white dark:text-slate-900 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  المتابعة إلى القوالب
-                </button>
+                  onBack={() => setCurrentStep(4)}
+                />
               </form>
             </div>
           )}

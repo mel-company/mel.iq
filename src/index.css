@@ -27,6 +27,14 @@
   --color-muted: #a4b1fa;
   --color-mint: #00dfa8;
   --color-amber: #ff9b3d;
+
+  /* The auth screens' own palette: a field ground a shade above the card,
+     its resting border, and the two dimmer text tones under `muted`. */
+  --color-field: #0c1130;
+  --color-field-line: #2a3168;
+  --color-dim: #6c78b8;
+  --color-line: #4a5596;
+  --color-violet: #7d26f7;
 }
 
 @font-face {
@@ -295,10 +303,14 @@ section[id] {
     translate: 0 18px;
   }
 
+  /* `none`, not `1`: any non-`none` value of scale/translate/rotate makes the
+     element a containing block for `position: fixed` descendants, so an
+     identity `scale: 1` silently trapped every modal rendered inside a
+     revealed block — they anchored to the block instead of the viewport. */
   [data-reveal][data-reveal-in] {
     opacity: 1;
     translate: none;
-    scale: 1;
+    scale: none;
   }
 }
 

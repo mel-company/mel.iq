@@ -13,6 +13,7 @@ import {
   BookOpen01Icon as HiBookOpen,
   CheckIcon as HiCheck,
   CheckmarkCircle02Icon as HiCheckCircle,
+  ChevronDownIcon as HiChevronDown,
   ChevronLeftIcon as HiChevronLeft,
   ChevronRightIcon as HiChevronRight,
   Clock01Icon as HiClock,
@@ -52,6 +53,7 @@ import {
   Store01Icon as HiStore,
   TrashIcon as HiTrash,
   TriangleAlertIcon as HiTriangleAlert,
+  Upload03Icon as HiUpload,
   TwitterIcon as HiTwitter,
   XIcon as HiX,
   YoutubeIcon as HiYoutube,
@@ -97,6 +99,7 @@ export const ArrowUpRight = icon(HiArrowUpRight, "ArrowUpRight");
 export const BookOpen = icon(HiBookOpen, "BookOpen");
 export const Check = icon(HiCheck, "Check");
 export const CheckCircle2 = icon(HiCheckCircle, "CheckCircle2");
+export const ChevronDown = icon(HiChevronDown, "ChevronDown");
 export const ChevronLeft = icon(HiChevronLeft, "ChevronLeft");
 export const ChevronRight = icon(HiChevronRight, "ChevronRight");
 export const Clock = icon(HiClock, "Clock");
@@ -138,5 +141,6 @@ export const Star = icon(HiStar, "Star");
 export const Store = icon(HiStore, "Store");
 export const Trash2 = icon(HiTrash, "Trash2");
 export const Twitter = icon(HiTwitter, "Twitter");
+export const Upload = icon(HiUpload, "Upload");
 export const X = icon(HiX, "X");
 export const Youtube = icon(HiYoutube, "Youtube");

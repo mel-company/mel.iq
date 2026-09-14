@@ -42,15 +42,9 @@ function App() {
     <div className="min-h-screen bg-white dark:bg-black transition-colors duration-200">
       <Toaster />
       <Routes>
-        <Route
-          path="/login"
-          element={
-            <>
-              <Navbar />
-              <Login />
-            </>
-          }
-        />
+        {/* No navbar on the auth screens: the frames are standalone, and a
+            half-finished sign-in is not somewhere to offer more navigation. */}
+        <Route path="/login" element={<Login />} />
         <Route
           path="/otp"
           element={
@@ -120,15 +114,8 @@ function App() {
             </MarketingShell>
           }
         />
-        <Route
-          path="/checkout"
-          element={
-            <>
-              <Navbar />
-              <Checkout />
-            </>
-          }
-        />
+        {/* Standalone, like the other auth screens. */}
+        <Route path="/checkout" element={<Checkout />} />
         <Route
           path="/checkout/payment-return"
           element={
