@@ -1035,6 +1035,12 @@ export default function PromptComposer() {
               setError(event.message);
               setErrorCode(event.code ?? null);
               setRefunded(Boolean(event.refunded));
+              // The run is over and its credit has been returned, so the
+              // handle is no longer something to resume: the server treats a
+              // refunded generation as terminal and refuses a replay under the
+              // same id. Leaving it behind would offer the merchant a resume
+              // that can only end in that refusal.
+              clearActiveRun();
               buildTerminalRef.current = true;
               break;
           }
