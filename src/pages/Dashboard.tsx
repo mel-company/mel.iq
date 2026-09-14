@@ -19,7 +19,7 @@ import {
   Settings,
   Store as StoreIcon,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 
 // Types
 interface Store {

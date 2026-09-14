@@ -1,4 +1,4 @@
-import { Loader2, ShieldCheck, Globe, CheckCircle2 } from "lucide-react";
+import { Loader2, ShieldCheck, Globe, CheckCircle2 } from "@/components/icons";
 import type { DashboardReadyStatus } from "@/hooks/useWaitForDashboardReady";
 
 type Props = {

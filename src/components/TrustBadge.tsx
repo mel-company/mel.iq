@@ -1,49 +1,76 @@
-import { Star } from "lucide-react";
+import { Star } from "./icons";
 
+/** Exported from the Figma frame — the five faces are photographs, not avatars
+ *  we can synthesise, so they ship as assets. */
 const AVATARS = [
-  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop&crop=face",
-  "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&h=80&fit=crop&crop=face",
-  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&h=80&fit=crop&crop=face",
+  "/images/landing/avatar-1.png",
+  "/images/landing/avatar-2.png",
+  "/images/landing/avatar-3.png",
+  "/images/landing/avatar-4.png",
+  "/images/landing/avatar-5.png",
 ];
+
+const RATING = 4.5;
+
+/**
+ * A star filled to a fraction of its width.
+ *
+ * The design's fifth star is a half — drawing it as either full or empty is
+ * the difference between "4.8" being illustrated and being contradicted.
+ */
+function RatingStar({ fill }: { fill: number }) {
+  return (
+    <span className="relative inline-flex size-[18px] shrink-0">
+      <Star size={18} className="absolute inset-0 text-white/20" strokeWidth={1.5} />
+      <span
+        className="absolute inset-0 overflow-hidden"
+        // The bar grows from the left in both directions: a star is not a
+        // bidirectional glyph, and mirroring it under RTL would fill the
+        // wrong half.
+        style={{ width: `${fill * 100}%`, direction: "ltr" }}
+      >
+        <Star size={18} className="fill-amber text-amber" strokeWidth={1.5} />
+      </span>
+    </span>
+  );
+}
 
 function TrustBadge() {
   return (
     <div
+      // The pill reads left-to-right in the design — rating, then faces — so
+      // it opts out of the page's RTL flow while its caption opts back in.
       dir="ltr"
-      className="inline-flex items-center gap-3 sm:gap-5 rounded-full border border-[#3b9eff]/20 bg-gradient-to-r from-[#312e81]/90 via-[#2563eb]/85 to-[#3b82f6]/90 backdrop-blur-sm px-4 sm:px-6 py-2.5 sm:py-3 mb-8 sm:mb-10 shadow-[0_0_28px_rgba(59,130,246,0.18)]"
+      className="inline-flex items-center gap-5 rounded-full border border-white/10 py-3 pl-6 pr-3 backdrop-blur-sm sm:gap-6"
     >
-      <div className="flex items-center gap-1.5 shrink-0">
-        <div className="text-nav text-white leading-none">
-          <span className="font-bold">4.8</span>
-          <span className="font-light text-white/65"> / 5.0</span>
+      <div className="flex flex-col items-end">
+        <div className="flex items-center gap-1">
+          <p className="whitespace-nowrap leading-none text-white">
+            <span className="text-sm font-bold">4.8</span>
+            <span className="text-xs text-white/25"> / 5.0</span>
+          </p>
+          <div className="flex items-center">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <RatingStar key={i} fill={Math.min(Math.max(RATING - i, 0), 1)} />
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-0.5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Star
-              key={i}
-              size={13}
-              className={
-                i < 4
-                  ? "fill-amber-400 text-amber-400"
-                  : "fill-amber-400/30 text-amber-400/30"
-              }
-            />
-          ))}
-        </div>
+        <p dir="rtl" className="whitespace-nowrap text-sm text-white/50">
+          أكثر من <span className="font-bold text-white">500 عميل</span> يثق بنا
+        </p>
       </div>
 
-      <p dir="rtl" className="text-nav text-white/90 whitespace-nowrap hidden sm:block">
-        أكثر من <span className="font-bold text-white">500</span> عميل يثق بنا
-      </p>
-
-      <div className="flex items-center shrink-0">
+      <div className="flex shrink-0 items-center">
         {AVATARS.map((src, i) => (
           <img
             key={src}
             src={src}
             alt=""
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-[#2563eb] object-cover -ml-2.5 first:ml-0"
-            style={{ zIndex: i + 1 }}
+            width={38}
+            height={38}
+            aria-hidden
+            className="size-[38px] shrink-0 rounded-full object-cover -mr-5 last:mr-0"
+            style={{ zIndex: AVATARS.length - i }}
           />
         ))}
       </div>

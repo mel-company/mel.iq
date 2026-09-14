@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, Loader2, Sparkles, Store, PenLine, Check, ShieldCheck } from "lucide-react";
+import { X, Loader2, Sparkles, Store, PenLine, Check, ShieldCheck } from "@/components/icons";
 import { toast } from "sonner";
 import {
   useCredits,

@@ -1,353 +1,254 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, LogIn, Menu, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { LayoutDashboard, Menu, X } from "./icons";
 import { useAuth } from "../contexts/AuthContext";
+import { useScrollReveal } from "../hooks/useScrollReveal";
+import SiteFooter from "./landing/SiteFooter";
 
-const rightLinks = [
-  { label: "منصة ميل", to: "/", hash: "" },
-  { label: "المميزات", to: "/", hash: "#features" },
-  { label: "العملاء", to: "/", hash: "#customers" },
+/**
+ * The redesigned marketing chrome.
+ *
+ * The landing page is now one long page holding the features, pricing and
+ * contact blocks, so the nav items scroll to sections on `/` and fall back to
+ * navigating there first when the visitor is on another route. The standalone
+ * /pricing, /about and /contact pages still exist and still render inside
+ * this shell.
+ */
+const NAV_ITEMS = [
+  { label: "من نحن", hash: "#about" },
+  { label: "الميزات", hash: "#features" },
+  { label: "الباقات", hash: "#pricing" },
+  { label: "تواصل معنا", hash: "#contact" },
 ];
 
-const leftLinks = [
-  { label: "الباقات", to: "/pricing", hash: "" },
-  { label: "من نحن", to: "/about", hash: "" },
-  { label: "تواصل معنا", to: "/contact", hash: "", accent: true },
-];
+/** Which nav item the current scroll position belongs to. */
+const SECTION_FOR_INDEX = NAV_ITEMS.map((item) => item.hash.replace("#", ""));
 
-const allLinks = [...rightLinks, ...leftLinks];
-
-function getActiveIndex(pathname: string, hash: string): number {
-  if (pathname !== "/") {
-    const idx = leftLinks.findIndex((l) => l.to === pathname);
-    return idx >= 0 ? rightLinks.length + idx : 0;
-  }
-  if (hash === "#features") return 1;
-  if (hash === "#customers") return 2;
-  return 0;
-}
-
-type NavLinkItem = (typeof allLinks)[number] & { accent?: boolean };
-
-function SlidingIndicator({
-  activeLocalIndex,
-  linkRefs,
-  navRef,
-}: {
-  activeLocalIndex: number;
-  linkRefs: React.MutableRefObject<(HTMLAnchorElement | null)[]>;
-  navRef: React.RefObject<HTMLDivElement | null>;
-}) {
-  const [style, setStyle] = useState({ width: 0, left: 0, opacity: 0 });
-
-  const update = useCallback(() => {
-    if (activeLocalIndex < 0) {
-      setStyle((s) => ({ ...s, opacity: 0 }));
-      return;
-    }
-    const el = linkRefs.current[activeLocalIndex];
-    const nav = navRef.current;
-    if (!el || !nav) return;
-
-    const navRect = nav.getBoundingClientRect();
-    const elRect = el.getBoundingClientRect();
-    setStyle({
-      left: elRect.left - navRect.left,
-      width: elRect.width,
-      opacity: 1,
-    });
-  }, [activeLocalIndex, linkRefs, navRef]);
-
-  useLayoutEffect(() => {
-    update();
-  }, [update]);
-
-  useEffect(() => {
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, [update]);
-
-  return (
-    <div
-      className="absolute top-0 bottom-0 rounded-lg bg-[#3b9eff]/12 border border-[#3b9eff]/15 pointer-events-none transition-all duration-300 ease-out"
-      style={{
-        width: style.width,
-        left: style.left,
-        opacity: style.opacity,
-      }}
-    >
-      <div className="absolute bottom-0 inset-x-2 h-0.5 rounded-full bg-linear-to-l from-[#3b9eff] to-[#06b6d4]" />
-    </div>
-  );
-}
-
-function NavGroup({
-  links,
-  startIndex,
-  activeIndex,
-  onNavigate,
-}: {
-  links: NavLinkItem[];
-  startIndex: number;
-  activeIndex: number;
-  onNavigate: (index: number, hash: string, e: React.MouseEvent) => void;
-}) {
-  const navRef = useRef<HTMLDivElement>(null);
-  const linkRefs = useRef<(HTMLAnchorElement | null)[]>([]);
-  const localActive =
-    activeIndex >= startIndex && activeIndex < startIndex + links.length
-      ? activeIndex - startIndex
-      : -1;
-
-  return (
-    <div ref={navRef} className="relative flex items-center">
-      <SlidingIndicator
-        activeLocalIndex={localActive}
-        linkRefs={linkRefs}
-        navRef={navRef}
-      />
-      {links.map((link, i) => {
-        const globalIndex = startIndex + i;
-        const href = link.hash ? `${link.to}${link.hash}` : link.to;
-        const isActive = globalIndex === activeIndex;
-
-        return (
-          <Link
-            key={link.label}
-            ref={(el) => {
-              linkRefs.current[i] = el;
-            }}
-            to={href}
-            onClick={(e) => onNavigate(globalIndex, link.hash, e)}
-            className={`relative z-10 px-4 py-2.5 text-nav whitespace-nowrap align-middle transition-colors duration-200 ${
-              link.accent
-                ? "text-[#00c8ff] hover:text-[#33d4ff]"
-                : isActive
-                  ? "text-white"
-                  : "text-white/55 hover:text-white/85"
-            }`}
-          >
-            {link.label}
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
-
-function AuthAction({
-  variant = "inline",
-  onNavigate,
-}: {
-  variant?: "inline" | "block";
-  onNavigate?: () => void;
-}) {
+function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
   const { user, loading } = useAuth();
 
   if (loading) {
+    return <div className="h-15 w-[187px] animate-pulse rounded-[18px] bg-white/5" />;
+  }
+
+  if (user) {
     return (
-      <div
-        className={`rounded-lg bg-white/5 animate-pulse ${
-          variant === "inline" ? "h-10 w-32" : "h-10 w-full"
-        }`}
-      />
+      <Link
+        to="/dashboard"
+        onClick={onNavigate}
+        className="flex h-15 w-full items-center justify-center gap-2 rounded-[18px] border border-white/15 bg-[linear-gradient(90deg,#4f60f9_0%,#7569ff_100%)] px-4 text-base font-bold text-white transition-opacity hover:opacity-90 sm:w-[187px]"
+      >
+        <LayoutDashboard size={16} />
+        لوحة التحكم
+      </Link>
     );
   }
 
-  const isDashboard = Boolean(user);
-  const Icon = isDashboard ? LayoutDashboard : LogIn;
-
+  // Sign-in and sign-up are the same phone-OTP flow, so both land on /login;
+  // the design still shows them as two calls to action. The filled one comes
+  // first so RTL puts it on the right, where the frame has it.
   return (
-    <Link
-      to={isDashboard ? "/dashboard" : "/login"}
-      onClick={onNavigate}
-      className={`flex items-center justify-center gap-2 rounded-lg text-nav whitespace-nowrap transition-all duration-200 ${
-        variant === "inline" ? "px-4 py-2.5" : "w-full px-3 py-2.5"
-      } ${
-        isDashboard
-          ? "bg-linear-to-l from-[#3b9eff] to-[#06b6d4] text-[#060b18] font-normal shadow-lg shadow-[#3b9eff]/20 hover:shadow-[#3b9eff]/35 hover:brightness-110"
-          : "border border-[#3b9eff]/25 bg-[#3b9eff]/10 text-white/85 hover:text-white hover:bg-[#3b9eff]/20 hover:border-[#3b9eff]/45"
-      }`}
-    >
-      <Icon size={16} />
-      {isDashboard ? "لوحة التحكم" : "تسجيل الدخول"}
-    </Link>
+    <>
+      <Link
+        to="/login"
+        onClick={onNavigate}
+        className="flex h-15 w-full items-center justify-center rounded-[18px] border border-white/15 bg-[linear-gradient(90deg,#4f60f9_0%,#7569ff_100%)] px-4 text-base font-bold text-white transition-opacity hover:opacity-90 sm:w-[187px]"
+      >
+        أنشئ حساب ألان
+      </Link>
+      <Link
+        to="/login"
+        onClick={onNavigate}
+        className="flex h-15 w-full items-center justify-center rounded-[18px] border border-white/15 px-4 text-base text-white transition-colors hover:bg-white/5 sm:w-[187px]"
+      >
+        تسجيل الدخول
+      </Link>
+    </>
   );
 }
 
 function LandingNavbar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(() =>
-    getActiveIndex(location.pathname, location.hash),
-  );
+  const [activeIndex, setActiveIndex] = useState(0);
 
+  // Which section is in view, on the landing page only. Everywhere else the
+  // indicator sits on "منصة ميل", since none of the anchors are present.
   useEffect(() => {
-    setActiveIndex(getActiveIndex(location.pathname, location.hash));
-  }, [location.pathname, location.hash]);
-
-  useEffect(() => {
-    if (location.pathname !== "/") return;
-
-    const sectionMap: { id: string; index: number }[] = [
-      { id: "features", index: 1 },
-      { id: "customers", index: 2 },
-    ];
+    if (location.pathname !== "/") {
+      setActiveIndex(0);
+      return;
+    }
 
     const visible = new Set<number>();
-
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          const match = sectionMap.find((s) => s.id === entry.target.id);
-          if (!match) return;
-          if (entry.isIntersecting) visible.add(match.index);
-          else visible.delete(match.index);
+          const index = SECTION_FOR_INDEX.indexOf(entry.target.id);
+          if (index < 0) return;
+          if (entry.isIntersecting) visible.add(index);
+          else visible.delete(index);
         });
-
-        if (visible.size === 0) {
-          if (!location.hash) setActiveIndex(0);
-          return;
-        }
-
-        setActiveIndex(Math.min(...visible));
+        setActiveIndex(visible.size === 0 ? 0 : Math.min(...visible));
       },
       { rootMargin: "-40% 0px -45% 0px", threshold: 0 },
     );
 
-    sectionMap.forEach(({ id }) => {
-      const el = document.getElementById(id);
+    SECTION_FOR_INDEX.forEach((id) => {
+      const el = id && document.getElementById(id);
       if (el) observer.observe(el);
     });
 
     return () => observer.disconnect();
-  }, [location.pathname, location.hash]);
+  }, [location.pathname]);
 
-  const handleNavigate = (
-    index: number,
-    hash: string,
+  const handleNavigate = (index: number, hash: string) => (
     e: React.MouseEvent,
   ) => {
-    setActiveIndex(index);
     setMobileOpen(false);
+    setActiveIndex(index);
 
-    if (hash && location.pathname === "/") {
-      e.preventDefault();
-      document.querySelector(hash)?.scrollIntoView({ behavior: "smooth" });
-      window.history.replaceState(null, "", hash);
-    }
+    if (location.pathname !== "/") return; // let the router take us home first
+
+    e.preventDefault();
+    document.querySelector(hash)?.scrollIntoView({ behavior: "smooth" });
+    window.history.replaceState(null, "", hash);
+  };
+
+  /** The logo is the way back to the top, which no nav item covers. */
+  const handleHome = (e: React.MouseEvent) => {
+    setMobileOpen(false);
+    if (location.pathname !== "/") return;
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.history.replaceState(null, "", "/");
   };
 
   return (
-    <header className="fixed top-0 inset-x-0 z-50 bg-[#060b18]/40 backdrop-blur-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="hidden lg:grid grid-cols-[1fr_auto_1fr] items-center h-20">
-          <div aria-hidden="true" />
-
-          <div className="flex items-center justify-center">
-            <NavGroup
-              links={rightLinks}
-              startIndex={0}
-              activeIndex={activeIndex}
-              onNavigate={handleNavigate}
+    // The frame draws the bar itself as transparent, but the page scrolls a
+    // phone mockup and two card grids straight under it, which left the nav
+    // labels unreadable. The bar therefore carries the page ground at low
+    // opacity plus a blur — near-invisible over the hero, legible everywhere
+    // else.
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.06] bg-ink/60 px-4 pt-4 backdrop-blur-xl sm:px-6 lg:px-[69px]">
+      <div className="mx-auto flex max-w-[1600px] items-center justify-between">
+        {/* Desktop. RTL flow puts the first child on the right, which is where
+            the design places the nav items and the logo. */}
+        <nav className="hidden items-center gap-[38px] lg:flex">
+          <Link
+            to="/"
+            onClick={handleHome}
+            aria-label="ميل — الصفحة الرئيسية"
+            className="flex size-24 shrink-0 items-center justify-center"
+          >
+            <img
+              src="/images/landing/mel-mark.svg"
+              alt=""
+              aria-hidden
+              width={52}
+              height={52}
+              className="size-[52px]"
             />
+          </Link>
 
-            <Link to="/" className="relative mx-5 shrink-0 group">
-              <div className="absolute inset-0 rounded-full bg-[#3b9eff]/30 blur-xl scale-[2.2] opacity-80 group-hover:opacity-100 transition-opacity" />
-              <div className="relative w-[52px] h-[52px] rounded-full bg-[#0a1628] border border-white/10 flex items-center justify-center shadow-lg shadow-[#3b9eff]/25">
-                <img src="/logo.png" alt="ميل" className="h-7 w-auto" />
-              </div>
+          {NAV_ITEMS.map((item, i) => (
+            <Link
+              key={item.label}
+              to={`/${item.hash}`}
+              onClick={handleNavigate(i, item.hash)}
+              className={`text-nav flex h-14 w-28 items-center justify-center whitespace-nowrap py-2.5 transition-colors ${
+                i === activeIndex ? "text-white" : "text-white/60 hover:text-white"
+              }`}
+            >
+              {item.label}
             </Link>
+          ))}
+        </nav>
 
-            <NavGroup
-              links={leftLinks}
-              startIndex={rightLinks.length}
-              activeIndex={activeIndex}
-              onNavigate={handleNavigate}
-            />
-          </div>
-
-          <div className="flex items-center justify-end">
-            <AuthAction />
-          </div>
+        <div className="hidden items-center gap-3 lg:flex">
+          <AuthActions />
         </div>
 
-        <div className="flex lg:hidden items-center justify-between h-16">
+        {/* Mobile bar. */}
+        <div className="flex h-16 w-full items-center justify-between lg:hidden">
           <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="p-2 text-gray-300 hover:text-white"
+            type="button"
+            onClick={() => setMobileOpen((open) => !open)}
             aria-label="القائمة"
+            aria-expanded={mobileOpen}
+            className="p-2 text-white/80 transition-colors hover:text-white"
           >
             {mobileOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
-          <Link to="/" className="relative shrink-0">
-            <div className="relative w-10 h-10 rounded-full bg-[#0a1628] border border-white/10 flex items-center justify-center">
-              <img src="/logo.png" alt="ميل" className="h-5 w-auto" />
-            </div>
+          <Link
+            to="/"
+            onClick={handleHome}
+            aria-label="ميل — الصفحة الرئيسية"
+            className="shrink-0"
+          >
+            <img
+              src="/images/landing/mel-mark.svg"
+              alt=""
+              aria-hidden
+              width={36}
+              height={36}
+              className="size-9"
+            />
           </Link>
-          <AuthAction />
         </div>
-
-        {mobileOpen && (
-          <nav className="lg:hidden pb-4 flex flex-col gap-1 border-t border-white/10 pt-3">
-            {allLinks.map((link, i) => {
-              const href = link.hash ? `${link.to}${link.hash}` : link.to;
-              const isAccent = "accent" in link && link.accent;
-              return (
-                <Link
-                  key={link.label}
-                  to={href}
-                  onClick={(e) => handleNavigate(i, link.hash, e)}
-                  className={`px-3 py-2.5 text-nav rounded-lg transition-colors ${
-                    isAccent
-                      ? "text-[#00c8ff]"
-                      : i === activeIndex
-                        ? "text-white bg-[#3b9eff]/15 border border-[#3b9eff]/20"
-                        : "text-gray-400 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-            <div className="pt-2 mt-1 border-t border-white/10">
-              <AuthAction
-                variant="block"
-                onNavigate={() => setMobileOpen(false)}
-              />
-            </div>
-          </nav>
-        )}
       </div>
+
+      {mobileOpen && (
+        <nav className="mx-auto mb-4 mt-2 flex max-w-[1600px] flex-col gap-1 rounded-3xl bg-ink/80 p-4 lg:hidden">
+          {NAV_ITEMS.map((item, i) => (
+            <Link
+              key={item.label}
+              to={`/${item.hash}`}
+              onClick={handleNavigate(i, item.hash)}
+              className={`text-nav rounded-xl px-3 py-2.5 transition-colors ${
+                i === activeIndex
+                  ? "bg-white/10 text-white"
+                  : "text-white/60 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
+          <div className="mt-2 flex flex-col gap-2 border-t border-white/10 pt-3">
+            <AuthActions onNavigate={() => setMobileOpen(false)} />
+          </div>
+        </nav>
+      )}
     </header>
   );
 }
 
 export default LandingNavbar;
 
+/**
+ * The page ground shared by the landing page and the standalone marketing
+ * routes: the near-black wash, the faint grid, and the fixed navbar.
+ */
 export function MarketingShell({ children }: { children: ReactNode }) {
+  useScrollReveal();
+
   return (
-    <div className="min-h-screen bg-[#060b18] text-white font-setar font-light">
+    <div className="min-h-screen bg-ink font-setar font-light text-white">
       <div
-        className="fixed inset-0 pointer-events-none"
+        aria-hidden
+        className="pointer-events-none fixed inset-0"
         style={{
           backgroundImage: `
-            linear-gradient(rgba(59, 158, 255, 0.04) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(59, 158, 255, 0.04) 1px, transparent 1px)
+            linear-gradient(rgba(149, 158, 254, 0.025) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(149, 158, 254, 0.025) 1px, transparent 1px)
           `,
-          backgroundSize: "60px 60px",
+          backgroundSize: "109px 109px",
         }}
       />
-      <div className="fixed top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[600px] bg-[#3b9eff]/10 rounded-full blur-[140px] pointer-events-none" />
       <LandingNavbar />
-      <div className="relative pt-20">{children}</div>
+      <div className="relative pt-24 lg:pt-28">{children}</div>
+      <SiteFooter />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  ArrowUp,
+  ChevronRight,
   ImagePlus,
   Loader2,
   Mic,
@@ -8,7 +8,7 @@ import {
   Sparkle,
   Square,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
@@ -65,6 +65,21 @@ interface ReferenceImage {
   file: File;
   url: string;
 }
+
+/**
+ * The four chips under the composer.
+ *
+ * The Figma frame fills them with assistant questions ("ما المنتجات الأكثر
+ * مبيعاً؟"), but this box builds a store rather than answering questions, so
+ * they carry store descriptions instead — the affordance the design draws,
+ * pointed at what the button actually does.
+ */
+const STARTER_PROMPTS = [
+  "متجر إلكترونيات وهواتف ذكية في بغداد",
+  "متجر عبايات وأزياء نسائية بهوية أنيقة",
+  "متجر عطور ومستحضرات تجميل",
+  "متجر قرطاسية ومستلزمات مكتبية",
+];
 
 /** Same pattern the server uses to spot a Figma link in free text. */
 const FIGMA_URL =
@@ -273,6 +288,9 @@ export default function PromptComposer() {
   const attachRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const logoInput = useRef<HTMLInputElement>(null);
+  /** Focused after a starter chip fills the box, so the caret is already
+   *  where the merchant will start editing. */
+  const promptInput = useRef<HTMLTextAreaElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
@@ -521,7 +539,7 @@ export default function PromptComposer() {
           const message =
             typeof error === "object" && error && "response" in error
               ? (error as { response?: { data?: { message?: string } } }).response
-                  ?.data?.message
+                ?.data?.message
               : undefined;
           toast.error(message || "تعذر تحويل التسجيل إلى نص — حاول مرة أخرى");
         } finally {
@@ -1130,207 +1148,230 @@ export default function PromptComposer() {
 
   return (
     <div className="w-full">
-      <div className="mx-auto w-full max-w-2xl rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-right backdrop-blur-sm focus-within:border-[#00c8ff]/40 transition-colors">
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          // Focus is the earliest reliable signal that a run is coming, and it
-          // buys the seconds the mascot needs to decode. Fetched once — the
-          // browser caches it, and a repeat call is a cache hit.
-          onFocus={() => preloadMascot("design")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleGenerate();
-          }}
-          rows={3}
-          placeholder="اوصف متجرك… مثال: متجر لبيع الأجهزة الإلكترونية والهواتف الذكية في بغداد، بألوان زرقاء عصرية"
-          className="w-full resize-none bg-transparent px-3 py-2 text-white placeholder:text-white/30 focus:outline-none"
-        />
+      <div className="mx-auto w-full max-w-[791px] rounded-[32px] border border-white/5 p-3 backdrop-blur-[50px] transition-colors focus-within:border-brand-primary/25">
+        <div className="flex flex-col gap-3 rounded-3xl p-3 text-right">
+          <textarea
+            ref={promptInput}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            // Focus is the earliest reliable signal that a run is coming, and it
+            // buys the seconds the mascot needs to decode. Fetched once — the
+            // browser caches it, and a repeat call is a cache hit.
+            onFocus={() => preloadMascot("design")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleGenerate();
+            }}
+            rows={3}
+            placeholder="اوصف متجرك… مثال: متجر لبيع الأجهزة الإلكترونية والهواتف الذكية في بغداد، بألوان زرقاء عصرية"
+            className="min-h-[117px] w-full resize-none rounded-[18px] bg-white/5 p-[18px] text-white placeholder:text-[#625794] focus:outline-none"
+          />
 
-        {/* Only shown as the limit gets close — a counter on every short
+          {/* Only shown as the limit gets close — a counter on every short
             prompt is noise. */}
-        {prompt.length > PROMPT_MAX_LENGTH * 0.75 && (
-          <p
-            className={`px-3 pb-1 text-left text-xs ${prompt.length > PROMPT_MAX_LENGTH ? "text-red-400" : "text-white/35"
-              }`}
-            dir="ltr"
-          >
-            {prompt.length.toLocaleString()} / {PROMPT_MAX_LENGTH.toLocaleString()}
-          </p>
-        )}
+          {prompt.length > PROMPT_MAX_LENGTH * 0.75 && (
+            <p
+              className={`-mt-1 text-left text-xs ${prompt.length > PROMPT_MAX_LENGTH ? "text-red-400" : "text-white/35"
+                }`}
+              dir="ltr"
+            >
+              {prompt.length.toLocaleString()} / {PROMPT_MAX_LENGTH.toLocaleString()}
+            </p>
+          )}
 
-        {/* One strip for everything attached. A filename in a pill told the
+          {/* One strip for everything attached. A filename in a pill told the
             merchant nothing about which photo they had picked — the whole
             point of a reference is what it looks like. */}
-        {(images.length > 0 || logoPreview || figmaUrl) && (
-          <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
-            {logoPreview && (
-              <Attachment
-                url={logoPreview}
-                label="الشعار"
-                accent
-                onRemove={clearLogo}
-              />
-            )}
-            {images.map((image, index) => (
-              <Attachment
-                key={image.url}
-                url={image.url}
-                label={`مرجع ${index + 1}`}
-                onRemove={() => removeImage(index)}
-              />
-            ))}
-            {figmaUrl && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#00c8ff]/30 bg-[#00c8ff]/10 px-3 py-1 text-xs text-[#00c8ff]">
-                Figma
-                <button
-                  type="button"
-                  aria-label="إزالة رابط Figma"
-                  onClick={() => setPrompt((p) => p.replace(FIGMA_URL, "").trim())}
-                  className="opacity-60 hover:opacity-100"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between gap-3 px-1">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleVoiceInput}
-              disabled={voicePhase === "transcribing"}
-              aria-label={
-                voicePhase === "recording"
-                  ? "إيقاف التسجيل"
-                  : voicePhase === "transcribing"
-                    ? "جاري تحويل الصوت إلى نص"
-                    : "اكتب صوتياً"
-              }
-              aria-pressed={voicePhase === "recording"}
-              title={voicePhase === "recording" ? "إيقاف التسجيل" : "اكتب صوتياً"}
-              className={`relative rounded-full p-2 transition-colors ${
-                voicePhase === "recording"
-                  ? "bg-red-500/15 text-red-400 hover:bg-red-500/25"
-                  : "text-white/40 hover:bg-white/5 hover:text-white/80 disabled:cursor-wait"
-              }`}
-            >
-              {voicePhase === "recording" ? (
-                <Square size={16} fill="currentColor" />
-              ) : voicePhase === "transcribing" ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Mic size={18} />
+          {(images.length > 0 || logoPreview || figmaUrl) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {logoPreview && (
+                <Attachment
+                  url={logoPreview}
+                  label="الشعار"
+                  accent
+                  onRemove={clearLogo}
+                />
               )}
-              {voicePhase === "recording" && (
-                <span className="absolute inset-0 -z-10 animate-ping rounded-full bg-red-400/20" />
-              )}
-            </button>
-            <span className="sr-only" aria-live="polite">
-              {voicePhase === "recording"
-                ? "جاري التسجيل"
-                : voicePhase === "transcribing"
-                  ? "جاري تحويل الصوت إلى نص"
-                  : ""}
-            </span>
-            <div className="relative" ref={attachRef}>
-              <button
-                type="button"
-                onClick={() => setAttachOpen((open) => !open)}
-                aria-haspopup="menu"
-                aria-expanded={attachOpen}
-                aria-label="إرفاق"
-                title="إرفاق"
-                className={`rounded-full p-2 transition-colors hover:bg-white/5 ${attachOpen || images.length || logo
-                  ? "text-[#00c8ff]"
-                  : "text-white/40 hover:text-white/80"
-                  }`}
-              >
-                <Paperclip size={18} />
-              </button>
-
-              {attachOpen && (
-                <div
-                  role="menu"
-                  aria-label="نوع المرفق"
-                  className="absolute bottom-full start-0 z-20 mb-2 w-64 overflow-hidden rounded-2xl border border-white/10 bg-[#241f56] p-1 shadow-2xl"
-                >
-                  <AttachOption
-                    icon={<ImagePlus size={16} />}
-                    title="صور مرجعية"
-                    hint={
-                      images.length
-                        ? `${images.length} من ${MAX_IMAGES} — يحاكي المتجر تصميمها`
-                        : `حتى ${MAX_IMAGES} صور يحاكي المتجر تصميمها`
-                    }
-                    disabled={images.length >= MAX_IMAGES}
-                    onSelect={() => {
-                      setAttachOpen(false);
-                      fileInput.current?.click();
-                    }}
-                  />
-                  <AttachOption
-                    icon={<Sparkle size={16} />}
-                    title="شعار المتجر"
-                    hint={logo ? "استبدال الشعار الحالي" : "صورة واحدة تُستخدم كشعار"}
-                    onSelect={() => {
-                      setAttachOpen(false);
-                      logoInput.current?.click();
-                    }}
-                  />
-                </div>
+              {images.map((image, index) => (
+                <Attachment
+                  key={image.url}
+                  url={image.url}
+                  label={`مرجع ${index + 1}`}
+                  onRemove={() => removeImage(index)}
+                />
+              ))}
+              {figmaUrl && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#00c8ff]/30 bg-[#00c8ff]/10 px-3 py-1 text-xs text-[#00c8ff]">
+                  Figma
+                  <button
+                    type="button"
+                    aria-label="إزالة رابط Figma"
+                    onClick={() => setPrompt((p) => p.replace(FIGMA_URL, "").trim())}
+                    className="opacity-60 hover:opacity-100"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
               )}
             </div>
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/*"
-              multiple
-              hidden
-              onChange={(e) => {
-                handleFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
-            <input
-              ref={logoInput}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => {
-                handleLogo(e.target.files);
-                e.target.value = "";
-              }}
-            />
-            <CreditsBadge />
-          </div>
+          )}
 
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={
-              phase !== "idle" ||
-              voicePhase !== "idle" ||
-              (Boolean(user) && creditsLoading) ||
-              prompt.trim().length < PROMPT_MIN_LENGTH ||
-              prompt.length > PROMPT_MAX_LENGTH
-            }
-            className="inline-flex items-center gap-2 rounded-full bg-[#00c8ff] px-6 py-2.5 font-medium text-white shadow-[0_0_30px_rgba(0,200,255,0.35)] transition-colors hover:bg-[#33d4ff] disabled:opacity-40 disabled:shadow-none"
-          >
-            {busy ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <ArrowUp size={16} />
-            )}
-            أنشئ متجري
-          </button>
+          {/* The tool row. In the RTL flow the first child sits on the right,
+            which is where the design puts the icon buttons, and
+            `justify-between` pushes the submit button to the left. */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1">
+
+              <button
+                type="button"
+                onClick={toggleVoiceInput}
+                disabled={voicePhase === "transcribing"}
+                aria-label={
+                  voicePhase === "recording"
+                    ? "إيقاف التسجيل"
+                    : voicePhase === "transcribing"
+                      ? "جاري تحويل الصوت إلى نص"
+                      : "اكتب صوتياً"
+                }
+                aria-pressed={voicePhase === "recording"}
+                title={voicePhase === "recording" ? "إيقاف التسجيل" : "اكتب صوتياً"}
+                className={`relative flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors ${voicePhase === "recording"
+                  ? "bg-red-500/15 text-red-400 hover:bg-red-500/25"
+                  : "text-white hover:bg-white/5 disabled:cursor-wait"
+                  }`}
+              >
+                {voicePhase === "recording" ? (
+                  <Square size={16} fill="currentColor" />
+                ) : voicePhase === "transcribing" ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <Mic size={18} />
+                )}
+                {voicePhase === "recording" && (
+                  <span className="absolute inset-0 -z-10 animate-ping rounded-full bg-red-400/20" />
+                )}
+              </button>
+              <span className="sr-only" aria-live="polite">
+                {voicePhase === "recording"
+                  ? "جاري التسجيل"
+                  : voicePhase === "transcribing"
+                    ? "جاري تحويل الصوت إلى نص"
+                    : ""}
+              </span>
+              <div className="relative" ref={attachRef}>
+                <button
+                  type="button"
+                  onClick={() => setAttachOpen((open) => !open)}
+                  aria-haspopup="menu"
+                  aria-expanded={attachOpen}
+                  aria-label="إرفاق"
+                  title="إرفاق"
+                  className={`flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-white/5 ${attachOpen || images.length || logo
+                    ? "text-brand-primary"
+                    : "text-white"
+                    }`}
+                >
+                  <Paperclip size={18} />
+                </button>
+
+                {attachOpen && (
+                  <div
+                    role="menu"
+                    aria-label="نوع المرفق"
+                    className="absolute bottom-full start-0 z-20 mb-2 w-64 overflow-hidden rounded-2xl border border-white/10 bg-[#241f56] p-1 shadow-2xl"
+                  >
+                    <AttachOption
+                      icon={<ImagePlus size={16} />}
+                      title="صور مرجعية"
+                      hint={
+                        images.length
+                          ? `${images.length} من ${MAX_IMAGES} — يحاكي المتجر تصميمها`
+                          : `حتى ${MAX_IMAGES} صور يحاكي المتجر تصميمها`
+                      }
+                      disabled={images.length >= MAX_IMAGES}
+                      onSelect={() => {
+                        setAttachOpen(false);
+                        fileInput.current?.click();
+                      }}
+                    />
+                    <AttachOption
+                      icon={<Sparkle size={16} />}
+                      title="شعار المتجر"
+                      hint={logo ? "استبدال الشعار الحالي" : "صورة واحدة تُستخدم كشعار"}
+                      onSelect={() => {
+                        setAttachOpen(false);
+                        logoInput.current?.click();
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={(e) => {
+                  handleFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <input
+                ref={logoInput}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => {
+                  handleLogo(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <CreditsBadge />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={
+                phase !== "idle" ||
+                voicePhase !== "idle" ||
+                (Boolean(user) && creditsLoading) ||
+                prompt.trim().length < PROMPT_MIN_LENGTH ||
+                prompt.length > PROMPT_MAX_LENGTH
+              }
+              className="inline-flex cursor-pointer py-2.5 shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-l from-brand-violet to-brand-indigo ps-3 pe-4 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              <span className="flex size-7 items-center justify-center rounded-full bg-white/20">
+                {busy ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <ChevronRight size={16} />
+                )}
+              </span>
+              أنشئ متجري
+            </button>
+          </div>
         </div>
       </div>
 
-      <p className="mt-3 text-center text-xs text-white/30">
-        اكتب وصف متجرك أو استخدم الميكروفون، وأرفق صوراً أو شعارك عند الحاجة
-      </p>
+      {/* Starter prompts. The design shows four chips under the composer; they
+          fill the box rather than submit, because the merchant still wants to
+          edit the description before spending a credit on it. */}
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+        {STARTER_PROMPTS.map((starter) => (
+          <button
+            key={starter}
+            type="button"
+            onClick={() => {
+              setPrompt(starter);
+              promptInput.current?.focus();
+            }}
+            className="rounded-xl border border-white/15 px-4 py-2.5 text-xs text-white transition-colors hover:border-white/25 hover:bg-white/5"
+          >
+            {starter}
+          </button>
+        ))}
+      </div>
 
       <AuthModal
         open={authOpen}

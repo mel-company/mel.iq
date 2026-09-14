@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, ExternalLink, Copy, X } from "lucide-react";
+import { CheckCircle2, ExternalLink, Copy, X } from "@/components/icons";
 import { toast } from "sonner";
 import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
 import StoreProvisioningGate from "@/components/StoreProvisioningGate";

@@ -36,7 +36,7 @@ import {
   LayoutGrid,
   Share2,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import { toast } from "sonner";
 
 type ManageTab = "overview" | "domain" | "subscription" | "social";

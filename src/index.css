@@ -3,6 +3,30 @@
 
 @theme {
   --font-setar: "Setar XS", "Cairo", ui-sans-serif, sans-serif;
+
+  /* Palette from the Landing page Figma file's own variables, plus the
+     literal fills the redesign uses for grounds and card chrome. */
+  --color-brand-primary: #33c5ff;
+  --color-brand-secondary: #b282ff;
+  --color-brand-indigo: #4f60f9;
+  --color-brand-violet: #7569ff;
+  /* Page ground. `ink-raised` is the hero's deeper indigo, `ink-panel` the
+     flat ground the FAQ rows and pricing cards sit on. */
+  --color-ink: #03010f;
+  --color-ink-raised: #0a0e27;
+  --color-ink-panel: #05011a;
+  --color-slate: #1f2448;
+  --color-eyebrow: #959efe;
+  --color-prose: #b9a6d4;
+  /* Named for the values, not the slots they fill: a `--color-card-title`
+     would make Tailwind emit a `.text-card-title` that collides with the
+     typography class of the same name defined below. */
+  --color-frost: #f4f7ff;
+  --color-ash: #94969d;
+  --color-hairline: #1d1d20;
+  --color-muted: #a4b1fa;
+  --color-mint: #00dfa8;
+  --color-amber: #ff9b3d;
 }
 
 @font-face {
@@ -58,43 +82,75 @@ body {
   box-sizing: border-box;
 }
 
-/* Typography — hero tagline gradient */
-.text-hero-tagline {
-  font-family: var(--font-setar);
-  font-weight: 600;
-  font-size: clamp(1.25rem, 3vw, 2rem);
-  line-height: 1.4;
-  letter-spacing: 0;
-  background: linear-gradient(to left, #a855f7, #06b6d4, #22d3ee);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-}
-
-.text-hero-sub {
-  font-family: var(--font-setar);
-  font-weight: 300;
-  font-size: clamp(0.95rem, 2vw, 1.125rem);
-  line-height: 1.75;
-  letter-spacing: 0;
-  color: rgba(255, 255, 255, 0.55);
-  text-align: center;
-}
-
-.text-hero-cta {
-  font-family: var(--font-setar);
-  font-weight: 600;
-  font-size: 1.125rem;
-  line-height: 1.5;
-}
-
-.text-hero-title {
+/* Typography scale of the landing redesign.
+ *
+ * The Figma file sets its headings in Thmanyah Sans, which the project does
+ * not license; Setar XS is kept as the single family and the designed weights
+ * are mapped onto it so the hierarchy survives the substitution.
+ */
+.text-display {
   font-family: var(--font-setar);
   font-weight: 700;
-  color: #ffffff;
+  font-size: clamp(2.125rem, 5vw, 4rem);
+  line-height: 1.2;
   letter-spacing: 0;
-  text-align: center;
+  color: #ffffff;
+}
+
+.text-section-title {
+  font-family: var(--font-setar);
+  font-weight: 700;
+  font-size: clamp(1.75rem, 3.6vw, 3rem);
+  line-height: 1.25;
+  letter-spacing: 0;
+  color: #ffffff;
+}
+
+/* Hero subtitle and section ledes — 24px/38px in the file. */
+.text-lede {
+  font-family: var(--font-setar);
+  font-weight: 300;
+  font-size: clamp(1rem, 1.6vw, 1.5rem);
+  line-height: 1.6;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* The long-form paragraphs under an eyebrow — 24px/48px, violet-tinted. */
+.text-prose-lg {
+  font-family: var(--font-setar);
+  font-weight: 300;
+  font-size: clamp(1rem, 1.6vw, 1.5rem);
+  line-height: 2;
+  letter-spacing: 0;
+  color: var(--color-prose);
+}
+
+.text-eyebrow-label {
+  font-family: var(--font-setar);
+  font-weight: 400;
+  font-size: clamp(1.05rem, 1.6vw, 1.5rem);
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--color-eyebrow);
+}
+
+.text-card-title {
+  font-family: var(--font-setar);
+  font-weight: 700;
+  font-size: clamp(1.0625rem, 1.4vw, 1.27rem);
+  line-height: 1.6;
+  letter-spacing: 0;
+  color: #ffffff;
+}
+
+.text-card-body {
+  font-family: var(--font-setar);
+  font-weight: 300;
+  font-size: clamp(0.9375rem, 1.2vw, 1.125rem);
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--color-ash);
 }
 
 .text-nav {
@@ -137,6 +193,14 @@ body {
   }
 }
 
+/* The marketing navbar is fixed, so a section reached through a nav anchor
+ * has to stop below it — otherwise its heading lands underneath the bar. The
+ * sections carrying an id are exactly the landing page's anchor targets.
+ */
+section[id] {
+  scroll-margin-top: 7.5rem;
+}
+
 .no-scrollbar {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
@@ -144,4 +208,200 @@ body {
 
 .no-scrollbar::-webkit-scrollbar {
   display: none !important;
+}
+
+/* Continuously scrolling rails: the partner logo strip under the hero, the
+ * brand-icon tickers inside the first benefit card, and the product decks.
+ *
+ * The track holds the content twice over, so translating it by exactly -50%
+ * lands on a copy identical to the starting frame and the loop is seamless.
+ * The mask reproduces the alpha mask the Figma frame carries, which is what
+ * keeps logos from popping in at a hard edge.
+ */
+@keyframes marquee-rtl {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes marquee-ltr {
+  from {
+    transform: translateX(-50%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-rtl 40s linear infinite;
+}
+
+.marquee-track-reverse {
+  animation-name: marquee-ltr;
+}
+
+/* Pausing on hover is what makes a scrolling product deck readable. */
+.marquee-host:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Scroll reveal
+ *
+ * `useScrollReveal` stamps `data-reveal-in` on an element once it enters the
+ * viewport; everything else is here.
+ *
+ * The *hiding* half sits behind `no-preference` on purpose. Gating the reveal
+ * the other way round — hiding always, then opting out under `reduce` — means
+ * any failure of the observer leaves the page blank; this way the worst case
+ * is a page that simply appears, already visible.
+ *
+ * Motion is carried by the standalone `translate`/`scale` properties rather
+ * than `transform`, so a hover lift (which uses `transform`) composes with a
+ * reveal on the same element instead of fighting it.
+ * ------------------------------------------------------------------------ */
+@media (prefers-reduced-motion: no-preference) {
+  [data-reveal] {
+    opacity: 0;
+    translate: 0 26px;
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0ms),
+      translate 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0ms),
+      scale 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0ms);
+  }
+
+  /* For imagery: rises and settles out of a slight shrink. */
+  [data-reveal="zoom"] {
+    scale: 0.96;
+    translate: 0 18px;
+  }
+
+  [data-reveal][data-reveal-in] {
+    opacity: 1;
+    translate: none;
+    scale: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Hover
+ * ------------------------------------------------------------------------ */
+
+/* A card that answers the pointer. `transform` is used here so the lift
+ * composes with a reveal's `translate` instead of overwriting it. */
+.card-hover {
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease,
+    border-color 0.35s ease;
+}
+
+@media (hover: hover) {
+  .card-hover:hover {
+    box-shadow: 0 12px 55px -24px rgba(88, 52, 233, 0.6);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Ambient loops — the hero mockup and the blooms behind the copy. Slow and
+ * low-amplitude by design: this is background texture, not an attraction.
+ * ------------------------------------------------------------------------ */
+@keyframes drift-y {
+
+  0%,
+  100% {
+    translate: 0 0;
+  }
+
+  50% {
+    translate: 0 -14px;
+  }
+}
+
+@keyframes bloom-drift {
+
+  0%,
+  100% {
+    translate: 0 0;
+    scale: 1;
+  }
+
+  50% {
+    translate: 3% -4%;
+    scale: 1.09;
+  }
+}
+
+.animate-drift {
+  animation: drift-y 7s ease-in-out infinite;
+}
+
+.animate-bloom {
+  animation: bloom-drift 19s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------------------
+ * A disclosure that opens to its content's height.
+ *
+ * `grid-template-rows: 0fr -> 1fr` is the one way to transition to an
+ * auto height without measuring it in JS; the inner element supplies the
+ * `overflow: hidden` the collapse needs.
+ * ------------------------------------------------------------------------ */
+.disclosure {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.disclosure[data-open] {
+  grid-template-rows: 1fr;
+}
+
+/* `visibility` as well as the clip, because a zero-height row still exposes
+ * its text to a screen reader and to find-in-page. It is a discrete property,
+ * so it is held visible for the length of the collapse and only then hidden. */
+.disclosure>* {
+  overflow: hidden;
+  visibility: hidden;
+  transition: visibility 0s linear 0.35s;
+}
+
+.disclosure[data-open]>* {
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .animate-drift,
+  .animate-bloom {
+    animation: none;
+  }
+
+  .card-hover:hover {
+    transform: none;
+  }
+
+  .disclosure {
+    transition: none;
+  }
 }

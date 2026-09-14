@@ -2,7 +2,7 @@ import { ChangeEvent, FormEvent, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import iqFlag from "@/assets/icon/iq.png";
-import { ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon } from "@/components/icons";
 import { toast } from "sonner";
 import { useLogin } from "@/api/wrappers/auth.wrappers";
 import { getApiErrorMessage } from "@/utils/otp";

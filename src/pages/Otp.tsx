@@ -8,7 +8,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
-import { ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon } from "@/components/icons";
 import { getApiErrorMessage } from "@/utils/otp";
 
 function OTPVerification() {

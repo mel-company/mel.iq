@@ -10,7 +10,7 @@ import {
   Rocket,
   Sparkles,
   X,
-} from "lucide-react";
+} from "../icons";
 import type {
   DesignAnswers,
   DesignQuestion,

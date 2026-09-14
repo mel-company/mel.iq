@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles } from "@/components/icons";
 import { useCredits } from "@/api/wrappers/aiStoreGenerator.wrappers";
 import { useAuth } from "@/contexts/AuthContext";
 import BuyCreditsModal from "./BuyCreditsModal";

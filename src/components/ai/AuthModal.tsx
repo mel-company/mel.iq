@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2 } from "@/components/icons";
 import { usePhoneOtpAuth } from "@/hooks/usePhoneOtpAuth";
 import {
   InputOTP,
