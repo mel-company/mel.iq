@@ -299,10 +299,14 @@ export default function PromptComposer() {
   const [buildConfirmed, setBuildConfirmed] = useState(false);
   /**
    * The resumed run had died: `RUNNING`, but abandoned long enough that the
-   * server counts it as takeable. Restarting it is a second charge, because
-   * the credit the dead run consumed is never refunded — nothing reaches the
-   * refund path when the process simply disappears — so the panel says so
-   * rather than spending it quietly.
+   * server counts it as takeable.
+   *
+   * Continuing it costs nothing. The credit was charged against this
+   * generation's id, and the server now records that debit durably and keyed
+   * on it, so the takeover finds the existing receipt and takes no second
+   * credit. This used to be a real second charge — unrefunded, because a
+   * process that simply disappears never reaches the refund path — and the
+   * panel disclosed it; the disclosure came out with the defect.
    */
   const [stalled, setStalled] = useState(false);
   const [visitedQuestions, setVisitedQuestions] = useState<Set<string>>(
