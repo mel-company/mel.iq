@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import ModalPortal from "./ModalPortal";
-import { X, Loader2 } from "@/components/icons";
+import { AlertCircle, X, Loader2 } from "@/components/icons";
 import { usePhoneOtpAuth } from "@/hooks/usePhoneOtpAuth";
+import {
+  IQ_LOCAL_PHONE_LENGTH,
+  formatIqPhone,
+  iqPhoneError,
+  toLocalDigits,
+} from "@/utils/phone";
 import {
   InputOTP,
   InputOTPGroup,
@@ -39,13 +45,26 @@ export default function AuthModal({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  /**
+   * Format complaints stay quiet until the field is left with something in it,
+   * or submitted — the field is autofocused, so blurring an empty one is just
+   * the merchant clicking elsewhere, not a mistake worth flagging.
+   */
+  const [phoneTouched, setPhoneTouched] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  const phoneError = iqPhoneError(localPhone);
+  const showPhoneError =
+    (phoneTouched ||
+      toLocalDigits(localPhone).length >= IQ_LOCAL_PHONE_LENGTH) &&
+    phoneError;
 
   useEffect(() => {
     if (open) return;
     // Reset only on close so a re-open starts clean.
     auth.reset();
     setCode("");
+    setPhoneTouched(false);
   }, [open]);
 
   useEffect(() => {
@@ -61,6 +80,10 @@ export default function AuthModal({
   if (!open) return null;
 
   const submitPhone = async () => {
+    // The button stays live on a bad number so the merchant is told what is
+    // wrong rather than left prodding a dead control.
+    setPhoneTouched(true);
+    if (phoneError) return;
     try {
       await auth.requestCode(localPhone);
     } catch {
@@ -113,7 +136,7 @@ export default function AuthModal({
           <p className="text-sm text-white/50 mb-6 text-center">
             {auth.step === "phone" && "سجّل الدخول لنبدأ بإنشاء متجرك"}
             {auth.step === "register" && "لا يوجد حساب بهذا الرقم — أكمل بياناتك"}
-            {auth.step === "otp" && `أرسلنا رمزاً إلى ${auth.phone}`}
+            {auth.step === "otp" && `أرسلنا رمزاً إلى ${formatIqPhone(auth.phone)}`}
           </p>
 
           {auth.error && (
@@ -138,20 +161,41 @@ export default function AuthModal({
                     inputMode="numeric"
                     autoFocus
                     value={localPhone}
-                    onChange={(e) =>
-                      setLocalPhone(e.target.value.replace(/\D/g, ""))
-                    }
+                    maxLength={IQ_LOCAL_PHONE_LENGTH + 1}
+                    onChange={(e) => {
+                      setLocalPhone(e.target.value.replace(/\D/g, ""));
+                      auth.setError("");
+                    }}
+                    onBlur={() => localPhone && setPhoneTouched(true)}
                     onKeyDown={(e) => e.key === "Enter" && submitPhone()}
                     placeholder="7XX XXX XXXX"
-                    className="w-full rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-white placeholder:text-white/25 focus:outline-none focus:border-[#00c8ff]/60"
+                    aria-invalid={Boolean(showPhoneError)}
+                    aria-describedby={showPhoneError ? "ai-phone-error" : undefined}
+                    className={`w-full rounded-lg bg-white/5 border px-4 py-3 text-white placeholder:text-white/25 focus:outline-none ${
+                      showPhoneError
+                        ? "border-red-500/60"
+                        : phoneError
+                          ? "border-white/10 focus:border-[#00c8ff]/60"
+                          : "border-emerald-400/50"
+                    }`}
                   />
                 </div>
+                {showPhoneError && (
+                  <p
+                    id="ai-phone-error"
+                    role="alert"
+                    className="mt-2 flex items-center gap-1.5 text-xs text-red-300"
+                  >
+                    <AlertCircle size={13} className="shrink-0" />
+                    {phoneError}
+                  </p>
+                )}
               </div>
 
               <button
                 type="button"
                 onClick={submitPhone}
-                disabled={auth.busy || localPhone.length < 10}
+                disabled={auth.busy}
                 className="w-full rounded-full bg-[#00c8ff] py-3 font-medium text-white transition-colors hover:bg-[#33d4ff] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {auth.busy && <Loader2 size={16} className="animate-spin" />}
@@ -180,6 +224,28 @@ export default function AuthModal({
 
           {auth.step === "register" && (
             <div className="space-y-4">
+              {/* The number is the account's identity and the only thing the
+                  OTP can reach, so it is shown here rather than left implicit
+                  two steps back — with a way to correct a typo. */}
+              <div>
+                <span className="block text-sm text-white/70 mb-2">رقم الهاتف</span>
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                  <span dir="ltr" className="text-white">
+                    {formatIqPhone(auth.phone)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhoneTouched(false);
+                      auth.setError("");
+                      auth.setStep("phone");
+                    }}
+                    className="shrink-0 text-sm font-medium text-[#00c8ff] hover:underline"
+                  >
+                    تغيير
+                  </button>
+                </div>
+              </div>
               <div>
                 <label htmlFor="ai-name" className="block text-sm text-white/70 mb-2">
                   الاسم الكامل

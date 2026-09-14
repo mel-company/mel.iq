@@ -5,6 +5,7 @@ import { useLogin, useValidateUser, useVerify } from "@/api/wrappers/auth.wrappe
 import { useAuth } from "@/contexts/AuthContext";
 import { ArrowRightIcon, Loader2 } from "@/components/icons";
 import { getApiErrorMessage } from "@/utils/otp";
+import { formatIqPhone } from "@/utils/phone";
 import AuthShell from "@/components/auth/AuthShell";
 import OtpInputs from "@/components/auth/OtpInputs";
 
@@ -27,19 +28,6 @@ function formatCountdown(total: number): string {
   return `${mm}:${ss}`;
 }
 
-/**
- * "+9647701234567" -> "+964 770 123 4567", the grouping the frame shows.
- *
- * Anything that isn't a full Iraqi mobile is returned as-is rather than
- * mangled into the wrong shape.
- */
-function formatPhone(e164: string): string {
-  if (!e164) return "—";
-  const local = e164.replace(/^\+?964/, "");
-  if (local.length !== 10) return e164;
-  return `+964 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`;
-}
-
 function OTPVerification() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -55,7 +43,7 @@ function OTPVerification() {
   const storeFromQuery =
     new URLSearchParams(window.location.search).get("store")?.trim() || "";
   const storeSlug = storeFromState || storeFromQuery;
-  const maskedPhone = formatPhone(phone);
+  const maskedPhone = formatIqPhone(phone);
 
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");

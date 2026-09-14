@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { authAPI } from "@/api/endpoints/auth.endpoints";
 import { useAuth } from "@/contexts/AuthContext";
 import { extractDevOtp, getApiErrorMessage, showDevOtpToast } from "@/utils/otp";
+import { iqPhoneError, toIqE164 } from "@/utils/phone";
 
 /**
  * Phone + OTP authentication, decoupled from any particular screen.
@@ -17,17 +17,6 @@ import { extractDevOtp, getApiErrorMessage, showDevOtpToast } from "@/utils/otp"
  */
 
 export type AuthStep = "phone" | "register" | "otp";
-
-/** Normalizes local input to E.164, or null when it isn't a valid Iraqi mobile. */
-export function toE164(localPhone: string): string | null {
-  const digits = localPhone.replace(/\D/g, "");
-  if (!digits) return null;
-  const parsed = parsePhoneNumberFromString(
-    digits.startsWith("964") ? `+${digits}` : `+964${digits}`,
-    "IQ",
-  );
-  return parsed?.isValid() ? parsed.number : null;
-}
 
 const isNoAccountError = (error: unknown): boolean => {
   const err = error as { response?: { status?: number } };
@@ -59,9 +48,9 @@ export function usePhoneOtpAuth() {
   const requestCode = useCallback(
     async (localPhone: string): Promise<"sent" | "needs-registration"> => {
       setError("");
-      const e164 = toE164(localPhone);
+      const e164 = toIqE164(localPhone);
       if (!e164) {
-        setError("رقم غير صحيح. يرجى إدخال رقم عراقي صالح.");
+        setError(iqPhoneError(localPhone));
         throw new Error("invalid-phone");
       }
 

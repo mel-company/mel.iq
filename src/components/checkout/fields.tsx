@@ -1,5 +1,6 @@
 import type { ReactNode, SelectHTMLAttributes, InputHTMLAttributes } from "react";
 import { AlertCircle, ChevronDown, Loader2 } from "@/components/icons";
+import { IQ_LOCAL_PHONE_LENGTH } from "@/utils/phone";
 
 /**
  * The checkout wizard's form primitives, in the auth screens' dark language:
@@ -125,12 +126,14 @@ export function PhoneInput({
         </span>
         <span aria-hidden className="h-[22px] w-px bg-field-line" />
       </span>
+      {/* The cap allows one extra digit so "0770…" can be typed in full and
+          normalized on submit, rather than being truncated at the keystroke. */}
       <input
+        maxLength={IQ_LOCAL_PHONE_LENGTH + 1}
         {...props}
         type="tel"
         dir="ltr"
         inputMode="numeric"
-        maxLength={10}
         className="min-w-0 flex-1 bg-transparent text-right text-frost placeholder:text-dim focus:outline-none"
       />
     </div>

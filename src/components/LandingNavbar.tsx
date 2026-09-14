@@ -131,11 +131,11 @@ function LandingNavbar() {
     // labels unreadable. The bar therefore carries the page ground at low
     // opacity plus a blur — near-invisible over the hero, legible everywhere
     // else.
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.06] bg-ink/60 px-4 pt-4 backdrop-blur-xl sm:px-6 lg:px-[69px]">
-      <div className="mx-auto flex max-w-[1600px] items-center justify-between">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/6 bg-ink/60 px-4 backdrop-blur-xl sm:px-6 lg:px-17.25">
+      <div className="mx-auto flex max-w-400 items-center justify-between">
         {/* Desktop. RTL flow puts the first child on the right, which is where
             the design places the nav items and the logo. */}
-        <nav className="hidden items-center gap-[38px] lg:flex">
+        <nav className="hidden items-center gap-9.5 lg:flex">
           <Link
             to="/"
             onClick={handleHome}
@@ -157,9 +157,8 @@ function LandingNavbar() {
               key={item.label}
               to={`/${item.hash}`}
               onClick={handleNavigate(i, item.hash)}
-              className={`text-nav flex h-14 w-28 items-center justify-center whitespace-nowrap py-2.5 transition-colors ${
-                i === activeIndex ? "text-white" : "text-white/60 hover:text-white"
-              }`}
+              className={`text-nav flex h-14 w-28 items-center justify-center whitespace-nowrap py-2.5 transition-colors ${i === activeIndex ? "text-white" : "text-white/60 hover:text-white"
+                }`}
             >
               {item.label}
             </Link>
@@ -200,17 +199,16 @@ function LandingNavbar() {
       </div>
 
       {mobileOpen && (
-        <nav className="mx-auto mb-4 mt-2 flex max-w-[1600px] flex-col gap-1 rounded-3xl bg-ink/80 p-4 lg:hidden">
+        <nav className="mx-auto mb-4 mt-2 flex max-w-400 flex-col gap-1 rounded-3xl bg-ink/80 p-4 lg:hidden">
           {NAV_ITEMS.map((item, i) => (
             <Link
               key={item.label}
               to={`/${item.hash}`}
               onClick={handleNavigate(i, item.hash)}
-              className={`text-nav rounded-xl px-3 py-2.5 transition-colors ${
-                i === activeIndex
-                  ? "bg-white/10 text-white"
-                  : "text-white/60 hover:bg-white/5 hover:text-white"
-              }`}
+              className={`text-nav rounded-xl px-3 py-2.5 transition-colors ${i === activeIndex
+                ? "bg-white/10 text-white"
+                : "text-white/60 hover:bg-white/5 hover:text-white"
+                }`}
             >
               {item.label}
             </Link>

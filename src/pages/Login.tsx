@@ -1,54 +1,69 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { toast } from "sonner";
 import { AlertCircle, Loader2 } from "@/components/icons";
 import { useLogin } from "@/api/wrappers/auth.wrappers";
 import { getApiErrorMessage } from "@/utils/otp";
+import {
+  IQ_LOCAL_PHONE_LENGTH,
+  iqPhoneError,
+  toIqE164,
+  toLocalDigits,
+} from "@/utils/phone";
 import AuthShell from "@/components/auth/AuthShell";
 import BrandPanel from "@/components/auth/BrandPanel";
-
-/** Local part of an Iraqi mobile number, without the +964. */
-const LOCAL_PHONE_MAX = 10;
 
 function Login() {
   const navigate = useNavigate();
   const [phone, setPhone] = useState("");
   const [accepted, setAccepted] = useState(true);
-  const [error, setError] = useState("");
-  const [isValid, setIsValid] = useState(false);
+  /** Server-side failures, which outlive a keystroke unlike the format check. */
+  const [apiError, setApiError] = useState("");
+  /**
+   * Format complaints stay quiet until the field is left with something in it,
+   * or submitted — tabbing past an empty field is not a mistake worth flagging.
+   */
+  const [touched, setTouched] = useState(false);
   const { mutate: login, isPending } = useLogin();
 
-  useEffect(() => {
-    const parsed = parsePhoneNumberFromString(`+964${phone}`, "IQ");
-    setIsValid(Boolean(parsed?.isValid()));
-  }, [phone]);
+  const formatError = iqPhoneError(phone);
+  const isValid = !formatError;
+  const error =
+    apiError ||
+    (touched || toLocalDigits(phone).length >= IQ_LOCAL_PHONE_LENGTH
+      ? formatError
+      : "");
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     setPhone(e.target.value.replace(/\D/g, ""));
-    setError("");
+    setApiError("");
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (isPending || !isValid || !accepted) return;
+    if (isPending) return;
 
-    const parsed = parsePhoneNumberFromString(`+964${phone}`, "IQ");
-    if (!parsed?.isValid()) {
-      setError("رقم غير صحيح. يرجى إدخال رقم عراقي صالح.");
+    // Validate on submit too: the button stays clickable so the merchant gets
+    // told what is wrong instead of meeting a greyed-out button.
+    setTouched(true);
+    const e164 = toIqE164(phone);
+    if (!e164) return;
+
+    if (!accepted) {
+      setApiError("يرجى الموافقة على الشروط والأحكام للمتابعة.");
       return;
     }
 
-    setError("");
+    setApiError("");
     login(
-      { phone: parsed.number },
+      { phone: e164 },
       {
         onSuccess: (data) => {
           if (data?.message) toast.success(data.message);
-          navigate("/otp", { state: { phone: parsed.number } });
+          navigate("/otp", { state: { phone: e164 } });
         },
         onError: (err) => {
-          setError(
+          setApiError(
             getApiErrorMessage(
               err,
               "حدث خطأ أثناء إرسال رمز التحقق. يرجى المحاولة مرة أخرى.",
@@ -86,7 +101,11 @@ function Login() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex w-full flex-col gap-[22px]">
+            <form
+              onSubmit={handleSubmit}
+              noValidate
+              className="flex w-full flex-col gap-[22px]"
+            >
               <div className="flex flex-col gap-2">
                 <label htmlFor="phone" className="text-[13px] font-semibold text-muted">
                   رقم الهاتف
@@ -97,7 +116,9 @@ function Login() {
                   className={`flex h-[52px] w-full items-center gap-2.5 rounded-[14px] bg-field px-4 transition-colors ${
                     error
                       ? "border-[1.5px] border-[#ff5252]"
-                      : "border-[1.5px] border-field-line focus-within:border-brand-primary"
+                      : isValid
+                        ? "border-[1.5px] border-mint"
+                        : "border-[1.5px] border-field-line focus-within:border-brand-primary"
                   }`}
                 >
                   <span className="flex shrink-0 items-center gap-2">
@@ -117,16 +138,23 @@ function Login() {
                     autoComplete="tel-national"
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    maxLength={LOCAL_PHONE_MAX}
+                    maxLength={IQ_LOCAL_PHONE_LENGTH + 1}
                     required
                     value={phone}
                     onChange={handleChange}
+                    onBlur={() => phone && setTouched(true)}
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error ? "phone-error" : undefined}
                     placeholder="7XX XXX XXXX"
                     className="min-w-0 flex-1 bg-transparent text-right text-sm text-frost placeholder:text-dim focus:outline-none"
                   />
                 </div>
                 {error && (
-                  <p className="flex items-center gap-1.5 text-xs text-[#ff5252]">
+                  <p
+                    id="phone-error"
+                    role="alert"
+                    className="flex items-center gap-1.5 text-xs text-[#ff5252]"
+                  >
                     <AlertCircle size={13} className="shrink-0" />
                     {error}
                   </p>
@@ -137,7 +165,10 @@ function Login() {
                 <input
                   type="checkbox"
                   checked={accepted}
-                  onChange={(e) => setAccepted(e.target.checked)}
+                  onChange={(e) => {
+                    setAccepted(e.target.checked);
+                    if (e.target.checked) setApiError("");
+                  }}
                   className="peer sr-only"
                 />
                 <span
@@ -155,7 +186,7 @@ function Login() {
 
               <button
                 type="submit"
-                disabled={isPending || !isValid || !accepted}
+                disabled={isPending}
                 className="flex h-[52px] w-full items-center justify-center gap-2.5 rounded-[14px] bg-gradient-to-l from-brand-violet to-brand-indigo px-5 text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 {isPending ? (

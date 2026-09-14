@@ -21,11 +21,16 @@ import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 import { useInitPlatformPayment } from "@/api/wrappers/platform-payment.wrapper";
 import { CHECKOUT_DRAFT_KEY, LAST_PAYMENT_ID_KEY } from "@/pages/CheckoutPaymentReturn";
 import { toast } from "sonner";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
 import {
   getApiErrorMessage,
   isPhoneTakenError,
 } from "@/utils/otp";
+import {
+  formatIqPhone,
+  iqPhoneError,
+  toIqE164,
+  toLocalDigits,
+} from "@/utils/phone";
 import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
 import StoreProvisioningGate from "@/components/StoreProvisioningGate";
 import { Loader2, Upload, X } from "@/components/icons";
@@ -34,6 +39,7 @@ import OtpInputs from "@/components/auth/OtpInputs";
 import {
   CheckBox,
   Field,
+  type FieldState,
   PhoneInput,
   SelectInput,
   StepFooter,
@@ -92,30 +98,6 @@ function planFeatures(plan: any): string[] {
     .filter(Boolean);
 }
 
-/** Normalize Iraqi mobile input to E.164 (+964…) for the API. */
-function normalizeToIqE164(input: string): string | null {
-  const raw = input.trim().replace(/\s/g, "");
-  if (!raw) return null;
-
-  let parsed = parsePhoneNumberFromString(raw, "IQ");
-  if (parsed?.isValid()) return parsed.number;
-
-  const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("964") && digits.length >= 12) {
-    parsed = parsePhoneNumberFromString(`+${digits}`, "IQ");
-    if (parsed?.isValid()) return parsed.number;
-  }
-  if (digits.length === 10) {
-    parsed = parsePhoneNumberFromString(`+964${digits}`, "IQ");
-    if (parsed?.isValid()) return parsed.number;
-  }
-  if (digits.length === 11 && digits.startsWith("0")) {
-    parsed = parsePhoneNumberFromString(`+964${digits.slice(1)}`, "IQ");
-    if (parsed?.isValid()) return parsed.number;
-  }
-  return null;
-}
-
 /** Phone used for OTP (logged-in user object or checkout form), always IQ E.164 when possible. */
 function resolveOtpPhone(user: unknown, formPhone: string): string | null {
   const u = user as {
@@ -134,7 +116,7 @@ function resolveOtpPhone(user: unknown, formPhone: string): string | null {
 
   for (const raw of candidates) {
     if (raw == null || String(raw).trim() === "") continue;
-    const normalized = normalizeToIqE164(String(raw));
+    const normalized = toIqE164(String(raw));
     if (normalized) return normalized;
   }
   return null;
@@ -216,6 +198,11 @@ function Checkout() {
 
   const [otpSent, setOtpSent] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(true);
+  /**
+   * Account-step fields the merchant has already left (or tried to submit), so
+   * a half-typed number isn't scolded on its first keystroke.
+   */
+  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
   /** Drives the success pill the frame shows once the code checks out. */
   const [otpVerified, setOtpVerified] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(
@@ -323,6 +310,54 @@ function Checkout() {
   // and failed states.
   // Widened to cover the account step's two <select>s as well as its inputs —
   // they all just write their `name` into formData.
+  /**
+   * The account step's own checks.
+   *
+   * `/auth/register` is the first thing that ever looked at these, so a typo in
+   * the number came back as a server error — or worse, succeeded and sent the
+   * code to someone else's phone. They are validated here, in place, instead.
+   */
+  const EMAIL_RE = /^\S+@\S+\.\S+$/;
+  const accountPhone = user ? resolveOtpPhone(user, "") : null;
+  /**
+   * What the phone field shows: the digits as typed, so a leading 0 does not
+   * disappear under the cursor — unless the value is one this flow normalized
+   * (`proceedToOtpStep` stores E.164), which reads back as the local number.
+   */
+  const localPhone = /^(\+|964)/.test(formData.phone)
+    ? toLocalDigits(formData.phone)
+    : formData.phone;
+  const phoneError = iqPhoneError(formData.phone);
+  const nameError =
+    formData.name.trim().length >= 2 ? "" : "يرجى إدخال الاسم الكامل (حرفان على الأقل).";
+  const emailError = EMAIL_RE.test(formData.email.trim())
+    ? ""
+    : "يرجى إدخال بريد إلكتروني صالح.";
+
+  const markTouched = (field: string) =>
+    setTouchedFields((prev) => ({ ...prev, [field]: true }));
+
+  /** Leaving a field only counts as "touched" once something is in it. */
+  const blurHandler = (field: string, value: string) => () => {
+    if (value.trim()) markTouched(field);
+  };
+
+  /** An error is only shown once the field has been left or submitted. */
+  const errorFor = (field: string, message: string): string | undefined =>
+    message && touchedFields[field] ? message : undefined;
+
+  const stateFor = (field: string, message: string): FieldState =>
+    errorFor(field, message) ? "error" : message ? "default" : "valid";
+
+  const handlePhoneChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      phone: e.target.value.replace(/\D/g, ""),
+    }));
+  };
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
@@ -477,7 +512,7 @@ function Checkout() {
     // If user is logged in, just proceed to OTP step
     if (user) {
       // Send OTP for logged in user
-      const phone = resolveOtpPhone(user, formData.phone);
+      const phone = accountPhone || toIqE164(formData.phone);
       if (phone) {
         sendOtpMutation(
           { phone },
@@ -497,19 +532,19 @@ function Checkout() {
           },
         );
       } else {
-        toast.error("لم يُعثر على رقم هاتف صالح في حسابك");
+        markTouched("phone");
+        toast.error(
+          "لم يُعثر على رقم هاتف صالح في حسابك. أدخل رقمك للمتابعة.",
+        );
       }
     } else {
       // If user is not logged in, register then send OTP (same flow as login)
-      if (formData.name && formData.email && formData.phone) {
-        const phoneE164 = normalizeToIqE164(formData.phone);
-        if (!phoneE164) {
-          toast.error(
-            "رقم الجوال غير صحيح. أدخل رقم عراقي صالح (مثال: 7xx xxx xxxx).",
-          );
-          return;
-        }
+      // Every field is checked here rather than at the API: the message lands
+      // under the field that is wrong, and no OTP goes to a mistyped number.
+      setTouchedFields({ name: true, email: true, phone: true });
+      const phoneE164 = toIqE164(formData.phone);
 
+      if (!nameError && !emailError && phoneE164) {
         registerMutation(
           {
             phone: phoneE164,
@@ -538,7 +573,7 @@ function Checkout() {
           },
         );
       } else {
-        toast.error("الرجاء إدخال جميع المعلومات المطلوبة");
+        toast.error("الرجاء تصحيح الحقول المعلَّمة بالأحمر قبل المتابعة.");
       }
     }
   };
@@ -896,55 +931,107 @@ function Checkout() {
               </div>
 
               {user ? (
-                <StepFooter
-                  submitLabel="المتابعة إلى التحقق"
-                  busy={isSendingOtp}
-                  onSubmit={() => {
-                    const phone = resolveOtpPhone(user, formData.phone);
-                    if (!phone) {
-                      toast.error(
-                        "لم يُعثر على رقم هاتف صالح في حسابك. تواصل مع الدعم.",
+                /* Signed in, so the only thing this step still needs is the
+                   number the code goes to — shown rather than assumed, and
+                   typed in when the account carries no usable one. */
+                <div className="flex flex-col gap-[22px]">
+                  <div className="flex flex-col gap-5 sm:flex-row">
+                    <Field
+                      label="رقم الهاتف"
+                      htmlFor="account-phone"
+                      hint={
+                        accountPhone ? "سنرسل رمز التحقق إلى هذا الرقم" : undefined
+                      }
+                      error={accountPhone ? undefined : errorFor("phone", phoneError)}
+                    >
+                      {accountPhone ? (
+                        <div
+                          id="account-phone"
+                          dir="ltr"
+                          className="flex h-[52px] w-full items-center rounded-[14px] border-[1.5px] border-mint bg-field px-4 text-sm text-frost"
+                        >
+                          {formatIqPhone(accountPhone)}
+                        </div>
+                      ) : (
+                        <PhoneInput
+                          id="account-phone"
+                          name="phone"
+                          value={localPhone}
+                          onChange={handlePhoneChange}
+                          onBlur={blurHandler("phone", formData.phone)}
+                          autoComplete="tel-national"
+                          placeholder="7XX XXX XXXX"
+                          state={stateFor("phone", phoneError)}
+                        />
+                      )}
+                    </Field>
+                    <span className="hidden flex-1 sm:block" />
+                  </div>
+
+                  <StepFooter
+                    submitLabel="المتابعة إلى التحقق"
+                    busy={isSendingOtp}
+                    onSubmit={() => {
+                      const phone = accountPhone || toIqE164(formData.phone);
+                      if (!phone) {
+                        markTouched("phone");
+                        toast.error(
+                          "لم يُعثر على رقم هاتف صالح في حسابك. أدخل رقمك للمتابعة.",
+                        );
+                        return;
+                      }
+                      sendOtpMutation(
+                        { phone },
+                        {
+                          onSuccess: () => {
+                            setFormData((prev) => ({ ...prev, phone, otp: "" }));
+                            setOtpSent(true);
+                            setCurrentStep(2);
+                          },
+                          onError: (error) => {
+                            toast.error(
+                              getApiErrorMessage(
+                                error,
+                                "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
+                              ),
+                            );
+                          },
+                        },
                       );
-                      return;
-                    }
-                    sendOtpMutation(
-                      { phone },
-                      {
-                        onSuccess: () => {
-                          setFormData((prev) => ({ ...prev, phone, otp: "" }));
-                          setOtpSent(true);
-                          setCurrentStep(2);
-                        },
-                        onError: (error) => {
-                          toast.error(
-                            getApiErrorMessage(
-                              error,
-                              "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
-                            ),
-                          );
-                        },
-                      },
-                    );
-                  }}
-                />
+                    }}
+                  />
+                </div>
               ) : (
-                <form onSubmit={handleStep1Submit} className="flex flex-col gap-[22px]">
+                <form
+                  onSubmit={handleStep1Submit}
+                  noValidate
+                  className="flex flex-col gap-[22px]"
+                >
                   {/* Two per row on desktop; RTL puts the first field on the
                       right, which is the order the frame reads in. */}
                   <div className="flex flex-col gap-5 sm:flex-row">
-                    <Field label="الاسم الكامل" htmlFor="name">
+                    <Field
+                      label="الاسم الكامل"
+                      htmlFor="name"
+                      error={errorFor("name", nameError)}
+                    >
                       <TextInput
                         id="name"
                         name="name"
                         value={formData.name}
                         onChange={handleInputChange}
+                        onBlur={blurHandler("name", formData.name)}
                         required
                         autoComplete="name"
                         placeholder="محمد علي يوسف"
-                        state={formData.name.trim().length >= 2 ? "valid" : "default"}
+                        state={stateFor("name", nameError)}
                       />
                     </Field>
-                    <Field label="البريد الإلكتروني" htmlFor="email">
+                    <Field
+                      label="البريد الإلكتروني"
+                      htmlFor="email"
+                      error={errorFor("email", emailError)}
+                    >
                       <TextInput
                         id="email"
                         name="email"
@@ -952,9 +1039,11 @@ function Checkout() {
                         dir="ltr"
                         value={formData.email}
                         onChange={handleInputChange}
+                        onBlur={blurHandler("email", formData.email)}
                         required
                         autoComplete="email"
                         placeholder="you@store.iq"
+                        state={stateFor("email", emailError)}
                       />
                     </Field>
                   </div>
@@ -964,15 +1053,18 @@ function Checkout() {
                       label="رقم الهاتف"
                       htmlFor="phone"
                       hint="سنرسل رمز التحقق إلى هذا الرقم"
+                      error={errorFor("phone", phoneError)}
                     >
                       <PhoneInput
                         id="phone"
                         name="phone"
-                        value={formData.phone}
-                        onChange={handleInputChange}
+                        value={localPhone}
+                        onChange={handlePhoneChange}
+                        onBlur={blurHandler("phone", formData.phone)}
                         required
                         autoComplete="tel-national"
                         placeholder="7XX XXX XXXX"
+                        state={stateFor("phone", phoneError)}
                       />
                     </Field>
                     <Field label="اسم المتجر" htmlFor="storeName">
@@ -1059,7 +1151,7 @@ function Checkout() {
                 <p className="flex flex-wrap items-center justify-center gap-1.5 text-sm leading-[21px] text-muted">
                   أرسلنا رمزاً من {CHECKOUT_OTP_LENGTH} أرقام إلى
                   <span dir="ltr" className="font-semibold text-frost">
-                    {formData.phone || "—"}
+                    {formatIqPhone(formData.phone)}
                   </span>
                   <button
                     type="button"
