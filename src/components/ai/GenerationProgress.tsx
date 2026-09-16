@@ -12,10 +12,12 @@ import {
   Sparkles,
   X,
 } from "../icons";
-import type {
-  DesignAnswers,
-  DesignQuestion,
-  FailureCode,
+import {
+  aiStoreGeneratorAPI,
+  type DesignAnswers,
+  type DesignQuestion,
+  type FailureCode,
+  type QuestionOption,
 } from "../../api/endpoints/aiStoreGenerator.endpoints";
 
 /**
@@ -1065,6 +1067,234 @@ function ProgressRing({
 }
 
 /**
+ * The colour question, as colours.
+ *
+ * Three things went wrong here in order, and the third is the one worth
+ * recording. It began as a list of radio rows with three 20px chips on each —
+ * the same shape as every other question and the wrong shape for this one,
+ * because a colour is not a label to read. The correction overshot into cards
+ * big enough to show a miniature of the store, which took more of the panel
+ * than the question they answered.
+ *
+ * Both of those were size problems. The third was not: hard-edged stripes
+ * inside an 8px-radius box with a hairline border is a colour picker from
+ * fifteen years ago, and it sat inside a product built out of 28px radii,
+ * gradient fills, translucent surfaces and soft glows. It matched nothing
+ * around it.
+ *
+ * So the swatch is built from the platform's own vocabulary — `index.css`:
+ *
+ *  - the primary and the accent as **two triangles split on one diagonal**,
+ *    rather than stripes. A blend between them would be a third colour the
+ *    store never paints; a hard edge shows two colours and says they are two.
+ *    The same angle on every swatch, so a row of four reads as one set.
+ *  - `rounded-2xl`, in the family of the `[32px]` composer and the `[28px]`
+ *    modal it lives in, rather than the `rounded-lg` of a generic dark theme.
+ *  - selection as a **ring plus outer glow** in `--color-brand-primary`, which
+ *    is the treatment this modal already gives its own active step node — and
+ *    the brand's real cyan, not the `#00c8ff` that had been hand-typed near it.
+ *  - a hover lift, matching `.card-hover`.
+ *
+ * The ground the store is painted on is deliberately **not** shown, though it
+ * was for a while. `derivePalette` mixes 2% of the primary into a light ground
+ * and 12% into a dark one, so across a whole row of palettes it produced
+ * `#FDFBFB`, `#FAFBFC`, `#FEFCFB`, `#FBFCFC` — five whites nobody can tell
+ * apart. And light-versus-dark is its own question, so every tile in the row
+ * shares one mode by construction and the dot was identical on all of them. It
+ * distinguished nothing between the options it sat on, while reading like a
+ * status badge, and its halo existed only to rescue it from a dark swatch —
+ * effort spent making a non-signal visible. The `surfaceColor` still travels
+ * on the option; nothing here draws it.
+ */
+function PaletteRow({
+  options,
+  chosen,
+  onAnswer,
+  labelledBy,
+}: {
+  options: QuestionOption[];
+  chosen: string[];
+  onAnswer: (value: string) => void;
+  labelledBy: string;
+}) {
+  const customOption = options.find((option) => option.custom);
+  const answer = chosen[0] ?? "";
+  const isCustom = answer.startsWith("custom:");
+
+  /**
+   * The colours in the picker.
+   *
+   * Read out of the answer when there is one, so returning to this question
+   * shows what was chosen rather than resetting; seeded from the recommended
+   * palette otherwise, so the wheel opens on the store's current colours
+   * instead of an arbitrary hex.
+   */
+  const [customPrimary, customSecondary] = isCustom
+    ? answer.split(":").slice(1)
+    : [
+      customOption?.palette?.primaryColor ?? "#4272FF",
+      customOption?.palette?.secondaryColor ?? "#4272FF",
+    ];
+
+  const setCustom = (primary: string, secondary: string) =>
+    onAnswer(`custom:${primary}:${secondary}`);
+
+  // A row of fixed-size swatches, not a four-column grid.
+  //
+  // The grid stretched each one to a quarter of whatever it was given, which on
+  // the modal's own 672px is a 150px square — the colour question taking more
+  // room than every other question put together, and taking it because of the
+  // container rather than because it needed it. A swatch has a size at which it
+  // can be judged, and past that the extra pixels say nothing.
+  return (
+    <>
+      <div
+        className="flex flex-wrap gap-3"
+        role="radiogroup"
+        aria-labelledby={labelledBy}
+      >
+        {options.map((option) => {
+          const active = option.custom ? isCustom : answer === option.value;
+          // The custom tile shows what the merchant picked once they have
+          // picked; until then it shows the wheel, not a colour it does not have.
+          const palette = option.custom
+            ? isCustom
+              ? { ...option.palette!, primaryColor: customPrimary, secondaryColor: customSecondary }
+              : undefined
+            : option.palette;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              // The swatch is decoration to a screen reader; the name below is
+              // the accessible label, and a gradient cannot be read aloud.
+              aria-label={option.label}
+              onClick={() =>
+                option.custom
+                  ? setCustom(customPrimary, customSecondary)
+                  : onAnswer(option.value)
+              }
+              className="group w-20 text-center outline-none"
+            >
+              <span
+                className={`relative aspect-8/6 block w-full rounded-xl transition-all duration-300 motion-reduce:transition-none ${active
+                  ? "ring-2 ring-brand-primary shadow-[0_0_0_4px_rgba(51,197,255,0.10),0_0_24px_-6px_rgba(51,197,255,0.75)]"
+                  : "ring-1 ring-white/10 group-hover:-translate-y-0.5 group-hover:ring-white/30 group-focus-visible:ring-white/40"
+                  }`}
+                style={{
+                  // The unpicked custom tile wears a colour wheel — the one
+                  // universally understood sign for "choose your own" — rather
+                  // than a made-up pair of colours the merchant never chose.
+                  ...(palette
+                    ? {}
+                    : {
+                      backgroundImage:
+                        "conic-gradient(#ff4d4d, #ffd24d, #4dff88, #4dd2ff, #7d4dff, #ff4dd2, #ff4d4d)",
+                    }),
+                  // `to bottom left` rather than an angle in degrees. On the
+                  // square the two coincide at 45°, but the keyword is the one
+                  // that stays correct: it puts the 50% line through the other
+                  // two corners whatever the box turns out to be, so these are
+                  // triangles by construction rather than by the grid happening
+                  // to divide evenly. A fixed `135deg` cuts trapezoids the
+                  // moment a swatch is not square.
+                  //
+                  // The primary takes the top-right half, which is where the eye
+                  // enters in Arabic.
+                  ...(palette
+                    ? {
+                      backgroundImage:
+                        `linear-gradient(to bottom left, ${palette.primaryColor} 0%, ${palette.primaryColor} 50%, ` +
+                        `${palette.secondaryColor} 50%, ${palette.secondaryColor} 100%)`,
+                    }
+                    : {}),
+                }}
+                aria-hidden="true"
+              >
+              </span>
+              {/* Wrapped rather than truncated: the swatch is now narrower than
+                the names it carries, and "ألوان المرج…" identifies nothing. */}
+              <span
+                className={`mt-2 line-clamp-2 block text-[10px] leading-tight transition-colors motion-reduce:transition-none ${active ? "text-white" : "text-white/45 group-hover:text-white/75"
+                  }`}
+              >
+                {option.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Only once the tile is chosen. Two wheels permanently under the row
+          would make a question four people in five answer with one tap look
+          like a form. */}
+      {isCustom && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <ColorField
+            label="اللون الأساسي"
+            value={customPrimary}
+            onChange={(next) => setCustom(next, customSecondary)}
+          />
+          <ColorField
+            label="اللون الثانوي"
+            value={customSecondary}
+            onChange={(next) => setCustom(customPrimary, next)}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * One colour, picked with the platform's own picker.
+ *
+ * `input[type=color]` rather than a hand-built wheel: it is the control every
+ * merchant already knows, it is the one their phone opens full-screen with a
+ * dropper and recent colours, and a bespoke one would be a worse version of it
+ * in every respect except looking like ours. The native chrome is hidden and
+ * the swatch is drawn in the product's own vocabulary.
+ */
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="relative flex min-h-11 flex-1 cursor-pointer items-center gap-2.5 rounded-[14px] bg-white/5 px-3 py-2 ring-1 ring-white/10 transition-colors hover:bg-white/[0.07] hover:ring-white/25 focus-within:ring-brand-primary/50">
+      <span
+        className="h-6 w-6 shrink-0 rounded-lg ring-1 ring-white/25"
+        style={{ backgroundColor: value }}
+      />
+      <span className="min-w-0 flex-1 truncate text-[11px] text-white/60">
+        {label}
+      </span>
+      <span className="shrink-0 font-mono text-[10px] uppercase text-white/35" dir="ltr">
+        {value}
+      </span>
+      {/* Covering the field rather than `sr-only`: the browser anchors its
+          picker to the input's own box, so a 1px one in the corner opens the
+          wheel somewhere the merchant did not click. Transparent, full size,
+          and still the real control — so the keyboard and the phone's
+          full-screen picker both behave exactly as they would anywhere else. */}
+      <input
+        type="color"
+        value={value}
+        onChange={(event) => onChange(event.target.value.toUpperCase())}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        aria-label={label}
+      />
+    </label>
+  );
+}
+
+/**
  * One decision, asked while the store is being designed.
  *
  * Single-answer questions advance on tap: there is no value in making someone
@@ -1095,6 +1325,12 @@ function QuestionStep({
   designReady: boolean;
 }) {
   const multi = question.kind === "multi";
+  // A colour question is answered by looking, not by reading. Detected off the
+  // options rather than off the question's id, so the server stays free to
+  // ask a second one without the client having to learn its name.
+  const palette =
+    question.options.length > 0 &&
+    question.options.every((option) => option.palette);
 
   return (
     <div className="mb-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:p-4">
@@ -1129,41 +1365,50 @@ function QuestionStep({
         <p className="mb-3 text-xs text-white/45">يمكنك اختيار أكثر من إجابة، ثم اضغط التالي. اتركها فارغة لاستخدام توصيتنا.</p>
       )}
 
-      <div
-        className="space-y-2"
-        role={multi ? "group" : "radiogroup"}
-        aria-labelledby={`question-heading-${index}`}
-      >
-        {question.options.map((option) => {
-          const active = chosen.includes(option.value);
-          return (
-            <button
-              key={option.value}
-              type="button"
-              role={multi ? "checkbox" : "radio"}
-              onClick={() => onAnswer(option.value)}
-              aria-checked={active}
-              className={`flex min-h-11 w-full items-center gap-3 rounded-xl border px-4 py-2.5 text-start text-sm transition motion-reduce:transition-none ${active
-                ? "border-[#00c8ff] bg-[#00c8ff]/15 text-white"
-                : "border-white/12 text-white/70 hover:border-white/30 hover:bg-white/5 hover:text-white"
-                }`}
-            >
-              <span
-                className={`flex h-4 w-4 shrink-0 items-center justify-center border transition motion-reduce:transition-none ${multi ? "rounded" : "rounded-full"
-                  } ${active ? "border-[#00c8ff] bg-[#00c8ff]" : "border-white/25"}`}
+      {palette ? (
+        <PaletteRow
+          options={question.options}
+          chosen={chosen}
+          onAnswer={onAnswer}
+          labelledBy={`question-heading-${index}`}
+        />
+      ) : (
+        <div
+          className="space-y-2"
+          role={multi ? "group" : "radiogroup"}
+          aria-labelledby={`question-heading-${index}`}
+        >
+          {question.options.map((option) => {
+            const active = chosen.includes(option.value);
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role={multi ? "checkbox" : "radio"}
+                onClick={() => onAnswer(option.value)}
+                aria-checked={active}
+                className={`flex min-h-11 w-full items-center gap-3 rounded-xl border px-4 py-2.5 text-start text-sm transition motion-reduce:transition-none ${active
+                  ? "border-[#00c8ff] bg-[#00c8ff]/15 text-white"
+                  : "border-white/12 text-white/70 hover:border-white/30 hover:bg-white/5 hover:text-white"
+                  }`}
               >
-                {active && <Check size={11} className="text-[#0b0f19]" />}
-              </span>
-              <span className="min-w-0 flex-1">{option.label}</span>
-              {option.recommended && (
-                <span className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/45">
-                  موصى به
+                <span
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center border transition motion-reduce:transition-none ${multi ? "rounded" : "rounded-full"
+                    } ${active ? "border-[#00c8ff] bg-[#00c8ff]" : "border-white/25"}`}
+                >
+                  {active && <Check size={11} className="text-[#0b0f19]" />}
                 </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+                <span className="min-w-0 flex-1">{option.label}</span>
+                {option.recommended && (
+                  <span className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/45">
+                    موصى به
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {(multi || revisited) && (

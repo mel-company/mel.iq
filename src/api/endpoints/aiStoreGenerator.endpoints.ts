@@ -47,6 +47,26 @@ export interface QuestionOption {
   label: string;
   /** Pre-selected, so skipping the questions still answers them. */
   recommended?: boolean;
+  /**
+   * The colours this option stands for, when it is a palette.
+   *
+   * Present only on the colour question. The server derives `surfaceColor`
+   * from the primary, so the three chips together are the page the merchant
+   * would actually get — not a decorative approximation of it.
+   */
+  palette?: {
+    primaryColor: string;
+    secondaryColor: string;
+    surfaceColor: string;
+  };
+  /**
+   * The merchant's own colours, rather than one of ours.
+   *
+   * Its answer is `custom:#RRGGBB:#RRGGBB` — the colours ride on the value
+   * because they do not exist when the question is written. `palette` here is
+   * only the seed the picker opens on.
+   */
+  custom?: true;
 }
 
 export interface DesignQuestion {
@@ -164,8 +184,24 @@ export interface GenerateParams {
    * Uploaded through the same references endpoint as the design references —
    * it is one more image on R2 — but kept separate in the payload because it
    * is a brand asset, not something to design from.
+   *
+   * The composer no longer sends this: it asks for the whole brand kit below,
+   * and the server works out which of those images is the mark. Kept for API
+   * clients that have only a logo, where it still wins outright.
    */
   logoUrl?: string;
+  /**
+   * Images from the merchant's brand kit, as R2 urls.
+   *
+   * Read once per run for colours, typefaces, voice, art direction and what
+   * the business sells — all of which reach the foundation, so the kit shapes
+   * the store's name and brief and not only its swatches. A kit and not a logo
+   * because a logo settles exactly one thing.
+   *
+   * Distinct from `referenceImages`, which are screens to reproduce: a palette
+   * page sent as a reference would be transcribed as a layout.
+   */
+  brandKitImages?: string[];
   /**
    * What the merchant answered, keyed by question id.
    *

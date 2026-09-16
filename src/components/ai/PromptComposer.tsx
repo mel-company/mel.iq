@@ -58,7 +58,39 @@ const DRAFT_KEY = "ai-store-prompt-draft";
  *  typing rather than arriving as a 400 after a submit. */
 const PROMPT_MAX_LENGTH = 8000;
 const PROMPT_MIN_LENGTH = 10;
+/**
+ * The questions this wizard can actually put in front of someone.
+ *
+ * The server filters these too, and this is the second half of the same guard
+ * rather than a duplicate of it. Questions are persisted on the generation row
+ * and a row outlives the code that wrote it, so a proposal made before a deploy
+ * can carry a question the pipeline has since stopped asking. It arrives as a
+ * kind with no branch here and no options under it, and renders as a heading
+ * with nothing beneath — a card the merchant cannot answer, counted towards
+ * "6 of 6", reachable only by going back.
+ *
+ * Filtered where the questions enter rather than where they are drawn, because
+ * `questionIndex` counts them: dropping one at render time would leave the
+ * index pointing at a different question than the dots say.
+ */
+const answerable = (questions: unknown): DesignQuestion[] =>
+  (Array.isArray(questions) ? questions : []).filter(
+    (question): question is DesignQuestion =>
+      !!question &&
+      typeof question.id === "string" &&
+      Array.isArray(question.options) &&
+      question.options.length > 0,
+  );
+
 const MAX_IMAGES = 3;
+/**
+ * Brand-kit pages accepted.
+ *
+ * What the references endpoint takes in one call, and what one vision call can
+ * carry as image parts. A kit is usually a logo, a palette page and a type
+ * page, which is exactly three.
+ */
+const MAX_BRAND_KIT = 3;
 /** Downscaled before upload — a phone photo is megabytes of no extra signal. */
 const MAX_IMAGE_EDGE = 1600;
 
@@ -197,15 +229,22 @@ export default function PromptComposer() {
   );
   const [images, setImages] = useState<ReferenceImage[]>([]);
   /**
-   * The merchant's own logo.
+   * The merchant's own brand kit.
    *
-   * Kept apart from the design references on purpose: it is a brand asset to
-   * put *in* the store, not an image to design *from*. Mixed into
-   * `referenceImages` it would be transcribed as a page and reproduced as a
-   * layout, which is the failure mode this whole flow is being fixed for.
+   * Kept apart from the design references on purpose: these are brand assets
+   * to build the store *from*, not screens to design *like*. Mixed into
+   * `referenceImages` a palette page would be transcribed as a layout and
+   * reproduced as one, which is the failure mode this whole flow exists to fix.
+   *
+   * A kit rather than a logo, and several files rather than one. A logo settles
+   * exactly one thing — the mark in the navbar — while a kit states the
+   * colours, the typefaces, the voice the copy is written in and the way the
+   * photographs are lit, all of which are otherwise inferred from the sentence
+   * above it. The server reads the set once and works out for itself which
+   * image, if any, is the mark.
    */
-  const [logo, setLogo] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [brandKit, setBrandKit] = useState<File[]>([]);
+  const [brandKitPreviews, setBrandKitPreviews] = useState<string[]>([]);
   const [figmaUrl, setFigmaUrl] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   // A stored handle means a build was already running when the page went
@@ -257,7 +296,7 @@ export default function PromptComposer() {
   );
   /** Uploaded reference urls, carried from the design phase into the build. */
   const [pendingRefs, setPendingRefs] = useState<string[] | undefined>();
-  const [pendingLogo, setPendingLogo] = useState<string | undefined>();
+  const [pendingKit, setPendingKit] = useState<string[] | undefined>();
   const [questions, setQuestions] = useState<DesignQuestion[]>([]);
   const [questionsReady, setQuestionsReady] = useState(false);
   /**
@@ -294,7 +333,7 @@ export default function PromptComposer() {
   const [pendingBuild, setPendingBuild] = useState<{
     id: string;
     referenceImages?: string[];
-    logoUrl?: string;
+    brandKitImages?: string[];
   } | null>(null);
   const [buildConfirmed, setBuildConfirmed] = useState(false);
   /**
@@ -347,7 +386,7 @@ export default function PromptComposer() {
   const [attachOpen, setAttachOpen] = useState(false);
   const attachRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const logoInput = useRef<HTMLInputElement>(null);
+  const brandKitInput = useRef<HTMLInputElement>(null);
   /** Focused after a starter chip fills the box, so the caret is already
    *  where the merchant will start editing. */
   const promptInput = useRef<HTMLTextAreaElement>(null);
@@ -508,9 +547,7 @@ export default function PromptComposer() {
           // is no process to wait on and the spinner would never end. What the
           // run needs is the merchant — first for the questions the design
           // asked, then for the approval — and both come back off the row.
-          const asked: DesignQuestion[] = Array.isArray(data.questions)
-            ? data.questions
-            : [];
+          const asked = answerable(data.questions);
           setQuestions(asked);
           setQuestionIndex(0);
           setQuestionsReady(true);
@@ -610,28 +647,50 @@ export default function PromptComposer() {
       return [];
     });
 
-  const handleLogo = async (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("الشعار يجب أن يكون صورة");
+  const handleBrandKit = async (files: FileList | null) => {
+    const picked = Array.from(files ?? []);
+    if (!picked.length) return;
+    if (picked.some((file) => !file.type.startsWith("image/"))) {
+      toast.error("ملف الهوية يجب أن يكون صوراً");
       return;
     }
-    // Downscaled like every other upload: a 4000px logo costs the merchant
-    // upload time for pixels the navbar renders at 48.
-    const processed = await downscale(file);
-    setLogo(processed);
-    setLogoPreview((previous) => {
-      if (previous) URL.revokeObjectURL(previous);
-      return URL.createObjectURL(processed);
+
+    // Capped at what the upload endpoint takes and what one vision call can
+    // carry. Silently truncating would let a merchant think a page they can
+    // see attached had been read.
+    const room = MAX_BRAND_KIT - brandKit.length;
+    if (room <= 0) {
+      toast.error(`حتى ${MAX_BRAND_KIT} صور من ملف الهوية`);
+      return;
+    }
+    if (picked.length > room) {
+      toast.error(`أضفنا ${room} فقط — الحد ${MAX_BRAND_KIT} صور`);
+    }
+
+    // Downscaled like every other upload: a 4000px page costs the merchant
+    // upload time for pixels nothing renders at that size.
+    const processed = await Promise.all(picked.slice(0, room).map(downscale));
+    setBrandKit((previous) => [...previous, ...processed]);
+    setBrandKitPreviews((previous) => [
+      ...previous,
+      ...processed.map((file) => URL.createObjectURL(file)),
+    ]);
+  };
+
+  const removeBrandKitImage = (index: number) => {
+    setBrandKit((previous) => previous.filter((_, i) => i !== index));
+    setBrandKitPreviews((previous) => {
+      const url = previous[index];
+      if (url) URL.revokeObjectURL(url);
+      return previous.filter((_, i) => i !== index);
     });
   };
 
-  const clearLogo = () => {
-    setLogo(null);
-    setLogoPreview((previous) => {
-      if (previous) URL.revokeObjectURL(previous);
-      return null;
+  const clearBrandKit = () => {
+    setBrandKit([]);
+    setBrandKitPreviews((previous) => {
+      previous.forEach((url) => URL.revokeObjectURL(url));
+      return [];
     });
   };
 
@@ -760,7 +819,7 @@ export default function PromptComposer() {
     setStoreName(undefined);
     setGenerationId(null);
     setPendingRefs(undefined);
-    setPendingLogo(undefined);
+    setPendingKit(undefined);
     setPendingBuild(null);
     setBuildConfirmed(false);
     setVisitedQuestions(new Set());
@@ -782,28 +841,28 @@ export default function PromptComposer() {
 
     try {
       let referenceImages: string[] = [];
-      let logoUrl: string | undefined;
+      let brandKitImages: string[] | undefined;
 
-      if (images.length || logo) {
+      if (images.length || brandKit.length) {
         setPhase("uploading");
         addStatus(
-          images.length ? "جاري رفع الصور المرجعية..." : "جاري رفع الشعار...",
+          images.length ? "جاري رفع الصور المرجعية..." : "جاري رفع ملف الهوية...",
         );
-        // Two calls rather than one batch: the endpoint accepts three files,
-        // and three references plus a logo is four — batching them would drop
-        // whichever went last.
-        const [refs, logoUrls] = await Promise.all([
+        // Two calls rather than one batch: the endpoint accepts three files
+        // per call, and three references plus a brand kit is more than that —
+        // batching them would drop whichever went last.
+        const [refs, kit] = await Promise.all([
           images.length
             ? aiStoreGeneratorAPI.uploadReferences(images.map((i) => i.file))
             : Promise.resolve({ urls: [] as string[] }),
-          logo
-            ? aiStoreGeneratorAPI.uploadReferences([logo])
+          brandKit.length
+            ? aiStoreGeneratorAPI.uploadReferences(brandKit)
             : Promise.resolve({ urls: [] as string[] }),
         ]);
         referenceImages = refs.urls;
-        logoUrl = logoUrls.urls[0];
+        brandKitImages = kit.urls.length ? kit.urls : undefined;
         setPendingRefs(refs.urls);
-        setPendingLogo(logoUrl);
+        setPendingKit(brandKitImages);
       }
 
       // A second run must not show the previous run's design — or its
@@ -864,7 +923,7 @@ export default function PromptComposer() {
               setStoreName(event.storeName);
               break;
             case "questions": {
-              setQuestions(event.questions);
+              setQuestions(answerable(event.questions));
               setQuestionsReady(true);
               addStatus("جهزنا أسئلة قصيرة لتخصيص تصميم متجرك");
               // Deliberately unanswered. Pre-seeding the recommendations put a
@@ -928,7 +987,7 @@ export default function PromptComposer() {
       setPendingBuild({
         id: decided.generationId,
         referenceImages,
-        logoUrl,
+        brandKitImages,
       });
     } catch (e) {
       setError(
@@ -946,7 +1005,7 @@ export default function PromptComposer() {
   const runBuild = async (
     id: string,
     referenceImages?: string[],
-    uploadedLogo?: string,
+    uploadedKit?: string[],
   ) => {
     if (user && credits && !hasStoreCredits()) {
       setBuyOpen(true);
@@ -977,7 +1036,7 @@ export default function PromptComposer() {
         {
           prompt: prompt.trim(),
           referenceImages: referenceImages ?? pendingRefs,
-          logoUrl: uploadedLogo ?? pendingLogo,
+          brandKitImages: uploadedKit ?? pendingKit,
           answers: Object.keys(answersRef.current).length
             ? answersRef.current
             : undefined,
@@ -1158,7 +1217,7 @@ export default function PromptComposer() {
     void runBuild(
       pendingBuild.id,
       pendingBuild.referenceImages,
-      pendingBuild.logoUrl,
+      pendingBuild.brandKitImages,
     );
     // `runBuild` is redefined every render and is not a dependency worth
     // chasing; the ref above is what guarantees one call.
@@ -1298,7 +1357,7 @@ export default function PromptComposer() {
                 setBuildConfirmed(false);
                 setPendingBuild(null);
                 setPendingRefs(undefined);
-                setPendingLogo(undefined);
+                setPendingKit(undefined);
                 setGenerationId(null);
                 answerAdvanceRef.current = null;
                 buildStartedRef.current = false;
@@ -1326,7 +1385,7 @@ export default function PromptComposer() {
                 setBuildConfirmed(false);
                 setPendingBuild(null);
                 setPendingRefs(undefined);
-                setPendingLogo(undefined);
+                setPendingKit(undefined);
                 setGenerationId(null);
                 answerAdvanceRef.current = null;
                 buildStartedRef.current = false;
@@ -1353,7 +1412,7 @@ export default function PromptComposer() {
             setActiveStep(0);
             setPrompt("");
             clearImages();
-            clearLogo();
+            clearBrandKit();
             setQuestions([]);
             setQuestionsReady(false);
             setAnswers({});
@@ -1363,7 +1422,7 @@ export default function PromptComposer() {
             setBuildConfirmed(false);
             setPendingBuild(null);
             setPendingRefs(undefined);
-            setPendingLogo(undefined);
+            setPendingKit(undefined);
             setGenerationId(null);
             answerAdvanceRef.current = null;
             buildStartedRef.current = false;
@@ -1411,16 +1470,19 @@ export default function PromptComposer() {
           {/* One strip for everything attached. A filename in a pill told the
             merchant nothing about which photo they had picked — the whole
             point of a reference is what it looks like. */}
-          {(images.length > 0 || logoPreview || figmaUrl) && (
+          {(images.length > 0 || brandKitPreviews.length > 0 || figmaUrl) && (
             <div className="flex flex-wrap items-center gap-2">
-              {logoPreview && (
+              {brandKitPreviews.map((url, index) => (
                 <Attachment
-                  url={logoPreview}
-                  label="الشعار"
+                  key={url}
+                  url={url}
+                  label={
+                    brandKitPreviews.length > 1 ? `هوية ${index + 1}` : "الهوية"
+                  }
                   accent
-                  onRemove={clearLogo}
+                  onRemove={() => removeBrandKitImage(index)}
                 />
-              )}
+              ))}
               {images.map((image, index) => (
                 <Attachment
                   key={image.url}
@@ -1495,7 +1557,7 @@ export default function PromptComposer() {
                   aria-expanded={attachOpen}
                   aria-label="إرفاق"
                   title="إرفاق"
-                  className={`flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-white/5 ${attachOpen || images.length || logo
+                  className={`flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-white/5 ${attachOpen || images.length || brandKit.length
                     ? "text-brand-primary"
                     : "text-white"
                     }`}
@@ -1525,11 +1587,16 @@ export default function PromptComposer() {
                     />
                     <AttachOption
                       icon={<Sparkle size={16} />}
-                      title="شعار المتجر"
-                      hint={logo ? "استبدال الشعار الحالي" : "صورة واحدة تُستخدم كشعار"}
+                      title="ملف الهوية"
+                      hint={
+                        brandKit.length
+                          ? `${brandKit.length} من ${MAX_BRAND_KIT} — ألوانك وخطوطك وشعارك`
+                          : "الشعار والألوان والخطوط — نبني المتجر عليها"
+                      }
+                      disabled={brandKit.length >= MAX_BRAND_KIT}
                       onSelect={() => {
                         setAttachOpen(false);
-                        logoInput.current?.click();
+                        brandKitInput.current?.click();
                       }}
                     />
                   </div>
@@ -1547,12 +1614,13 @@ export default function PromptComposer() {
                 }}
               />
               <input
-                ref={logoInput}
+                ref={brandKitInput}
                 type="file"
                 accept="image/*"
+                multiple
                 hidden
                 onChange={(e) => {
-                  handleLogo(e.target.files);
+                  handleBrandKit(e.target.files);
                   e.target.value = "";
                 }}
               />
