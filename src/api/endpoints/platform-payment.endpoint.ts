@@ -44,7 +44,7 @@ export const platformPaymentAPI = {
   ): Promise<PlatformPayment> => {
     const { data } = await axiosInstance.post<PlatformPayment>(
       "/platform-payments/init",
-      { provider: "QI_CARD", ...payload },
+      payload,
     );
     return data;
   },

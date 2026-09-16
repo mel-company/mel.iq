@@ -77,8 +77,15 @@ export const useCreditPackages = (enabled = true) =>
 
 export const usePurchaseCredits = () =>
   useMutation({
-    mutationFn: ({ packId, returnBaseUrl }: { packId: string; returnBaseUrl?: string }) =>
-      aiStoreGeneratorAPI.purchaseCredits(packId, returnBaseUrl),
+    mutationFn: ({
+      packId,
+      returnBaseUrl,
+      provider,
+    }: {
+      packId: string;
+      returnBaseUrl?: string;
+      provider: "QI_CARD" | "ZAIN_CASH";
+    }) => aiStoreGeneratorAPI.purchaseCredits(packId, returnBaseUrl, provider),
   });
 
 export const useCreditPurchaseStatus = (

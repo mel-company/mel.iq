@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import ModalPortal from "./ModalPortal";
 import { X, Loader2, Sparkles, Store, PenLine, Check, ShieldCheck } from "@/components/icons";
 import { toast } from "sonner";
+import type { PlatformPaymentProvider } from "@/api/endpoints/platform-payment.endpoint";
+import PaymentProviderPicker, {
+  paymentProviderLabel,
+} from "@/components/PaymentProviderPicker";
 import {
   useCredits,
   useCreditPackages,
@@ -25,6 +29,7 @@ interface BuyCreditsModalProps {
 
 export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [provider, setProvider] = useState<PlatformPaymentProvider | null>(null);
   const [redirecting, setRedirecting] = useState(false);
 
   const { data: packages, isLoading } = useCreditPackages(open);
@@ -34,6 +39,7 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
   useEffect(() => {
     if (open) {
       setSelected(null);
+      setProvider(null);
       setRedirecting(false);
     }
   }, [open]);
@@ -71,7 +77,7 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
   const selectedPack = packages?.find((p) => p.id === selected) ?? null;
 
   const handleBuy = async () => {
-    if (!selectedPack) return;
+    if (!selectedPack || !provider) return;
     try {
       const returnBaseUrl =
         typeof window !== "undefined"
@@ -80,6 +86,7 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
       const data = await purchase.mutateAsync({
         packId: selectedPack.id,
         returnBaseUrl,
+        provider,
       });
       if (data.id) {
         sessionStorage.setItem("mel_last_credit_payment_id", String(data.id));
@@ -138,7 +145,7 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
                 اشحن رصيد الذكاء الاصطناعي
               </h2>
               <p className="mt-2 text-sm text-white/50">
-                اختر الباقة وادفع عبر كي كارد — يُضاف الرصيد فوراً
+                اختر الباقة وطريقة الدفع — يُضاف الرصيد فوراً
               </p>
 
               {credits && !credits.unlimited && (
@@ -245,20 +252,31 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
                   })}
                 </div>
 
+                <div className="mt-5">
+                  <PaymentProviderPicker
+                    value={provider}
+                    onChange={setProvider}
+                    disabled={purchase.isPending}
+                    variant="dark"
+                  />
+                </div>
+
                 <button
                   type="button"
                   onClick={handleBuy}
-                  disabled={!selectedPack || purchase.isPending}
+                  disabled={!selectedPack || !provider || purchase.isPending}
                   className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-[#00c8ff] py-3 font-medium text-white shadow-[0_0_30px_rgba(0,200,255,0.35)] transition-colors hover:bg-[#33d4ff] disabled:opacity-40 disabled:shadow-none"
                 >
                   {purchase.isPending && <Loader2 size={16} className="animate-spin" />}
-                  {selectedPack ? (
+                  {selectedPack && provider ? (
                     <>
-                      ادفع عبر كي كارد —
+                      ادفع عبر {paymentProviderLabel(provider)} —
                       <span dir="ltr">
                         {selectedPack.price.toLocaleString()} {selectedPack.currency}
                       </span>
                     </>
+                  ) : selectedPack ? (
+                    "اختر طريقة الدفع"
                   ) : (
                     "اختر باقة للمتابعة"
                   )}
@@ -266,7 +284,7 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
 
                 <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-white/35">
                   <ShieldCheck size={13} />
-                  دفع آمن عبر كي كارد — يُضاف الرصيد تلقائياً بعد إتمام الدفع
+                  دفع آمن — يُضاف الرصيد تلقائياً بعد إتمام الدفع
                 </p>
               </>
             )}

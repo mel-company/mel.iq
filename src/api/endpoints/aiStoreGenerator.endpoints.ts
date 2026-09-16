@@ -370,7 +370,11 @@ export const aiStoreGeneratorAPI = {
     return data;
   },
 
-  purchaseCredits: async (packId: string, returnBaseUrl?: string): Promise<{
+  purchaseCredits: async (
+    packId: string,
+    returnBaseUrl?: string,
+    provider: "QI_CARD" | "ZAIN_CASH" = "ZAIN_CASH",
+  ): Promise<{
     id: string;
     redirectUrl: string;
     amount: number;
@@ -381,7 +385,7 @@ export const aiStoreGeneratorAPI = {
     const { data } = await axiosInstance.post("/credits/purchase", {
       packId,
       returnBaseUrl,
-      provider: "QI_CARD",
+      provider,
     });
     return data;
   },

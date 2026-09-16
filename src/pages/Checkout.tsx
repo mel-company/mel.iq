@@ -175,7 +175,7 @@ function Checkout() {
       phone: initialPhone || draft?.phone || "",
       plan: initialPlan,
       otp: "",
-      paymentMethod: "qicard",
+      paymentMethod: "",
       paymentId: (location.state?.paymentId as string | null) || null,
       websiteType: draft?.websiteType || "store",
       logo: null as string | null,
@@ -1415,7 +1415,7 @@ function Checkout() {
                         ? "ستُحوَّل إلى صفحة كي كارد الآمنة لإتمام الدفع، ثم تعود إلى هنا تلقائياً."
                         : formData.paymentMethod === "zaincash"
                           ? "ستُحوَّل إلى صفحة زين كاش الآمنة لإتمام الدفع، ثم تعود إلى هنا تلقائياً."
-                          : "ستُحوَّل إلى صفحة الدفع الآمنة لإتمام العملية، ثم تعود إلى هنا تلقائياً."}
+                          : "اختر زين كاش أو كي كارد للمتابعة إلى صفحة الدفع الآمنة."}
                     </p>
                   </div>
 
@@ -1480,7 +1480,15 @@ function Checkout() {
                       : "متابعة"
                 }
                 busy={isInitiatingPayment || processing}
-                disabled={!formData.plan}
+                disabled={
+                  !formData.plan ||
+                  (!isPlanFree &&
+                    !paymentCompleted &&
+                    !PAYMENT_METHODS.some(
+                      (method) =>
+                        method.id === formData.paymentMethod && method.available,
+                    ))
+                }
                 onSubmit={handlePayment}
                 onBack={() => setCurrentStep(3)}
               />

@@ -39,6 +39,10 @@ import {
   X,
 } from "@/components/icons";
 import { toast } from "sonner";
+import type { PlatformPaymentProvider } from "@/api/endpoints/platform-payment.endpoint";
+import PaymentProviderPicker, {
+  paymentProviderLabel,
+} from "@/components/PaymentProviderPicker";
 
 type ManageTab = "overview" | "domain" | "subscription" | "social";
 
@@ -579,6 +583,8 @@ function StoreManagement() {
   const [showRenewModal, setShowRenewModal] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState<number>(1);
   const [customDuration, setCustomDuration] = useState<string>("");
+  const [paymentProvider, setPaymentProvider] =
+    useState<PlatformPaymentProvider | null>(null);
 
   // Cancel/Delete store modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -636,6 +642,7 @@ function StoreManagement() {
   }, [store, setDomain, setDomainType, resetCheck]);
 
   const handleRenew = () => {
+    setPaymentProvider(null);
     setShowRenewModal(true);
   };
 
@@ -661,6 +668,10 @@ function StoreManagement() {
         toast.error("تعذر تحديد الخطة للتجديد");
         return;
       }
+      if (!paymentProvider) {
+        toast.error("الرجاء اختيار طريقة الدفع");
+        return;
+      }
 
       sessionStorage.setItem(
         RENEWAL_RETURN_KEY,
@@ -672,7 +683,7 @@ function StoreManagement() {
           type: "RENEWAL",
           planId,
           storeId,
-          provider: "QI_CARD",
+          provider: paymentProvider,
           durationMonths: duration,
           billingPeriod: duration >= 12 ? "YEARLY" : "MONTHLY",
           returnBaseUrl: `${window.location.origin}/store/${storeId}/manage`,
@@ -855,6 +866,11 @@ function StoreManagement() {
         return;
       }
 
+      if (!paymentProvider) {
+        toast.error("الرجاء اختيار طريقة الدفع");
+        return;
+      }
+
       sessionStorage.setItem(
         DOMAIN_PURCHASE_RETURN_KEY,
         JSON.stringify({ storeId, domain: normalizedDomain }),
@@ -865,7 +881,7 @@ function StoreManagement() {
           type: "DOMAIN_REGISTRATION",
           storeId,
           domain: normalizedDomain,
-          provider: "QI_CARD",
+          provider: paymentProvider,
           returnBaseUrl: `${window.location.origin}/store/${storeId}/manage`,
         },
         {
@@ -1307,15 +1323,26 @@ function StoreManagement() {
                     }}
                     onCheck={checkDomain}
                   />
+                  {domainPath === "buy" && (
+                    <PaymentProviderPicker
+                      value={paymentProvider}
+                      onChange={setPaymentProvider}
+                      disabled={isSavingDomain}
+                    />
+                  )}
                   <button
                     type="submit"
-                    disabled={!canSaveDomain || isSavingDomain}
+                    disabled={
+                      !canSaveDomain ||
+                      isSavingDomain ||
+                      (domainPath === "buy" && !paymentProvider)
+                    }
                     className="w-full rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-gray-200"
                   >
                     {isSavingDomain
                       ? "جاري التحويل لصفحة الدفع..."
                       : domainPath === "buy" && domainPricing
-                        ? `الدفع عبر كي كارد — ${formatUsd(domainPricing.totalUsd)}`
+                        ? `الدفع عبر ${paymentProviderLabel(paymentProvider)} — ${formatUsd(domainPricing.totalUsd)}`
                         : "حفظ سلاج المنصة"}
                   </button>
                 </form>
@@ -1410,6 +1437,7 @@ function StoreManagement() {
                   setShowRenewModal(false);
                   setSelectedDuration(1);
                   setCustomDuration("");
+                  setPaymentProvider(null);
                 }}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
               >
@@ -1530,12 +1558,25 @@ function StoreManagement() {
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent outline-none transition"
                 />
               </div>
+              {subscription?.plan?.is_free !== true &&
+                Number(subscription?.plan?.monthly_price) > 0 && (
+                  <div className="mb-6">
+                    <PaymentProviderPicker
+                      value={paymentProvider}
+                      onChange={setPaymentProvider}
+                      disabled={
+                        renewMutation.isPending || initPaymentMutation.isPending
+                      }
+                    />
+                  </div>
+                )}
               <div className="flex gap-4 justify-end">
                 <button
                   onClick={() => {
                     setShowRenewModal(false);
                     setSelectedDuration(1);
                     setCustomDuration("");
+                    setPaymentProvider(null);
                   }}
                   className="px-6 py-2 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
                 >
@@ -1546,13 +1587,18 @@ function StoreManagement() {
                   disabled={
                     renewMutation.isPending ||
                     initPaymentMutation.isPending ||
-                    (!customDuration && selectedDuration === 0)
+                    (!customDuration && selectedDuration === 0) ||
+                    (subscription?.plan?.is_free !== true &&
+                      Number(subscription?.plan?.monthly_price) > 0 &&
+                      !paymentProvider)
                   }
                   className="px-6 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {renewMutation.isPending || initPaymentMutation.isPending
                     ? "جاري..."
-                    : "تأكيد التجديد"}
+                    : paymentProvider
+                      ? `ادفع عبر ${paymentProviderLabel(paymentProvider)}`
+                      : "تأكيد التجديد"}
                 </button>
               </div>
             </div>
