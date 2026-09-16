@@ -25,6 +25,16 @@ export type DomainConnectDiscovery = {
   };
 };
 
+/** Response from POST /domain/connect/start — open applyUrl in the browser. */
+export type DomainConnectStartResult = {
+  domain: string;
+  providerId: string;
+  serviceId: string;
+  host: string;
+  connectionMode: "automatic";
+  applyUrl: string;
+};
+
 export const domainAPI = {
   setCustomDomain: async (params: {
     domain: string;
@@ -43,6 +53,18 @@ export const domainAPI = {
   discoverConnect: async (domain: string): Promise<DomainConnectDiscovery> => {
     const { data } = await axiosInstance.post<DomainConnectDiscovery>(
       "/domain/connect/discover",
+      { domain: domain.trim().toLowerCase() },
+    );
+    return data;
+  },
+
+  /**
+   * Build signed Domain Connect Apply URL. Does not attach the domain.
+   * Do not use next.automatic from discover — applyUrl comes from here.
+   */
+  startConnect: async (domain: string): Promise<DomainConnectStartResult> => {
+    const { data } = await axiosInstance.post<DomainConnectStartResult>(
+      "/domain/connect/start",
       { domain: domain.trim().toLowerCase() },
     );
     return data;
