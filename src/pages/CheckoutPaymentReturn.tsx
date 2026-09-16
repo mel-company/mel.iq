@@ -16,19 +16,15 @@ export default function CheckoutPaymentReturn() {
       ? sessionStorage.getItem(LAST_PAYMENT_ID_KEY)
       : null;
   const paymentId = paymentIdFromQuery || paymentIdFromStorage;
-  const result = params.get("result");
 
   const { data, isLoading, isError } = usePlatformPaymentStatus(
     paymentId,
     !!paymentId,
   );
 
-  const status = data?.status as string | undefined;
-  const paymentType = data?.type as string | undefined;
-  const paymentStoreId =
-    (data?.storeId as string | undefined) ||
-    params.get("storeId") ||
-    undefined;
+  const status = data?.status;
+  const paymentType = data?.type;
+  const paymentStoreId = data?.storeId || params.get("storeId") || undefined;
 
   const draft = useMemo(() => {
     try {
@@ -55,6 +51,14 @@ export default function CheckoutPaymentReturn() {
       return;
     }
 
+    if (
+      status !== "PAID" &&
+      status !== "FAILED" &&
+      status !== "EXPIRED"
+    ) {
+      return;
+    }
+
     const renewalStoreId =
       paymentStoreId || renewalReturn?.storeId || undefined;
     const isRenewal =
@@ -62,7 +66,7 @@ export default function CheckoutPaymentReturn() {
       paymentType === "CHANGE_PLAN" ||
       !!renewalStoreId;
 
-    if (result === "failure" || status === "FAILED" || status === "EXPIRED") {
+    if (status === "FAILED" || status === "EXPIRED") {
       toast.error("فشلت عملية الدفع. حاول مرة أخرى.");
       if (isRenewal && renewalStoreId) {
         sessionStorage.removeItem(RENEWAL_RETURN_KEY);
@@ -80,28 +84,25 @@ export default function CheckoutPaymentReturn() {
       return;
     }
 
-    if (status === "PAID") {
-      toast.success("تم الدفع بنجاح");
-      sessionStorage.removeItem(LAST_PAYMENT_ID_KEY);
-      if (isRenewal && renewalStoreId) {
-        sessionStorage.removeItem(RENEWAL_RETURN_KEY);
-        navigate(`/store/${renewalStoreId}/manage`, { replace: true });
-        return;
-      }
-      navigate("/checkout", {
-        replace: true,
-        state: {
-          skipToStep: 5,
-          selectedPlan: draft?.plan,
-          paymentId,
-          paymentCompleted: true,
-          checkoutDraft: draft,
-        },
-      });
+    toast.success("تم الدفع بنجاح");
+    sessionStorage.removeItem(LAST_PAYMENT_ID_KEY);
+    if (isRenewal && renewalStoreId) {
+      sessionStorage.removeItem(RENEWAL_RETURN_KEY);
+      navigate(`/store/${renewalStoreId}/manage`, { replace: true });
+      return;
     }
+    navigate("/checkout", {
+      replace: true,
+      state: {
+        skipToStep: 5,
+        selectedPlan: draft?.plan,
+        paymentId,
+        paymentCompleted: true,
+        checkoutDraft: draft,
+      },
+    });
   }, [
     paymentId,
-    result,
     status,
     paymentType,
     paymentStoreId,
@@ -115,7 +116,7 @@ export default function CheckoutPaymentReturn() {
       <div className="text-center px-6">
         <div className="animate-spin rounded-full h-14 w-14 border-4 border-slate-200 border-t-slate-900 dark:border-slate-700 dark:border-t-slate-100 mx-auto mb-4" />
         <p className="text-slate-700 dark:text-slate-300 font-medium">
-          {isLoading || status === "PENDING"
+          {isLoading || status === "PENDING" || !status
             ? "جاري التحقق من الدفع..."
             : isError
               ? "تعذر التحقق من الدفع"

@@ -1,5 +1,13 @@
 import axiosInstance from "@/utils/AxiosInstance";
 
+export type PlatformPaymentProvider = "QI_CARD" | "ZAIN_CASH";
+
+export type PlatformPaymentStatus =
+  | "PENDING"
+  | "PAID"
+  | "FAILED"
+  | "EXPIRED";
+
 export type PlatformPaymentInitPayload = {
   type:
     | "INITIAL_SUBSCRIPTION"
@@ -12,19 +20,39 @@ export type PlatformPaymentInitPayload = {
   storeId?: string;
   domain?: string;
   returnBaseUrl?: string;
+  provider?: PlatformPaymentProvider;
+};
+
+export type PlatformPayment = {
+  id: string;
+  status: PlatformPaymentStatus;
+  amount: number;
+  currency: string;
+  type: PlatformPaymentInitPayload["type"];
+  provider?: PlatformPaymentProvider;
+  planId?: string | null;
+  packData?: unknown;
+  storeId?: string | null;
+  transactionId?: string;
+  redirectUrl?: string;
+  orderId?: string;
 };
 
 export const platformPaymentAPI = {
-  init: async (payload: PlatformPaymentInitPayload): Promise<any> => {
-    const { data } = await axiosInstance.post<any>(
+  init: async (
+    payload: PlatformPaymentInitPayload,
+  ): Promise<PlatformPayment> => {
+    const { data } = await axiosInstance.post<PlatformPayment>(
       "/platform-payments/init",
-      payload,
+      { provider: "QI_CARD", ...payload },
     );
     return data;
   },
 
-  getStatus: async (id: string): Promise<any> => {
-    const { data } = await axiosInstance.get<any>(`/platform-payments/${id}`);
+  getStatus: async (id: string): Promise<PlatformPayment> => {
+    const { data } = await axiosInstance.get<PlatformPayment>(
+      `/platform-payments/${id}`,
+    );
     return data;
   },
 };

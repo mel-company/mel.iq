@@ -54,7 +54,7 @@ export default function DomainPriceBreakdown({
         </span>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-green-200 pt-2 dark:border-green-800">
-        <span className="font-semibold">المجموع (زين كاش)</span>
+        <span className="font-semibold">المجموع</span>
         <span className="text-base font-bold" dir="ltr">
           {formatUsd(pricing.totalUsd)}
         </span>
@@ -65,7 +65,7 @@ export default function DomainPriceBreakdown({
         </p>
       )}
       <p className="text-xs text-gray-500 dark:text-gray-400">
-        يُحوَّل المبلغ للدينار العراقي عند الدفع عبر زين كاش
+        يُحوَّل المبلغ للدينار العراقي عند الدفع
       </p>
     </div>
   );

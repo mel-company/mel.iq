@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCredits,
+  useCreditPurchaseStatus,
   aiGeneratorKeys,
 } from "@/api/wrappers/aiStoreGenerator.wrappers";
 import {
@@ -191,38 +192,48 @@ export default function PromptComposer() {
   const { user } = useAuth();
   const { data: credits, isLoading: creditsLoading } = useCredits(Boolean(user));
   const queryClient = useQueryClient();
-
-  // Handle a ZainCash credit purchase return (success or failure).
-  useEffect(() => {
+  const handledCreditReturn = useRef(false);
+  const [creditReturnPaymentId] = useState(() => {
+    if (typeof window === "undefined") return null;
     const params = new URLSearchParams(window.location.search);
-    const paymentId = params.get("paymentId");
-    const result = params.get("result");
-    if (!paymentId) return;
+    const fromQuery = params.get("paymentId");
+    if (fromQuery) return fromQuery;
+    if (params.get("result") || params.get("status")) {
+      return sessionStorage.getItem("mel_last_credit_payment_id");
+    }
+    return null;
+  });
+  const { data: creditPurchase } = useCreditPurchaseStatus(
+    creditReturnPaymentId,
+    Boolean(creditReturnPaymentId),
+  );
 
-    aiStoreGeneratorAPI
-      .getCreditPurchaseStatus(paymentId)
-      .then((data) => {
-        if (data.status === "PAID") {
-          toast.success("تم شحن الرصيد بنجاح");
-          queryClient.invalidateQueries({ queryKey: aiGeneratorKeys.credits() });
-        } else if (data.status === "FAILED" || data.status === "EXPIRED") {
-          toast.error("فشلت عملية الدفع أو انتهت صلاحيتها");
-        } else if (result === "failure") {
-          toast.error("لم تكتمل عملية الدفع");
-        }
-      })
-      .catch(() => toast.error("تعذر التحقق من حالة الدفع"))
-      .finally(() => {
-        params.delete("paymentId");
-        params.delete("result");
-        params.delete("status");
-        const clean =
-          params.toString().length > 0
-            ? `?${params.toString()}`
-            : window.location.pathname;
-        window.history.replaceState({}, "", clean);
-      });
-  }, [queryClient]);
+  useEffect(() => {
+    if (!creditReturnPaymentId || handledCreditReturn.current) return;
+    const status = creditPurchase?.status;
+    if (status !== "PAID" && status !== "FAILED" && status !== "EXPIRED") {
+      return;
+    }
+
+    handledCreditReturn.current = true;
+    sessionStorage.removeItem("mel_last_credit_payment_id");
+    if (status === "PAID") {
+      toast.success("تم شحن الرصيد بنجاح");
+      queryClient.invalidateQueries({ queryKey: aiGeneratorKeys.credits() });
+    } else {
+      toast.error("فشلت عملية الدفع أو انتهت صلاحيتها");
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    params.delete("paymentId");
+    params.delete("result");
+    params.delete("status");
+    const clean =
+      params.toString().length > 0
+        ? `?${params.toString()}`
+        : window.location.pathname;
+    window.history.replaceState({}, "", clean);
+  }, [creditReturnPaymentId, creditPurchase, queryClient]);
 
   const [prompt, setPrompt] = useState(
     () => sessionStorage.getItem(DRAFT_KEY) || "",

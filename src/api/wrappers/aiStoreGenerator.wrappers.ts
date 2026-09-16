@@ -80,3 +80,19 @@ export const usePurchaseCredits = () =>
     mutationFn: ({ packId, returnBaseUrl }: { packId: string; returnBaseUrl?: string }) =>
       aiStoreGeneratorAPI.purchaseCredits(packId, returnBaseUrl),
   });
+
+export const useCreditPurchaseStatus = (
+  paymentId: string | null,
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: [...aiGeneratorKeys.credits(), "purchase", paymentId || ""],
+    queryFn: () => aiStoreGeneratorAPI.getCreditPurchaseStatus(paymentId!),
+    enabled: enabled && !!paymentId,
+    refetchInterval: (query) => {
+      const status = (query.state.data as { status?: string } | undefined)
+        ?.status;
+      if (status === "PENDING") return 2500;
+      return false;
+    },
+  });

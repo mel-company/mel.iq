@@ -65,16 +65,14 @@ const GOVERNORATES = [
 /**
  * The payment tiles the frame draws.
  *
- * Only ZainCash is integrated: `/platform-payments/init` takes no provider and
- * the server has a single `zaincash` module. The rest are rendered so the step
- * matches the design, but disabled — a card form that cannot charge a card is
- * worse than no card form.
+ * QiCard and ZainCash share the same `/platform-payments/init` flow; the
+ * only difference is `provider`. Card and FIB stay visible but disabled.
  */
 const PAYMENT_METHODS = [
-  { id: "card", title: "بطاقة بنكية", detail: "Visa · Mastercard", mark: "VC", tint: "bg-brand-primary/15 text-brand-primary", available: false },
-  { id: "zaincash", title: "زين كاش", detail: "ZainCash", mark: "Z", tint: "bg-[#ff5252]/15 text-[#ff5252]", available: true },
-  { id: "qicard", title: "كي كارد", detail: "Qi Card", mark: "Q", tint: "bg-amber/15 text-amber", available: false },
-  { id: "fib", title: "FIB", detail: "المصرف الأول", mark: "F", tint: "bg-brand-secondary/15 text-brand-secondary", available: false },
+  { id: "card", title: "بطاقة بنكية", detail: "Visa · Mastercard", mark: "VC", tint: "bg-brand-primary/15 text-brand-primary", available: false, provider: null },
+  { id: "zaincash", title: "زين كاش", detail: "ZainCash", mark: "Z", tint: "bg-[#ff5252]/15 text-[#ff5252]", available: true, provider: "ZAIN_CASH" as const },
+  { id: "qicard", title: "كي كارد", detail: "Qi Card", mark: "Q", tint: "bg-amber/15 text-amber", available: true, provider: "QI_CARD" as const },
+  { id: "fib", title: "FIB", detail: "المصرف الأول", mark: "F", tint: "bg-brand-secondary/15 text-brand-secondary", available: false, provider: null },
 ];
 
 /** Business categories offered on the account step. */
@@ -177,7 +175,7 @@ function Checkout() {
       phone: initialPhone || draft?.phone || "",
       plan: initialPlan,
       otp: "",
-      paymentMethod: "zaincash",
+      paymentMethod: "qicard",
       paymentId: (location.state?.paymentId as string | null) || null,
       websiteType: draft?.websiteType || "store",
       logo: null as string | null,
@@ -659,10 +657,18 @@ function Checkout() {
     const planId =
       formData.plan?.uuid || formData.plan?.planId || formData.plan?.id;
 
-    // Free plans skip ZainCash
+    // Free plans skip the payment gateway
     if (formData.plan?.is_free || Number(formData.plan?.monthly_price) === 0) {
       setPaymentCompleted(true);
       setCurrentStep(5);
+      return;
+    }
+
+    const selectedMethod = PAYMENT_METHODS.find(
+      (method) => method.id === formData.paymentMethod,
+    );
+    if (!selectedMethod?.available || !selectedMethod.provider) {
+      toast.error("الرجاء اختيار طريقة دفع");
       return;
     }
 
@@ -685,16 +691,17 @@ function Checkout() {
       {
         type: "INITIAL_SUBSCRIPTION",
         planId,
+        provider: selectedMethod.provider,
         billingPeriod: "MONTHLY",
         returnBaseUrl: `${window.location.origin}/checkout/payment-return`,
       },
       {
         onSuccess: (data) => {
           const redirectUrl = data?.redirectUrl;
-          const paymentId = data?.id || data?.paymentId;
+          const paymentId = data?.id;
           if (!redirectUrl) {
             setProcessing(false);
-            toast.error("لم يتم استلام رابط الدفع من زين كاش");
+            toast.error("لم يتم استلام رابط الدفع");
             return;
           }
           if (paymentId) {
@@ -706,7 +713,7 @@ function Checkout() {
           setProcessing(false);
           toast.error(
             error?.response?.data?.message ||
-              "تعذر بدء الدفع عبر زين كاش. حاول مرة أخرى.",
+              "تعذر بدء الدفع. حاول مرة أخرى.",
           );
         },
       },
@@ -744,7 +751,7 @@ function Checkout() {
     const isFree =
       formData.plan?.is_free || Number(formData.plan?.monthly_price) === 0;
     if (!isFree && !formData.paymentId && !paymentCompleted) {
-      toast.error("يجب إكمال الدفع عبر زين كاش قبل إنشاء المتجر");
+      toast.error("يجب إكمال الدفع قبل إنشاء المتجر");
       setCurrentStep(4);
       return;
     }
@@ -1351,10 +1358,6 @@ function Checkout() {
               ) : (
                 <div className="flex flex-col gap-8 lg:flex-row-reverse lg:items-start">
                   <div className="flex flex-1 flex-col gap-5">
-                    {/* Only ZainCash is integrated — the platform payment
-                        endpoint takes no provider and the server has just the
-                        one module — so the other three are shown as the frame
-                        has them but marked unavailable rather than faked. */}
                     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                       {PAYMENT_METHODS.map((method) => {
                         const selected = formData.paymentMethod === method.id;
@@ -1408,8 +1411,11 @@ function Checkout() {
                     </div>
 
                     <p className="text-xs leading-5 text-dim">
-                      ستُحوَّل إلى صفحة زين كاش الآمنة لإتمام الدفع، ثم تعود إلى
-                      هنا تلقائياً.
+                      {formData.paymentMethod === "qicard"
+                        ? "ستُحوَّل إلى صفحة كي كارد الآمنة لإتمام الدفع، ثم تعود إلى هنا تلقائياً."
+                        : formData.paymentMethod === "zaincash"
+                          ? "ستُحوَّل إلى صفحة زين كاش الآمنة لإتمام الدفع، ثم تعود إلى هنا تلقائياً."
+                          : "ستُحوَّل إلى صفحة الدفع الآمنة لإتمام العملية، ثم تعود إلى هنا تلقائياً."}
                     </p>
                   </div>
 

@@ -376,8 +376,13 @@ export const aiStoreGeneratorAPI = {
     amount: number;
     currency: string;
     status: string;
+    provider?: "QI_CARD" | "ZAIN_CASH";
   }> => {
-    const { data } = await axiosInstance.post("/credits/purchase", { packId, returnBaseUrl });
+    const { data } = await axiosInstance.post("/credits/purchase", {
+      packId,
+      returnBaseUrl,
+      provider: "QI_CARD",
+    });
     return data;
   },
 
@@ -386,6 +391,7 @@ export const aiStoreGeneratorAPI = {
     status: string;
     amount: number;
     currency: string;
+    provider?: "QI_CARD" | "ZAIN_CASH";
     packData?: any;
   }> => {
     const { data } = await axiosInstance.get(`/credits/purchase/${paymentId}/status`);

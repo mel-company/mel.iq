@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useFetchStores, useUpdateStore } from "@/api/wrappers/store.wrappers";
 import DomainSettingsFields from "@/components/DomainSettingsFields";
@@ -23,7 +23,7 @@ import {
   useCancelSubscription,
   useUpdateSubscription,
 } from "@/api/wrappers/subscription.wrapper";
-import { useInitPlatformPayment } from "@/api/wrappers/platform-payment.wrapper";
+import { useInitPlatformPayment, usePlatformPaymentStatus } from "@/api/wrappers/platform-payment.wrapper";
 import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -34,6 +34,7 @@ import {
   Globe,
   LayoutDashboard,
   LayoutGrid,
+  Loader2,
   Share2,
   X,
 } from "@/components/icons";
@@ -484,11 +485,27 @@ function StoreManagement() {
     refetch: refetchSubscriptions,
   } = useFetchSubscriptions({ storeId });
 
-  // After ZainCash: land here with ?paymentId=&result=success
+  const returnPaymentId = searchParams.get("paymentId");
+  const { data: returnPayment } = usePlatformPaymentStatus(
+    returnPaymentId,
+    Boolean(returnPaymentId),
+  );
+  const returnStatus = returnPayment?.status;
+  const handledReturnRef = useRef<string | null>(null);
+
+  // After the gateway: land here with ?paymentId= — status comes from the API.
   useEffect(() => {
-    const paymentId = searchParams.get("paymentId");
-    const result = searchParams.get("result");
-    if (!paymentId || !result) return;
+    if (!returnPaymentId) return;
+    if (handledReturnRef.current === returnPaymentId) return;
+    if (
+      returnStatus !== "PAID" &&
+      returnStatus !== "FAILED" &&
+      returnStatus !== "EXPIRED"
+    ) {
+      return;
+    }
+
+    handledReturnRef.current = returnPaymentId;
 
     const domainReturnRaw = sessionStorage.getItem(DOMAIN_PURCHASE_RETURN_KEY);
     const domainReturn = domainReturnRaw
@@ -496,7 +513,7 @@ function StoreManagement() {
       : null;
     const isDomainPurchase = Boolean(domainReturn?.domain);
 
-    if (result === "success") {
+    if (returnStatus === "PAID") {
       if (isDomainPurchase) {
         toast.success("تم الدفع بنجاح! سيتم تسجيل الدومين وربطه بمتجرك.");
         void refetchStores();
@@ -521,7 +538,14 @@ function StoreManagement() {
     next.delete("result");
     next.delete("status");
     setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams, refetchSubscriptions, refetchStores]);
+  }, [
+    returnPaymentId,
+    returnStatus,
+    searchParams,
+    setSearchParams,
+    refetchSubscriptions,
+    refetchStores,
+  ]);
 
   const renewMutation = useRenewSubscription();
   const initPaymentMutation = useInitPlatformPayment();
@@ -648,14 +672,15 @@ function StoreManagement() {
           type: "RENEWAL",
           planId,
           storeId,
+          provider: "QI_CARD",
           durationMonths: duration,
           billingPeriod: duration >= 12 ? "YEARLY" : "MONTHLY",
           returnBaseUrl: `${window.location.origin}/store/${storeId}/manage`,
         },
         {
           onSuccess: (data) => {
-            const redirectUrl = data?.redirectUrl || data?.data?.redirectUrl;
-            const paymentId = data?.id || data?.data?.id;
+            const redirectUrl = data?.redirectUrl;
+            const paymentId = data?.id;
             if (!redirectUrl) {
               toast.error("تعذر بدء عملية الدفع");
               return;
@@ -840,14 +865,15 @@ function StoreManagement() {
           type: "DOMAIN_REGISTRATION",
           storeId,
           domain: normalizedDomain,
+          provider: "QI_CARD",
           returnBaseUrl: `${window.location.origin}/store/${storeId}/manage`,
         },
         {
           onSuccess: (data) => {
-            const redirectUrl = data?.redirectUrl || data?.data?.redirectUrl;
-            const paymentId = data?.id || data?.data?.id;
+            const redirectUrl = data?.redirectUrl;
+            const paymentId = data?.id;
             if (!redirectUrl) {
-              toast.error("تعذر بدء الدفع عبر زين كاش");
+              toast.error("تعذر بدء عملية الدفع");
               return;
             }
             if (paymentId) {
@@ -860,7 +886,7 @@ function StoreManagement() {
             console.error("Error initiating domain payment:", error);
             toast.error(
               error?.response?.data?.message ||
-                "تعذر بدء الدفع عبر زين كاش. حاول مرة أخرى.",
+                "تعذر بدء الدفع. حاول مرة أخرى.",
             );
           },
         },
@@ -957,6 +983,19 @@ function StoreManagement() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      {returnPaymentId &&
+        returnStatus !== "PAID" &&
+        returnStatus !== "FAILED" &&
+        returnStatus !== "EXPIRED" && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-8 py-6 dark:bg-black">
+              <Loader2 className="h-8 w-8 animate-spin text-black dark:text-white" />
+              <p className="text-sm font-medium text-black dark:text-white">
+                جاري التحقق من الدفع...
+              </p>
+            </div>
+          </div>
+        )}
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-gray-800 dark:bg-black/95">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
@@ -1274,9 +1313,9 @@ function StoreManagement() {
                     className="w-full rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-gray-200"
                   >
                     {isSavingDomain
-                      ? "جاري التحويل لزين كاش..."
+                      ? "جاري التحويل لصفحة الدفع..."
                       : domainPath === "buy" && domainPricing
-                        ? `الدفع عبر زين كاش — ${formatUsd(domainPricing.totalUsd)}`
+                        ? `الدفع عبر كي كارد — ${formatUsd(domainPricing.totalUsd)}`
                         : "حفظ سلاج المنصة"}
                   </button>
                 </form>

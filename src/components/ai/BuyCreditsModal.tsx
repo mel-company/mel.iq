@@ -15,7 +15,7 @@ import {
  * `#00c8ff` accent — so the purchase step doesn't read as a different product.
  *
  * Picking a pack and paying are two steps on purpose: the pay action leaves
- * the site for ZainCash, so a single mis-click on a card shouldn't redirect.
+ * the site for the payment gateway, so a single mis-click on a card shouldn't redirect.
  */
 
 interface BuyCreditsModalProps {
@@ -81,6 +81,9 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
         packId: selectedPack.id,
         returnBaseUrl,
       });
+      if (data.id) {
+        sessionStorage.setItem("mel_last_credit_payment_id", String(data.id));
+      }
       if (data.redirectUrl) {
         setRedirecting(true);
         window.location.href = data.redirectUrl;
@@ -135,7 +138,7 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
                 اشحن رصيد الذكاء الاصطناعي
               </h2>
               <p className="mt-2 text-sm text-white/50">
-                اختر الباقة وادفع عبر زين كاش — يُضاف الرصيد فوراً
+                اختر الباقة وادفع عبر كي كارد — يُضاف الرصيد فوراً
               </p>
 
               {credits && !credits.unlimited && (
@@ -148,7 +151,7 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
             {redirecting ? (
               <div className="flex flex-col items-center justify-center gap-3 py-10">
                 <Loader2 size={32} className="animate-spin text-[#00c8ff]" />
-                <p className="text-sm text-white/60">جاري توجيهك إلى بوابة زين كاش...</p>
+                <p className="text-sm text-white/60">جاري توجيهك إلى بوابة الدفع...</p>
               </div>
             ) : isLoading ? (
               <div className="space-y-3" aria-busy="true" aria-label="جاري تحميل الباقات">
@@ -251,7 +254,7 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
                   {purchase.isPending && <Loader2 size={16} className="animate-spin" />}
                   {selectedPack ? (
                     <>
-                      ادفع عبر زين كاش —
+                      ادفع عبر كي كارد —
                       <span dir="ltr">
                         {selectedPack.price.toLocaleString()} {selectedPack.currency}
                       </span>
@@ -263,7 +266,7 @@ export default function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps)
 
                 <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-white/35">
                   <ShieldCheck size={13} />
-                  دفع آمن عبر زين كاش — يُضاف الرصيد تلقائياً بعد إتمام الدفع
+                  دفع آمن عبر كي كارد — يُضاف الرصيد تلقائياً بعد إتمام الدفع
                 </p>
               </>
             )}

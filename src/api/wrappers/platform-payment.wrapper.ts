@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   platformPaymentAPI,
+  PlatformPayment,
   PlatformPaymentInitPayload,
 } from "../endpoints/platform-payment.endpoint";
 
@@ -25,9 +26,8 @@ export const usePlatformPaymentStatus = (
     queryFn: () => platformPaymentAPI.getStatus(id!),
     enabled: enabled && !!id,
     refetchInterval: (query) => {
-      const status = (query.state.data as { status?: string } | undefined)
-        ?.status;
-      if (status === "PENDING") return 3000;
+      const status = (query.state.data as PlatformPayment | undefined)?.status;
+      if (status === "PENDING") return 2500;
       return false;
     },
   });
