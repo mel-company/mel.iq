@@ -416,6 +416,15 @@ export default function PromptComposer() {
   // Set to true when the stream emits its terminal event (proposal/done/error).
   const designTerminalRef = useRef(false);
   const buildTerminalRef = useRef(false);
+  /**
+   * The stream the modal is watching, so dismissing it can stop reading.
+   *
+   * Without this, closing the panel only hides it: the SSE reader keeps
+   * delivering events into a composer that has gone back to idle, and the
+   * design half ends by parking a build that the effect below then starts —
+   * charging a credit for a store the merchant just walked away from.
+   */
+  const runAbort = useRef<AbortController | null>(null);
 
   useEffect(() => {
     sessionStorage.setItem(DRAFT_KEY, prompt);
@@ -850,6 +859,9 @@ export default function PromptComposer() {
       return;
     }
 
+    const controller = new AbortController();
+    runAbort.current = controller;
+
     try {
       let referenceImages: string[] = [];
       let brandKitImages: string[] | undefined;
@@ -870,6 +882,7 @@ export default function PromptComposer() {
             ? aiStoreGeneratorAPI.uploadReferences(brandKit)
             : Promise.resolve({ urls: [] as string[] }),
         ]);
+        if (controller.signal.aborted) return;
         referenceImages = refs.urls;
         brandKitImages = kit.urls.length ? kit.urls : undefined;
         setPendingRefs(refs.urls);
@@ -958,7 +971,10 @@ export default function PromptComposer() {
               break;
           }
         },
+        controller.signal,
       );
+
+      if (controller.signal.aborted) return;
 
       const decided = proposal.value;
       if (!decided) {
@@ -1001,6 +1017,7 @@ export default function PromptComposer() {
         brandKitImages,
       });
     } catch (e) {
+      if (controller.signal.aborted) return;
       setError(
         e instanceof Error ? e.message : "تعذر إنشاء المتجر. حاول مرة أخرى.",
       );
@@ -1023,6 +1040,9 @@ export default function PromptComposer() {
       setError("لا يوجد رصيد كافٍ. اشحن رصيدك أولاً.");
       return;
     }
+
+    const controller = new AbortController();
+    runAbort.current = controller;
 
     setPhase("generating");
     setEntries([]);
@@ -1115,7 +1135,14 @@ export default function PromptComposer() {
               break;
           }
         },
+        controller.signal,
       );
+
+      // Dismissed mid-build. The run keeps going on the server and its handle
+      // is still in storage, so there is nothing to finish here — picking the
+      // result up would drop a success modal onto a page the merchant has
+      // moved on from.
+      if (controller.signal.aborted) return;
 
       if (result) {
         setPhase("done");
@@ -1141,6 +1168,7 @@ export default function PromptComposer() {
       }
       setPhase("idle");
     } catch (e) {
+      if (controller.signal.aborted) return;
       setError(
         e instanceof Error ? e.message : "تعذر إنشاء المتجر. حاول مرة أخرى.",
       );
@@ -1265,6 +1293,59 @@ export default function PromptComposer() {
     phase === "generating" ||
     phase === "polling";
 
+  /**
+   * Puts the composer back the way it was before a run.
+   *
+   * Every way out of the progress panel — retry, close, dismiss, finishing a
+   * store — lands here, because leaving any one of these fields behind shows
+   * it to the next run: a stale `stalled` reads as "توقف" over a build that
+   * has only just started, and a stale question index skips the first question
+   * of the next design.
+   */
+  const resetRun = () => {
+    setError(null);
+    setErrorCode(null);
+    setRefunded(false);
+    setStalled(false);
+    setResumed(null);
+    setPhase("idle");
+    setEntries([]);
+    setSteps([]);
+    stepsRef.current = [];
+    setActiveStep(0);
+    setStoreName(undefined);
+    setQuestions([]);
+    setQuestionsReady(false);
+    setAnswers({});
+    answersRef.current = {};
+    setQuestionIndex(0);
+    setVisitedQuestions(new Set());
+    setBuildConfirmed(false);
+    setPendingBuild(null);
+    setPendingRefs(undefined);
+    setPendingKit(undefined);
+    setGenerationId(null);
+    answerAdvanceRef.current = null;
+    buildStartedRef.current = false;
+    designTerminalRef.current = false;
+    buildTerminalRef.current = false;
+  };
+
+  /**
+   * Closes the progress panel, whatever the run is doing.
+   *
+   * Only the client stops. Nothing on the server notices a watcher leaving, so
+   * a build in flight runs to completion either way — and the stored handle is
+   * deliberately left alone, so the run is still there to pick up from the
+   * history list or from a reload. Dropping the handle is what would actually
+   * lose the merchant their credit.
+   */
+  const dismissRun = () => {
+    runAbort.current?.abort();
+    runAbort.current = null;
+    resetRun();
+  };
+
   useEffect(() => {
     if (!busy) return;
     const protectActiveRun = (event: BeforeUnloadEvent) => {
@@ -1349,62 +1430,8 @@ export default function PromptComposer() {
             setStalled(false);
           }}
           designReady={Boolean(pendingBuild) || phase === "awaiting"}
-          onRetry={
-            error
-              ? () => {
-                setError(null);
-                setErrorCode(null);
-                setPhase("idle");
-                setEntries([]);
-                setSteps([]);
-                stepsRef.current = [];
-                setActiveStep(0);
-                setQuestions([]);
-                setQuestionsReady(false);
-                setAnswers({});
-                answersRef.current = {};
-                setQuestionIndex(0);
-                setVisitedQuestions(new Set());
-                setBuildConfirmed(false);
-                setPendingBuild(null);
-                setPendingRefs(undefined);
-                setPendingKit(undefined);
-                setGenerationId(null);
-                answerAdvanceRef.current = null;
-                buildStartedRef.current = false;
-                designTerminalRef.current = false;
-                buildTerminalRef.current = false;
-              }
-              : undefined
-          }
-          onClose={
-            error
-              ? () => {
-                setError(null);
-                setErrorCode(null);
-                setPhase("idle");
-                setEntries([]);
-                setSteps([]);
-                stepsRef.current = [];
-                setActiveStep(0);
-                setQuestions([]);
-                setQuestionsReady(false);
-                setAnswers({});
-                answersRef.current = {};
-                setQuestionIndex(0);
-                setVisitedQuestions(new Set());
-                setBuildConfirmed(false);
-                setPendingBuild(null);
-                setPendingRefs(undefined);
-                setPendingKit(undefined);
-                setGenerationId(null);
-                answerAdvanceRef.current = null;
-                buildStartedRef.current = false;
-                designTerminalRef.current = false;
-                buildTerminalRef.current = false;
-              }
-              : undefined
-          }
+          onRetry={error ? resetRun : undefined}
+          onClose={dismissRun}
         />
         <SuccessModal
           open={Boolean(success)}
@@ -1416,29 +1443,10 @@ export default function PromptComposer() {
           onClose={() => {
             // Back to a fresh composer; the store is safe in history.
             setSuccess(null);
-            setPhase("idle");
-            setEntries([]);
-            setSteps([]);
-            stepsRef.current = [];
-            setActiveStep(0);
             setPrompt("");
             clearImages();
             clearBrandKit();
-            setQuestions([]);
-            setQuestionsReady(false);
-            setAnswers({});
-            answersRef.current = {};
-            setQuestionIndex(0);
-            setVisitedQuestions(new Set());
-            setBuildConfirmed(false);
-            setPendingBuild(null);
-            setPendingRefs(undefined);
-            setPendingKit(undefined);
-            setGenerationId(null);
-            answerAdvanceRef.current = null;
-            buildStartedRef.current = false;
-            designTerminalRef.current = false;
-            buildTerminalRef.current = false;
+            resetRun();
           }}
         />
         <BuyCreditsModal open={buyOpen} onClose={() => setBuyOpen(false)} />

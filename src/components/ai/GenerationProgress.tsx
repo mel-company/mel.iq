@@ -160,6 +160,16 @@ interface GenerationProgressProps {
    */
   designReady?: boolean;
   onRetry?: () => void;
+  /**
+   * Dismisses the panel.
+   *
+   * Offered at every point in a run, not only after a failure. A merchant who
+   * changed their mind — or who just wants their page back while the build
+   * works — was otherwise held here for the length of the run, with the tab
+   * itself the only way out. What closing *means* is the caller's business;
+   * all this component guarantees is that nothing in flight is dropped without
+   * saying so first, which is what the confirmation step below is for.
+   */
   onClose?: () => void;
 }
 
@@ -443,6 +453,40 @@ export default function GenerationProgress({
   const paused = Boolean(current) || (showingConfirmation && !buildConfirmed);
   const rawSegment = segmentOf(phase, steps, activeStep);
 
+  /**
+   * Whether closing needs to be asked about first.
+   *
+   * A failed run and a design parked for approval both have nothing in flight
+   * — closing them costs the merchant nothing, and an "are you sure" over a
+   * decision with no consequence is just a second click. Everything else is
+   * work in progress, and what happens to it differs enough between the two
+   * halves of the run that the panel has to say which.
+   */
+  const closeNeedsConfirming = !error && !awaitingApproval;
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const stayButton = useRef<HTMLButtonElement>(null);
+
+  const requestClose = () => {
+    if (!onClose) return;
+    if (closeNeedsConfirming) {
+      setConfirmingClose(true);
+      return;
+    }
+    onClose();
+  };
+
+  // A run that ends while the confirmation is up takes the question with it:
+  // by then it is asking about work that is no longer running.
+  useEffect(() => {
+    if (!closeNeedsConfirming) setConfirmingClose(false);
+  }, [closeNeedsConfirming]);
+
+  // Enter on a confirmation nobody read should put the merchant back in the
+  // run, not out of it, so the safe choice takes the focus.
+  useEffect(() => {
+    if (confirmingClose) stayButton.current?.focus({ preventScroll: true });
+  }, [confirmingClose]);
+
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
@@ -513,8 +557,11 @@ export default function GenerationProgress({
     });
     const trapFocus = (event: KeyboardEvent) => {
       if (event.key !== "Tab" || !dialogRef.current) return;
+      const root =
+        dialogRef.current.querySelector<HTMLElement>('[data-close-confirm="true"]') ??
+        dialogRef.current;
       const focusable = Array.from(
-        dialogRef.current.querySelectorAll<HTMLElement>(
+        root.querySelectorAll<HTMLElement>(
           'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
       );
@@ -525,7 +572,7 @@ export default function GenerationProgress({
       }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (!dialogRef.current.contains(document.activeElement)) {
+      if (!root.contains(document.activeElement)) {
         event.preventDefault();
         first.focus();
       } else if (event.shiftKey && document.activeElement === first) {
@@ -543,6 +590,25 @@ export default function GenerationProgress({
       previousFocus.current?.focus();
     };
   }, [open]);
+
+  // Escape backs out of the confirmation before it backs out of the run —
+  // otherwise the key that asks "close?" also answers it.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (confirmingClose) {
+        setConfirmingClose(false);
+        return;
+      }
+      requestClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // `requestClose` is redefined every render; the values it closes over are
+    // the dependencies that matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, confirmingClose, closeNeedsConfirming, onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -627,15 +693,19 @@ export default function GenerationProgress({
           dir="rtl"
           className="relative flex h-dvh max-h-dvh w-full max-w-2xl flex-col overflow-hidden border border-[#00c8ff]/15 bg-gradient-to-b from-[#161c46] via-[#111637] to-[#0b0f2b] text-start shadow-[0_30px_90px_-20px_rgba(0,0,0,0.8)] outline-none animate-[modal-rise_200ms_ease-out] sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-[28px]"
         >
-          {/* Ambient glow. Purely decorative, and behind everything that reads. */}
+          {/* Ambient glow. Purely decorative, and behind everything that reads.
+              Kept inside its own clipped box: both circles are wider than a
+              phone, and an overflowing child leaves the dialog with a scroll
+              region that `overflow-hidden` hides but does not remove — enough
+              for the browser to scroll the panel sideways the first time
+              anything in it takes focus, dragging its headings off screen. */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -top-32 start-1/2 h-64 w-[28rem] -translate-x-1/2 rounded-full bg-[#00c8ff]/15 blur-3xl"
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -bottom-40 end-0 h-64 w-72 rounded-full bg-[#a855f7]/10 blur-3xl"
-          />
+            className="pointer-events-none absolute inset-0 overflow-hidden"
+          >
+            <div className="absolute -top-32 start-1/2 h-64 w-[28rem] -translate-x-1/2 rounded-full bg-[#00c8ff]/15 blur-3xl" />
+            <div className="absolute -bottom-40 end-0 h-64 w-72 rounded-full bg-[#a855f7]/10 blur-3xl" />
+          </div>
 
           <div className="relative flex shrink-0 items-start justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-6">
             {!error ? (
@@ -675,8 +745,9 @@ export default function GenerationProgress({
             {onClose && (
               <button
                 type="button"
-                onClick={onClose}
+                onClick={requestClose}
                 aria-label="إغلاق"
+                title={closeNeedsConfirming ? "إيقاف وإغلاق" : "إغلاق"}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/45 transition-colors hover:bg-white/10 hover:text-white"
               >
                 <X size={16} />
@@ -997,6 +1068,60 @@ export default function GenerationProgress({
               </div>
             )}
           </div>
+
+          {confirmingClose && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#05070f]/80 p-4 backdrop-blur-sm animate-[modal-fade_140ms_ease-out]">
+              <div
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="gen-close-title"
+                aria-describedby="gen-close-body"
+                data-close-confirm="true"
+                className="w-full max-w-sm rounded-3xl border border-white/10 bg-gradient-to-b from-[#161c46] to-[#0b0f2b] p-5 text-start shadow-[0_24px_70px_-20px_rgba(0,0,0,0.85)]"
+              >
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle size={18} className="mt-0.5 shrink-0 text-[#00c8ff]" />
+                  <div className="min-w-0">
+                    <p id="gen-close-title" className="text-sm font-medium text-white">
+                      {phase === "code" ? "إغلاق نافذة الإنشاء؟" : "إيقاف تصميم متجرك؟"}
+                    </p>
+                    <p
+                      id="gen-close-body"
+                      className="mt-1.5 text-[13px] leading-relaxed text-white/60"
+                    >
+                      {phase === "code"
+                        ? // The credit is already spent and the server does not
+                          // stop when the tab does, so offering to "cancel" here
+                          // would be a promise we cannot keep. What closing
+                          // actually does is stop watching.
+                          "سيستمر بناء متجرك على الخادم بعد الإغلاق، ولن يُخصم رصيد إضافي. يمكنك متابعته من سجل متاجرك أو بإعادة فتح الصفحة."
+                        : "لم يُخصم أي رصيد بعد، وسيتوقف العمل على التصميم. وصف متجرك يبقى كما هو لتبدأ من جديد متى شئت."}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-5 flex gap-2">
+                  <button
+                    type="button"
+                    ref={stayButton}
+                    onClick={() => setConfirmingClose(false)}
+                    className="min-h-11 flex-1 rounded-full bg-[#00c8ff] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#33d4ff]"
+                  >
+                    {phase === "code" ? "البقاء هنا" : "متابعة التصميم"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmingClose(false);
+                      onClose?.();
+                    }}
+                    className="min-h-11 flex-1 rounded-full border border-white/15 px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/5"
+                  >
+                    {phase === "code" ? "إغلاق" : "إيقاف"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </ModalPortal>

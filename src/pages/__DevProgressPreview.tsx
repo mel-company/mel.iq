@@ -18,6 +18,9 @@ export default function DevProgressPreview() {
           { key: "home", label: "جاري تجهيز الصفحة الرئيسية…", weight: 1 },
         ]}
         activeStep={1}
+        // Dev-only: the panel hides its dismiss control when there is nothing
+        // to call, and this preview exists to look at the controls.
+        onClose={() => console.log("dismissed")}
       />
     </div>
   );

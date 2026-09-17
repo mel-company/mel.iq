@@ -458,7 +458,27 @@ export const aiStoreGeneratorAPI = {
     id: string,
     pageType: string,
     feedback: string,
-  ): Promise<{ pageType: string; sections: unknown[]; design: PageDesign }> => {
+  ): Promise<{
+    pageType: string;
+    sections: unknown[];
+    design: PageDesign;
+    /**
+     * What the audit made of the page coming back.
+     *
+     * The build path has always audited every page after the repair chain and
+     * refused to persist a store carrying hard findings. This path ran the
+     * same chain and then nothing, so a revised page was the only tree that
+     * reached a merchant unexamined. It is reported rather than enforced —
+     * discarding a revision the merchant waited on is worse than the finding —
+     * which only works if the verdict actually travels this far.
+     */
+    findings: Array<{
+      severity: "hard" | "soft";
+      code: string;
+      /** Arabic, actionable, and specific about what failed. */
+      message: string;
+    }>;
+  }> => {
     const { data } = await axiosInstance.post(
       `/ai-agent/store-generator/${id}/revise`,
       { pageType, feedback },

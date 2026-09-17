@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { BookOpen, MessageCircle, Phone, Send } from "../icons";
+import { BookOpen, Loader2, MessageCircle, Phone, Send } from "../icons";
 import { toast } from "sonner";
 import SectionEyebrow from "./SectionEyebrow";
+import { useSubmitContact } from "@/api/wrappers/contact.wrappers";
+import { getApiErrorMessage } from "@/utils/otp";
+import { iqPhoneError, toIqE164 } from "@/utils/phone";
 
 const MESSAGE_MAX = 500;
 
@@ -39,10 +42,13 @@ const CHANNELS = [
 function Field({
   label,
   hint,
+  hintTone,
   children,
 }: {
   label: string;
   hint?: string;
+  /** "error" turns the hint red — the slot doubles as the validation message. */
+  hintTone?: "error";
   children: React.ReactNode;
 }) {
   // `w-full` rather than `items-end`: an end-aligned column shrinks its
@@ -52,7 +58,13 @@ function Field({
     <label className="flex w-full flex-1 flex-col gap-1 text-right">
       <span className="text-sm font-medium text-muted">{label}</span>
       {children}
-      {hint && <span className="text-xs text-muted">{hint}</span>}
+      {hint && (
+        <span
+          className={`text-xs ${hintTone === "error" ? "text-rose-400" : "text-muted"}`}
+        >
+          {hint}
+        </span>
+      )}
     </label>
   );
 }
@@ -60,15 +72,21 @@ function Field({
 const INPUT =
   "w-full rounded-[14px] bg-slate px-4 py-3.5 text-sm text-white placeholder:text-[#4a5596] outline-none transition-shadow focus:ring-2 focus:ring-brand-primary/40";
 
+const EMPTY_FORM = {
+  phone: "",
+  name: "",
+  email: "",
+  subject: "",
+  message: "",
+  // Honeypot — see the off-screen field near the submit button.
+  lpReference: "",
+};
+
 /** "تواصل معنا" — the message form beside the three support channels. */
 function ContactSection() {
-  const [form, setForm] = useState({
-    phone: "",
-    name: "",
-    email: "",
-    subject: "",
-    message: "",
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [phoneError, setPhoneError] = useState("");
+  const { mutate: submit, isPending } = useSubmitContact();
 
   const set = (key: keyof typeof form) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -76,11 +94,51 @@ function ContactSection() {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // There is no messages endpoint yet — the same place the standalone
-    // contact page stops. The form validates and acknowledges, and wiring it
-    // up is a single call once the endpoint exists.
-    toast.success("تم استلام رسالتك، سنرد عليك خلال يوم عمل واحد");
-    setForm({ phone: "", name: "", email: "", subject: "", message: "" });
+    if (isPending) return;
+
+    // The phone is optional, and `iqPhoneError("")` returns "يرجى إدخال رقم
+    // الهاتف." — so calling it unconditionally would block every visitor who
+    // leaves the field blank, with a message telling them to fill a field
+    // labelled "اختياري". Only validate what was actually typed.
+    let phone: string | undefined;
+    if (form.phone.trim()) {
+      const error = iqPhoneError(form.phone);
+      if (error) {
+        setPhoneError(error);
+        return;
+      }
+      // Store E.164: the admin dashboard builds a wa.me link from this, and
+      // wa.me takes bare digits with no "+" or spaces.
+      phone = toIqE164(form.phone) ?? undefined;
+    }
+    setPhoneError("");
+
+    submit(
+      {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone,
+        subject: form.subject.trim(),
+        message: form.message.trim(),
+        lpReference: form.lpReference,
+      },
+      {
+        onSuccess: (data) => {
+          toast.success(
+            data?.message || "تم استلام رسالتك، سنرد عليك خلال يوم عمل واحد",
+          );
+          setForm(EMPTY_FORM);
+        },
+        onError: (error) => {
+          toast.error(
+            getApiErrorMessage(
+              error,
+              "تعذر إرسال رسالتك. يرجى المحاولة مرة أخرى.",
+            ),
+          );
+        },
+      },
+    );
   };
 
   return (
@@ -104,7 +162,7 @@ function ContactSection() {
           <form
             onSubmit={handleSubmit}
             data-reveal
-            className="flex flex-1 flex-col gap-4 rounded-[18px] p-6 sm:p-8"
+            className="relative flex flex-1 flex-col gap-4 rounded-[18px] p-6 sm:p-8"
             style={{ backgroundImage: PANEL }}
           >
             <div className="flex w-full flex-col pb-2 text-right">
@@ -124,12 +182,19 @@ function ContactSection() {
                   className={`${INPUT} text-right`}
                 />
               </Field>
-              <Field label="رقم الهاتف" hint="اختياري — للتواصل السريع عبر واتساب">
+              <Field
+                label="رقم الهاتف"
+                hint={phoneError || "اختياري — للتواصل السريع عبر واتساب"}
+                hintTone={phoneError ? "error" : undefined}
+              >
                 <input
                   type="tel"
                   dir="ltr"
                   value={form.phone}
-                  onChange={set("phone")}
+                  onChange={(e) => {
+                    setPhoneError("");
+                    set("phone")(e);
+                  }}
                   placeholder="+964 7XX XXX XXXX"
                   className={INPUT}
                 />
@@ -173,12 +238,39 @@ function ContactSection() {
               {form.message.length}/{MESSAGE_MAX}
             </p>
 
+            {/* Honeypot. Positioned off-screen rather than display:none —
+                naive bots skip hidden fields but happily fill positioned ones.
+                aria-hidden and tabIndex keep humans out, and autoComplete="off"
+                stops a password manager filling it and silently binning a real
+                submission. The name avoids `company`/`organization`, which
+                autofill does recognise. */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -left-[9999px] top-0 h-0 w-0 overflow-hidden"
+            >
+              <label htmlFor="lp-reference">لا تملأ هذا الحقل</label>
+              <input
+                id="lp-reference"
+                name="lpReference"
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                value={form.lpReference}
+                onChange={set("lpReference")}
+              />
+            </div>
+
             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-l from-brand-violet to-brand-indigo px-3.5 py-4 text-[15px] font-bold text-white transition-opacity hover:opacity-90"
+              disabled={isPending}
+              className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-l from-brand-violet to-brand-indigo px-3.5 py-4 text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              إرسال الرسالة
-              <Send size={18} />
+              {isPending ? "جاري الإرسال…" : "إرسال الرسالة"}
+              {isPending ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Send size={18} />
+              )}
             </button>
           </form>
 

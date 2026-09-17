@@ -1,12 +1,20 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
+import { useSubmitContact } from '@/api/wrappers/contact.wrappers'
+import { getApiErrorMessage } from '@/utils/otp'
+
+const EMPTY_FORM = {
+  name: '',
+  email: '',
+  subject: '',
+  message: '',
+  // Honeypot — see the off-screen field above the submit button.
+  lpReference: ''
+}
 
 function Contact() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    subject: '',
-    message: ''
-  })
+  const [formData, setFormData] = useState(EMPTY_FORM)
+  const { mutate: submit, isPending } = useSubmitContact()
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({
@@ -15,12 +23,33 @@ function Contact() {
     })
   }
 
+  // Same endpoint as the contact section on the landing page: this route used
+  // to console.log and throw the message away. No phone field here, which the
+  // API treats as optional.
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    // Handle form submission here
-    console.log('Form submitted:', formData)
-    alert('شكراً لرسالتك! سنعود إليك قريباً.')
-    setFormData({ name: '', email: '', subject: '', message: '' })
+    if (isPending) return
+
+    submit(
+      {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        subject: formData.subject.trim(),
+        message: formData.message.trim(),
+        lpReference: formData.lpReference
+      },
+      {
+        onSuccess: (data) => {
+          toast.success(data?.message || 'شكراً لرسالتك! سنعود إليك قريباً.')
+          setFormData(EMPTY_FORM)
+        },
+        onError: (error) => {
+          toast.error(
+            getApiErrorMessage(error, 'تعذر إرسال رسالتك. يرجى المحاولة مرة أخرى.')
+          )
+        }
+      }
+    )
   }
 
   return (
@@ -40,7 +69,7 @@ function Contact() {
           {/* Contact Form */}
           <div className="bg-white dark:bg-black rounded-2xl shadow-lg border border-gray-200 dark:border-gray-800 p-8 transition-colors duration-200">
             <h2 className="text-2xl font-bold text-black dark:text-white mb-6">أرسل لنا رسالة</h2>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="relative space-y-6">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">
                   الاسم
@@ -101,11 +130,31 @@ function Contact() {
                   placeholder="رسالتك هنا..."
                 />
               </div>
+              {/* Honeypot: off-screen, not display:none — bots skip hidden
+                  fields but fill positioned ones. The name avoids
+                  `company`/`organization`, which autofill does recognise. */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -left-[9999px] top-0 h-0 w-0 overflow-hidden"
+              >
+                <label htmlFor="contact-reference">لا تملأ هذا الحقل</label>
+                <input
+                  id="contact-reference"
+                  name="lpReference"
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={formData.lpReference}
+                  onChange={handleChange}
+                />
+              </div>
+
               <button
                 type="submit"
-                className="w-full bg-black dark:bg-white text-white dark:text-black py-3 px-6 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"
+                disabled={isPending}
+                className="w-full bg-black dark:bg-white text-white dark:text-black py-3 px-6 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
               >
-                إرسال الرسالة
+                {isPending ? 'جاري الإرسال…' : 'إرسال الرسالة'}
               </button>
             </form>
           </div>
