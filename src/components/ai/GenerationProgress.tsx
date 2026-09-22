@@ -292,7 +292,11 @@ const FAILURE_ADVICE: Record<FailureCode, { title: string; advice?: string; retr
   },
   timeout: {
     title: "انتهت المهلة",
-    advice: "تحقق من اتصالك ثم أعد المحاولة.",
+    // Not "check your connection". This code now covers a dropped connection
+    // between our server and the AI provider as well as a slow one from the
+    // merchant, and the two are indistinguishable from here — so the advice
+    // must not send them to look at a router that is working fine.
+    advice: "قد تكون المشكلة مؤقتة، حاول مرة أخرى.",
     retry: true,
   },
   "qa-gate": {
