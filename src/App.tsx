@@ -18,6 +18,7 @@ import OTPVerification from "./pages/Otp";
 import { Toaster } from "./components/ui/sonner";
 import NotFound from "./pages/NotFound";
 import AuthRedirectError from "./pages/AuthRedirectError";
+import PublicTicketChat from "./pages/PublicTicketChat";
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -116,6 +117,7 @@ function App() {
         />
         {/* Standalone, like the other auth screens. */}
         <Route path="/checkout" element={<Checkout />} />
+        <Route path="/ticket/:token" element={<PublicTicketChat />} />
         <Route
           path="/checkout/payment-return"
           element={

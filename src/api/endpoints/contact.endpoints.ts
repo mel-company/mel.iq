@@ -14,6 +14,8 @@ export type ContactPayload = {
 export type ContactResult = {
   ok: boolean;
   message: string;
+  /** Guest chat link for LANDING_PAGE tickets (when the API returns one). */
+  chatUrl?: string;
 };
 
 /**

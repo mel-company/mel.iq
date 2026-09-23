@@ -42,6 +42,9 @@ function Contact() {
         onSuccess: (data) => {
           toast.success(data?.message || 'شكراً لرسالتك! سنعود إليك قريباً.')
           setFormData(EMPTY_FORM)
+          if (data?.chatUrl) {
+            window.open(data.chatUrl, '_blank', 'noopener')
+          }
         },
         onError: (error) => {
           toast.error(

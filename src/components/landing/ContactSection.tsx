@@ -92,7 +92,7 @@ function ContactSection() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isPending) return;
 
@@ -128,6 +128,21 @@ function ContactSection() {
             data?.message || "تم استلام رسالتك، سنرد عليك خلال يوم عمل واحد",
           );
           setForm(EMPTY_FORM);
+
+          if (data?.chatUrl) {
+            toast.message("تم فتح محادثة التذكرة", {
+              description: "احفظ الرابط لمتابعة الردود",
+              action: {
+                label: "افتح المحادثة",
+                onClick: () =>
+                  window.open(data.chatUrl, "_blank", "noopener"),
+              },
+              duration: 12000,
+            });
+            window.setTimeout(() => {
+              window.location.href = data.chatUrl!;
+            }, 800);
+          }
         },
         onError: (error) => {
           toast.error(
