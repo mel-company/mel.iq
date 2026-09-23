@@ -2,12 +2,15 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useStorefrontUrl } from "../hooks/useStorefrontUrl";
 
 function Navbar() {
   const location = useLocation();
   const { isDark, toggleTheme } = useTheme();
   const { user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const storefrontUrl = useStorefrontUrl();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -72,6 +75,32 @@ function Navbar() {
 
           {/* Section 3: Actions (Login/Dashboard + Theme Toggle) */}
           <div className="flex items-center space-x-2 flex-shrink-0">
+            {/* Desktop: Visit-my-store Button */}
+            {storefrontUrl && (
+              <a
+                href={storefrontUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden md:inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-sm font-medium text-gray-800 dark:text-gray-100 transition-colors hover:bg-gray-50 dark:hover:bg-gray-900"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
+                </svg>
+                زيارة متجري
+              </a>
+            )}
+
             {/* Desktop: Login/Dashboard Button */}
             <div className="hidden md:block">
               {user ? (
@@ -210,7 +239,32 @@ function Navbar() {
               </Link>
 
               {/* Mobile Login/Dashboard Button */}
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-800 mt-2">
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-800 mt-2 space-y-2">
+                {storefrontUrl && (
+                  <a
+                    href={storefrontUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 text-base font-medium text-gray-800 dark:text-gray-100 transition-colors hover:bg-gray-50 dark:hover:bg-gray-900"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                      />
+                    </svg>
+                    زيارة متجري
+                  </a>
+                )}
                 {user ? (
                   <Link
                     to="/dashboard"

@@ -15,10 +15,13 @@ export const storeKeys = {
 /**
  * Fetch all stores with optional filtering and pagination
  */
-export const useFetchStores = (params?: any) => {
+export const useFetchStores = (params?: any, enabled: boolean = true) => {
   return useQuery<any>({
     queryKey: storeKeys.list(params),
     queryFn: () => storeAPI.fetchAll(params),
+    // The navbar renders on public pages too, where there is no session to
+    // fetch stores for.
+    enabled,
   });
 };
 

@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useCallback, useState } from "react";
+import {
+  normalizeApiResponse,
+  resolveDashboardUrl,
+  resolveStorefrontUrl,
+} from "../utils/storeUrls";
 import { useNavigate } from "react-router-dom";
 import { useQueries } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
@@ -33,37 +38,6 @@ interface Store {
   is_deleted?: boolean;
 }
 
-/** Prefer API storeUrl, then customDomain, then platform slug. */
-const resolveStorefrontUrl = (store: Store): string | null => {
-  if (store.storeUrl?.trim()) return store.storeUrl.trim();
-  if (store.customDomain?.trim()) {
-    const host = store.customDomain.trim().replace(/^https?:\/\//, "");
-    return `https://${host}`;
-  }
-  const slug = store.domain
-    ?.trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/^dash\./, "")
-    .replace(/\.mel\.iq$/i, "")
-    .split("/")[0]
-    ?.split(".")[0];
-  if (!slug) return null;
-  return `https://${slug}.mel.iq`;
-};
-
-/** https://dash.{slug}.mel.iq */
-const resolveDashboardUrl = (store: Store): string | null => {
-  const slug = store.domain
-    ?.trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/^dash\./, "")
-    .replace(/\.mel\.iq$/i, "")
-    .split("/")[0]
-    ?.split(".")[0];
-  if (!slug) return null;
-  return `https://dash.${slug}.mel.iq`;
-};
-
 interface Subscription {
   id: string;
   storeId: string;
@@ -82,12 +56,6 @@ interface TimeRemaining {
 }
 
 // Utils
-const normalizeApiResponse = <T,>(data: any): T[] => {
-  if (!data) return [];
-  const normalized = data?.data || data?.stores || data?.subscriptions || data;
-  return Array.isArray(normalized) ? normalized : [];
-};
-
 const getTimeRemaining = (endDate?: string): TimeRemaining | null => {
   if (!endDate) return null;
 

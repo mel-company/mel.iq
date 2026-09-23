@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Menu, X } from "./icons";
+import { ExternalLink, LayoutDashboard, Menu, X } from "./icons";
 import { useAuth } from "../contexts/AuthContext";
+import { useStorefrontUrl } from "../hooks/useStorefrontUrl";
 import { useScrollReveal } from "../hooks/useScrollReveal";
 import SiteFooter from "./landing/SiteFooter";
 
@@ -26,6 +27,7 @@ const SECTION_FOR_INDEX = NAV_ITEMS.map((item) => item.hash.replace("#", ""));
 
 function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
   const { user, loading } = useAuth();
+  const storefrontUrl = useStorefrontUrl();
 
   if (loading) {
     return <div className="h-15 w-[187px] animate-pulse rounded-[18px] bg-white/5" />;
@@ -33,14 +35,28 @@ function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
 
   if (user) {
     return (
-      <Link
-        to="/dashboard"
-        onClick={onNavigate}
-        className="flex h-15 w-full items-center justify-center gap-2 rounded-[18px] border border-white/15 bg-[linear-gradient(90deg,#4f60f9_0%,#7569ff_100%)] px-4 text-base font-bold text-white transition-opacity hover:opacity-90 sm:w-[187px]"
-      >
-        <LayoutDashboard size={16} />
-        لوحة التحكم
-      </Link>
+      <>
+        <Link
+          to="/dashboard"
+          onClick={onNavigate}
+          className="flex h-15 w-full items-center justify-center gap-2 rounded-[18px] border border-white/15 bg-[linear-gradient(90deg,#4f60f9_0%,#7569ff_100%)] px-4 text-base font-bold text-white transition-opacity hover:opacity-90 sm:w-[187px]"
+        >
+          <LayoutDashboard size={16} />
+          لوحة التحكم
+        </Link>
+        {storefrontUrl && (
+          <a
+            href={storefrontUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onNavigate}
+            className="flex h-15 w-full items-center justify-center gap-2 rounded-[18px] border border-white/15 px-4 text-base text-white transition-colors hover:bg-white/5 sm:w-[187px]"
+          >
+            <ExternalLink size={16} />
+            زيارة متجري
+          </a>
+        )}
+      </>
     );
   }
 
