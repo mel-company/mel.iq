@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
   useRegister,
@@ -1124,7 +1124,14 @@ function Checkout() {
                   <CheckBox checked={acceptedTerms} onChange={setAcceptedTerms}>
                     أوافق على{" "}
                     <span className="font-bold text-brand-primary">الشروط والأحكام</span>{" "}
-                    و <span className="font-bold text-brand-primary">سياسة الخصوصية</span>
+                    و{" "}
+                    <Link
+                      to="/privacy-policy"
+                      className="font-bold text-brand-primary hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      سياسة الخصوصية
+                    </Link>
                   </CheckBox>
 
                   <StepFooter

@@ -180,7 +180,13 @@ function Login() {
                 <span className="text-[13px] leading-5 text-muted">
                   أوافق على{" "}
                   <span className="font-bold text-brand-primary">الشروط والأحكام</span> و{" "}
-                  <span className="font-bold text-brand-primary">سياسة الخصوصية</span>
+                  <Link
+                    to="/privacy-policy"
+                    className="font-bold text-brand-primary hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    سياسة الخصوصية
+                  </Link>
                 </span>
               </label>
 
