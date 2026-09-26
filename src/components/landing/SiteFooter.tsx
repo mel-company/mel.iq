@@ -12,12 +12,14 @@ const SOCIALS = [
 ];
 
 /**
- * The design renders these three as plain muted text, in the same style as
- * the copyright line beside them — no link affordance — which is just as well
- * because the app has no routes for them yet. They become <Link>s the day
- * those pages exist.
+ * Privacy policy and account deletion are live. Terms stay as plain text
+ * until that page exists.
  */
-const LEGAL = ["سياسة الخصوصية", "شروط الاستخدام", "ملفات الارتباط"];
+const LEGAL = [
+  { label: "سياسة الخصوصية", to: "/privacy-policy" },
+  { label: "حذف الحساب", to: "/delete-account" },
+  { label: "شروط الاستخدام", to: null },
+];
 
 function SiteFooter() {
   return (
@@ -74,8 +76,16 @@ function SiteFooter() {
         <div className="mt-6 flex flex-col items-center gap-4 py-6 text-xs text-muted sm:flex-row sm:justify-between">
           <p>© 2026 mel.iq — جميع الحقوق محفوظة.</p>
           <ul className="flex flex-wrap items-center justify-center gap-5">
-            {LEGAL.map((label) => (
-              <li key={label}>{label}</li>
+            {LEGAL.map((item) => (
+              <li key={item.label}>
+                {item.to ? (
+                  <Link to={item.to} className="transition-colors hover:text-frost">
+                    {item.label}
+                  </Link>
+                ) : (
+                  item.label
+                )}
+              </li>
             ))}
           </ul>
         </div>

@@ -8,6 +8,8 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Checkout from "./pages/Checkout";
 import CheckoutPaymentReturn from "./pages/CheckoutPaymentReturn";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import DeleteAccount from "./pages/DeleteAccount";
 import Templates from "./pages/Templates";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -112,6 +114,22 @@ function App() {
           element={
             <MarketingShell>
               <Contact />
+            </MarketingShell>
+          }
+        />
+        <Route
+          path="/privacy-policy"
+          element={
+            <MarketingShell>
+              <PrivacyPolicy />
+            </MarketingShell>
+          }
+        />
+        <Route
+          path="/delete-account"
+          element={
+            <MarketingShell>
+              <DeleteAccount />
             </MarketingShell>
           }
         />
