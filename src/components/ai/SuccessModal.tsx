@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import ModalPortal from "./ModalPortal";
 import { CheckCircle2, ExternalLink, Copy, X } from "@/components/icons";
 import { toast } from "sonner";
-import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
+import {
+  needsDashboardProvisioning,
+  useWaitForDashboardReady,
+} from "@/hooks/useWaitForDashboardReady";
 import StoreProvisioningGate from "@/components/StoreProvisioningGate";
 
 /**
@@ -74,7 +77,13 @@ export default function SuccessModal({
   const openEditor = async (newTab: boolean) => {
     if (!editorUrl) return;
 
-    if (!subdomain) {
+    // Only the store's own `dash.<slug>` host has a certificate to wait for.
+    // The handoff link is minted from the server's `EDITOR_URL` — one shared
+    // host — so for it there is nothing to provision, and waiting sent a
+    // finished store to the provisioning gate for three minutes. Opening
+    // without an await also keeps the new tab inside the click, where the
+    // popup blocker allows it.
+    if (!subdomain || !needsDashboardProvisioning(editorUrl, subdomain)) {
       navigateToEditor(editorUrl, newTab);
       return;
     }
