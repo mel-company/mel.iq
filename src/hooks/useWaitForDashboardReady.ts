@@ -27,6 +27,31 @@ function normalizeDomain(domain: string): string {
 }
 
 /**
+ * True when `url` is the store's own `dash.<slug>.…` host — the only
+ * destination whose DNS and certificate still have to be provisioned.
+ *
+ * The AI handoff link is minted from the server's `EDITOR_URL`, a single
+ * shared host (`editor.mel.iq`, or localhost in dev), so nothing about it
+ * waits on Total TLS. Gating it on `dash.<slug>` held a finished store behind
+ * a certificate the link never presents, and the merchant sat on the
+ * provisioning screen until it timed out three minutes later.
+ */
+export function needsDashboardProvisioning(
+  url: string,
+  subdomain?: string | null,
+): boolean {
+  const slug = subdomain ? normalizeDomain(subdomain) : "";
+  if (!slug) return false;
+
+  try {
+    const host = new URL(url, window.location.origin).hostname.toLowerCase();
+    return host.startsWith("dash.") && host.slice(5).split(".")[0] === slug;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Polls POST /domain/dashboard-ready until TLS+DNS are ready or timeout.
  * Use before redirecting to dash.{slug}.mel.iq after first-time store create.
  */
