@@ -1,14 +1,15 @@
-import { Facebook, Instagram, Linkedin, Twitter, Youtube } from "../icons";
+
+import { Facebook, Instagram, Linkedin, Tiktok, XTwitter, Youtube } from "../icons";
 import { Link } from "react-router-dom";
 
-/** In RTL reading order — the frame runs YouTube through Instagram left to
- *  right, so Instagram is the first one an Arabic reader meets. */
+/** In RTL reading order — Instagram is the first one an Arabic reader meets. */
 const SOCIALS = [
-  { label: "إنستغرام", Icon: Instagram, href: "https://www.instagram.com/meliq" },
-  { label: "فيسبوك", Icon: Facebook, href: "https://www.facebook.com/meliq" },
-  { label: "تويتر", Icon: Twitter, href: "https://twitter.com/meliq" },
-  { label: "لينكدإن", Icon: Linkedin, href: "https://www.linkedin.com/company/meliq" },
-  { label: "يوتيوب", Icon: Youtube, href: "https://www.youtube.com/@meliq" },
+  { label: "إنستغرام", Icon: Instagram, href: "https://www.instagram.com/melappcom" },
+  { label: "فيسبوك", Icon: Facebook, href: "https://www.facebook.com/melappcom" },
+    { label: "تيكتوك", Icon: Tiktok, href: "https://www.tiktok.com/@melappcom" },
+  { label: "إكس", Icon: XTwitter, href: "https://x.com/melappcom" },
+  { label: "لينكدإن", Icon: Linkedin, href: "https://www.linkedin.com/company/melappcom/" },
+  { label: "يوتيوب", Icon: Youtube, href: "https://www.youtube.com/@Melappcom" },
 ];
 
 /**

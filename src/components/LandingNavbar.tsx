@@ -60,17 +60,15 @@ function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
     );
   }
 
-  // Sign-in and sign-up are the same phone-OTP flow, so both land on /login;
-  // the design still shows them as two calls to action. The filled one comes
-  // first so RTL puts it on the right, where the frame has it.
+  // Sign-up starts checkout (plan + account). Sign-in is phone + OTP only.
   return (
     <>
       <Link
-        to="/login"
+        to="/checkout"
         onClick={onNavigate}
         className="flex h-15 w-full items-center justify-center rounded-[18px] border border-white/15 bg-[linear-gradient(90deg,#4f60f9_0%,#7569ff_100%)] px-4 text-base font-bold text-white transition-opacity hover:opacity-90 sm:w-[187px]"
       >
-        أنشئ حساب ألان
+        أنشئ حساب الآن
       </Link>
       <Link
         to="/login"
