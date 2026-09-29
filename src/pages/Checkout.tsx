@@ -33,7 +33,7 @@ import {
 } from "@/utils/phone";
 import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
 import StoreProvisioningGate from "@/components/StoreProvisioningGate";
-import { Loader2, Upload, X } from "@/components/icons";
+import { Loader2, Upload, X, ArrowRightIcon } from "@/components/icons";
 import CheckoutStepper from "@/components/checkout/CheckoutStepper";
 import OtpInputs from "@/components/auth/OtpInputs";
 import {
@@ -915,6 +915,14 @@ function Checkout() {
         aria-hidden
         className="pointer-events-none absolute -top-[383px] end-[-120px] size-[759px] rounded-full bg-[#1b5c8f]/25 blur-[180px]"
       />
+
+      <Link
+        to="/"
+        className="absolute top-5 start-5 z-10 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-muted transition-colors hover:bg-white/10 hover:text-frost sm:top-8 sm:start-8"
+      >
+        <ArrowRightIcon size={16} />
+        الرئيسية
+      </Link>
 
       <div className="relative mx-auto flex max-w-[1064px] flex-col gap-5 px-4 sm:px-6">
         {!location.state?.skipToStep && (

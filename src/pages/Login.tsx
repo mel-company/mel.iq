@@ -16,7 +16,7 @@ import BrandPanel from "@/components/auth/BrandPanel";
 function Login() {
   const navigate = useNavigate();
   const [phone, setPhone] = useState("");
-  const [accepted, setAccepted] = useState(true);
+  const [noAccount, setNoAccount] = useState(false);
   /** Server-side failures, which outlive a keystroke unlike the format check. */
   const [apiError, setApiError] = useState("");
   /**
@@ -37,24 +37,19 @@ function Login() {
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     setPhone(e.target.value.replace(/\D/g, ""));
     setApiError("");
+    setNoAccount(false);
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (isPending) return;
 
-    // Validate on submit too: the button stays clickable so the merchant gets
-    // told what is wrong instead of meeting a greyed-out button.
     setTouched(true);
     const e164 = toIqE164(phone);
     if (!e164) return;
 
-    if (!accepted) {
-      setApiError("يرجى الموافقة على الشروط والأحكام للمتابعة.");
-      return;
-    }
-
     setApiError("");
+    setNoAccount(false);
     login(
       { phone: e164 },
       {
@@ -63,6 +58,13 @@ function Login() {
           navigate("/otp", { state: { phone: e164 } });
         },
         onError: (err) => {
+          const status = (err as { response?: { status?: number } })?.response
+            ?.status;
+          if (status === 404) {
+            setNoAccount(true);
+            setApiError("لا يوجد حساب بهذا الرقم. أنشئ حسابك أولاً.");
+            return;
+          }
           setApiError(
             getApiErrorMessage(
               err,
@@ -94,7 +96,7 @@ function Login() {
 
             <div className="flex w-full flex-col gap-1.5">
               <h1 className="text-[30px] font-extrabold leading-[45px] text-frost">
-                مرحباً بعودتك
+                تسجيل الدخول
               </h1>
               <p className="text-sm leading-[21px] text-muted">
                 أدخل رقم هاتفك العراقي وسنرسل لك رمز تحقق عبر SMS
@@ -110,26 +112,14 @@ function Login() {
                 <label htmlFor="phone" className="text-[13px] font-semibold text-muted">
                   رقم الهاتف
                 </label>
-                {/* The country affix sits at the field's start (right, under
-                    RTL) while the digits themselves read left-to-right. */}
                 <div
-                  className={`flex h-[52px] w-full items-center gap-2.5 rounded-[14px] bg-field px-4 transition-colors ${
-                    error
+                  className={`flex h-[52px] w-full items-center gap-2.5 rounded-[14px] bg-field px-4 transition-colors ${error
                       ? "border-[1.5px] border-[#ff5252]"
                       : isValid
                         ? "border-[1.5px] border-mint"
                         : "border-[1.5px] border-field-line focus-within:border-brand-primary"
-                  }`}
+                    }`}
                 >
-                  <span className="flex shrink-0 items-center gap-2">
-                    <span className="flex h-5 w-7 items-center justify-center rounded-md bg-[#161c44] text-[10px] font-bold text-muted">
-                      IQ
-                    </span>
-                    <span dir="ltr" className="text-sm font-semibold text-frost">
-                      +964
-                    </span>
-                    <span aria-hidden className="h-[22px] w-px bg-field-line" />
-                  </span>
                   <input
                     id="phone"
                     name="phone"
@@ -146,8 +136,18 @@ function Login() {
                     aria-invalid={Boolean(error)}
                     aria-describedby={error ? "phone-error" : undefined}
                     placeholder="7XX XXX XXXX"
-                    className="min-w-0 flex-1 bg-transparent text-right text-sm text-frost placeholder:text-dim focus:outline-none"
+                    className="min-w-0 flex-1 bg-transparent text-left text-sm text-frost placeholder:text-dim focus:outline-none"
                   />
+
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span aria-hidden className="h-[22px] w-px bg-field-line" />
+                    <span dir="ltr" className="text-sm font-semibold text-frost">
+                      +964
+                    </span>
+                    <span className="flex h-5 w-7 items-center justify-center rounded-md bg-[#161c44] text-[10px] font-bold text-muted">
+                      IQ
+                    </span>
+                  </span>
                 </div>
                 {error && (
                   <p
@@ -161,35 +161,6 @@ function Login() {
                 )}
               </div>
 
-              <label className="flex cursor-pointer items-center gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={accepted}
-                  onChange={(e) => {
-                    setAccepted(e.target.checked);
-                    if (e.target.checked) setApiError("");
-                  }}
-                  className="peer sr-only"
-                />
-                <span
-                  aria-hidden
-                  className="flex size-5 shrink-0 items-center justify-center rounded-md border border-field-line text-[11px] font-bold text-white peer-checked:border-transparent peer-checked:bg-[linear-gradient(135deg,#00b7ff_0%,#7d26f7_71%)]"
-                >
-                  {accepted ? "✓" : ""}
-                </span>
-                <span className="text-[13px] leading-5 text-muted">
-                  أوافق على{" "}
-                  <span className="font-bold text-brand-primary">الشروط والأحكام</span> و{" "}
-                  <Link
-                    to="/privacy-policy"
-                    className="font-bold text-brand-primary hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    سياسة الخصوصية
-                  </Link>
-                </span>
-              </label>
-
               <button
                 type="submit"
                 disabled={isPending}
@@ -199,7 +170,7 @@ function Login() {
                   <Loader2 size={18} className="animate-spin" />
                 ) : (
                   <>
-                    إرسال رمز التحقق
+                    تسجيل الدخول
                     <span aria-hidden className="text-lg leading-none">
                       ←
                     </span>
@@ -215,9 +186,9 @@ function Login() {
             </div>
 
             <p className="w-full text-center text-[13px] leading-5 text-muted">
-              ليس لديك حساب؟{" "}
+              {noAccount ? "هذا الرقم غير مسجّل. " : "ليس لديك حساب؟ "}
               <Link to="/checkout" className="font-bold text-brand-primary hover:underline">
-                أنشئ متجرك مجاناً
+                أنشئ حسابك
               </Link>
             </p>
           </div>

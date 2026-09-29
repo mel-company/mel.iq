@@ -58,6 +58,7 @@ import {
   XIcon as HiX,
   YoutubeIcon as HiYoutube,
 } from "@hugeicons/core-free-icons";
+import { FaTiktok, FaXTwitter } from "react-icons/fa6";
 
 /**
  * The app's icon set: HugeIcons, behind the component shape the codebase
@@ -140,7 +141,10 @@ export const Square = icon(HiSquare, "Square");
 export const Star = icon(HiStar, "Star");
 export const Store = icon(HiStore, "Store");
 export const Trash2 = icon(HiTrash, "Trash2");
+export const Tiktok = FaTiktok;
 export const Twitter = icon(HiTwitter, "Twitter");
 export const Upload = icon(HiUpload, "Upload");
 export const X = icon(HiX, "X");
+/** Brand mark for X (the app formerly Twitter), not the close glyph. */
+export const XTwitter = FaXTwitter;
 export const Youtube = icon(HiYoutube, "Youtube");
