@@ -524,17 +524,7 @@ const StoreCard = ({
                   tabIndex={-1}
                 />
               )}
-              <button
-                type="button"
-                onClick={handleOpenStorefront}
-                aria-label={`زيارة ${store.name}`}
-                className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-[#03010f]/70 via-transparent to-transparent p-4 opacity-0 transition-opacity duration-300 hover:opacity-100 focus-visible:opacity-100"
-              >
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-1.5 text-xs font-bold text-[#0b1020] backdrop-blur">
-                  <ExternalLink size={13} />
-                  زيارة المتجر
-                </span>
-              </button>
+
             </div>
           </div>
         ) : (
@@ -587,7 +577,7 @@ const StoreCard = ({
             <button
               onClick={handleOpenDashboard}
               disabled={openStoreMutation.isPending}
-              className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-gradient-to-l from-brand-violet to-brand-indigo px-3 py-2.5 text-sm font-bold text-white shadow-[0_14px_35px_-18px_rgba(79,96,249,0.95)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-l from-brand-violet to-brand-indigo px-3 py-2.5 text-sm font-bold text-white shadow-[0_14px_35px_-18px_rgba(79,96,249,0.95)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <LayoutDashboard size={16} />
               {openStoreMutation.isPending ? "جاري الفتح..." : "لوحة التحكم"}
@@ -597,7 +587,7 @@ const StoreCard = ({
           <button
             onClick={handleOpenStorefront}
             disabled={!storefrontUrl}
-            className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2.5 text-sm font-semibold text-[#0b1020] transition-colors hover:bg-black/[0.06] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/12 dark:bg-white/5 dark:text-frost dark:hover:bg-white/10"
+            className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2.5 text-sm font-semibold text-[#0b1020] transition-colors hover:bg-black/[0.06] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/12 dark:bg-white/5 dark:text-frost dark:hover:bg-white/10"
           >
             <ExternalLink size={16} />
             زيارة المتجر
@@ -607,7 +597,7 @@ const StoreCard = ({
             onClick={onManage}
             aria-label={`إعدادات ${store.name}`}
             title="إعدادات المتجر"
-            className="flex shrink-0 items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03] px-3 text-[#5b6178] transition-colors hover:bg-black/[0.06] hover:text-[#0b1020] dark:border-white/12 dark:bg-white/5 dark:text-muted dark:hover:bg-white/10 dark:hover:text-frost"
+            className="flex shrink-0 items-center justify-center rounded-xl border border-black/10 bg-black/[0.03] px-3 text-[#5b6178] transition-colors hover:bg-black/[0.06] hover:text-[#0b1020] dark:border-white/12 dark:bg-white/5 dark:text-muted dark:hover:bg-white/10 dark:hover:text-frost"
           >
             <Settings size={18} />
           </button>
@@ -705,14 +695,14 @@ function Dashboard() {
 
       {/* Header. Transparent over the ground rather than the opaque bar it
           used to be, which would have covered the blooms it now sits on. */}
-      <header className="relative border-b border-black/5 dark:border-white/6">
+      <header className="relative bg-white/25 dark:bg-black/20">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <h1 className="text-3xl font-bold text-[#0b1020] dark:text-frost">
-              مرحباً، {displayName}
-              <a href="/">
+            <h1 className="text-3xl font-bold text-[#0b1020] dark:text-frost flex items-center gap-1.5">
+              <a href="/" className="p-1.5 rounded-xl opacity-70 hover:opacity-100 transition-all hover:bg-white/10 dark:hover:bg-white/5 border border-slate-400 dark:border-slate-700">
                 <HugeiconsIcon icon={ArrowRight} size={24} />
               </a>
+              مرحباً، {displayName}
             </h1>
             <button
               onClick={handleCreateNewStore}

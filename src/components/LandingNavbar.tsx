@@ -36,14 +36,7 @@ function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
   if (user) {
     return (
       <>
-        <Link
-          to="/dashboard"
-          onClick={onNavigate}
-          className="flex h-15 w-full items-center justify-center gap-2 rounded-[18px] border border-white/15 bg-[linear-gradient(90deg,#4f60f9_0%,#7569ff_100%)] px-4 text-base font-bold text-white transition-opacity hover:opacity-90 sm:w-[187px]"
-        >
-          <LayoutDashboard size={16} />
-          لوحة التحكم
-        </Link>
+
         {storefrontUrl && (
           <a
             href={storefrontUrl}
@@ -56,6 +49,14 @@ function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
             زيارة متجري
           </a>
         )}
+        <Link
+          to="/dashboard"
+          onClick={onNavigate}
+          className="flex h-15 w-full items-center justify-center gap-2 rounded-[18px] border border-white/15 bg-[linear-gradient(90deg,#4f60f9_0%,#7569ff_100%)] px-4 text-base font-bold text-white transition-opacity hover:opacity-90 sm:w-[187px]"
+        >
+          <LayoutDashboard size={16} />
+          لوحة التحكم
+        </Link>
       </>
     );
   }
@@ -149,7 +150,7 @@ function LandingNavbar() {
       <div className="mx-auto flex max-w-400 items-center justify-between">
         {/* Desktop. RTL flow puts the first child on the right, which is where
             the design places the nav items and the logo. */}
-        <nav className="hidden items-center gap-9.5 lg:flex">
+        <nav className="hidden items-center lg:flex">
           <Link
             to="/"
             onClick={handleHome}

@@ -70,7 +70,7 @@ function AboutSection() {
               جعل أدوات الأعمال القوية في متناول الجميع، بغض النظر عن حجمهم أو
               ميزانيتهم.
             </p>
-            <p className="text-prose-lg mt-2">
+            <p className="text-prose-lg mt-2 text-justify">
               بدأنا كفريق صغير من المطورين والمصممين المتحمسين الذين كانوا
               محبطين من تعقيد وتكلفة الحلول الموجودة. اليوم، نمونا لتصبح منصة
               موثوقة تخدم آلاف العملاء في جميع أنحاء العالم. التزامنا بالابتكار
@@ -104,7 +104,7 @@ function AboutSection() {
               className={`flex flex-col items-center gap-3.5 px-6 ${
                 // A hairline between the columns, never before the first.
                 i > 0 ? "sm:border-e sm:border-hairline" : ""
-              }`}
+                }`}
             >
               <dt dir="ltr" className="text-5xl font-bold text-white lg:text-[3.6rem]">
                 {stat.figure}
