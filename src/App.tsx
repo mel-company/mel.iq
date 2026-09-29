@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import DevProgressPreview from "./pages/__DevProgressPreview";
+import DevManagePreview from "./pages/__DevManagePreview";
 import Navbar from "./components/Navbar";
 import { MarketingShell } from "./components/LandingNavbar";
 import Landing from "./pages/Landing";
@@ -91,6 +92,10 @@ function App() {
           }
         />
         <Route path="/__dev/progress" element={<DevProgressPreview />} />
+        <Route
+          path="/__dev/store/:storeId/manage"
+          element={<DevManagePreview />}
+        />
         <Route path="/" element={<Landing />} />
         <Route
           path="/pricing"

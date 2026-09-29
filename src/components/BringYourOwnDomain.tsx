@@ -78,10 +78,10 @@ export default function BringYourOwnDomain() {
   return (
     <section className="space-y-4">
       <div>
-        <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-400">
+        <label className="mb-2 block text-[13px] font-bold text-[#5b6178] dark:text-muted">
           عندي دومين جاهز
         </label>
-        <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mb-4 text-sm leading-6 text-[#5b6178] dark:text-muted">
           أدخل دوميناً تملكه مسبقاً — نفحص إن كان الربط التلقائي متاحاً أو يدوياً.
           التحقق لا يربط الدومين بالمتجر.
         </p>
@@ -97,13 +97,13 @@ export default function BringYourOwnDomain() {
             placeholder="example.com"
             disabled={loading || starting}
             dir="ltr"
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-black outline-none transition focus:border-transparent focus:ring-2 focus:ring-black disabled:opacity-50 dark:border-gray-600 dark:bg-black dark:text-white dark:focus:ring-white"
+            className="h-[52px] w-full rounded-2xl border border-black/10 bg-black/[0.02] px-4 text-sm text-[#0b1020] outline-none transition-colors placeholder:text-[#a9adbe] focus:border-brand-indigo disabled:opacity-50 dark:border-field-line dark:bg-field dark:text-frost dark:placeholder:text-dim dark:focus:border-brand-primary"
           />
           <button
             type="button"
             onClick={onCheck}
             disabled={loading || starting || !domain.trim()}
-            className="shrink-0 rounded-lg border border-gray-300 bg-gray-100 px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:hover:bg-gray-800"
+            className="h-[52px] shrink-0 rounded-2xl border border-black/10 bg-black/[0.03] px-6 text-sm font-bold text-[#0b1020] transition-colors hover:bg-black/[0.06] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/12 dark:bg-white/5 dark:text-frost dark:hover:bg-white/10"
           >
             {loading ? "جاري التحقق…" : "تحقق"}
           </button>
@@ -111,23 +111,23 @@ export default function BringYourOwnDomain() {
       </div>
 
       {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+        <p className="rounded-2xl border border-[#ff5c7a]/30 bg-[#ff5c7a]/[0.08] px-4 py-3 text-sm text-[#b62347] dark:text-[#ff8da3]">
           {error}
         </p>
       )}
 
       {result && (
-        <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+        <div className="space-y-4 rounded-2xl border border-black/8 bg-black/[0.02] p-5 dark:border-white/8 dark:bg-white/[0.03]">
           <div>
-            <h3 className="text-base font-semibold text-black dark:text-white">
+            <h3 className="text-base font-bold text-[#0b1020] dark:text-frost">
               {result.ui.title}
             </h3>
             {result.provider.displayName && (
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-sm text-[#5b6178] dark:text-muted">
                 المزود: {result.provider.displayName}
               </p>
             )}
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500" dir="ltr">
+            <p className="mt-1 text-xs text-[#8a90a8] dark:text-dim" dir="ltr">
               {result.domain} · {result.connectionMode}
               {result.automaticAvailable ? " · automatic available" : ""}
             </p>
@@ -139,7 +139,7 @@ export default function BringYourOwnDomain() {
                 type="button"
                 onClick={onConnectAutomatically}
                 disabled={starting}
-                className="rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-l from-brand-violet to-brand-indigo px-5 py-2.5 text-sm font-bold text-white shadow-[0_16px_40px_-18px_rgba(79,96,249,0.9)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {starting ? "جاري التحويل…" : "Connect Automatically"}
               </button>
@@ -147,7 +147,7 @@ export default function BringYourOwnDomain() {
               <button
                 type="button"
                 onClick={onConnectManually}
-                className="rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-l from-brand-violet to-brand-indigo px-5 py-2.5 text-sm font-bold text-white shadow-[0_16px_40px_-18px_rgba(79,96,249,0.9)] transition-opacity hover:opacity-90"
               >
                 Connect Manually
               </button>
@@ -158,7 +158,7 @@ export default function BringYourOwnDomain() {
                 type="button"
                 onClick={onConnectManually}
                 disabled={starting}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-gray-900"
+                className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-black/[0.03] px-5 py-2.5 text-sm font-bold text-[#0b1020] transition-colors hover:bg-black/[0.06] disabled:opacity-50 dark:border-white/12 dark:bg-white/5 dark:text-frost dark:hover:bg-white/10"
               >
                 Connect Manually
               </button>

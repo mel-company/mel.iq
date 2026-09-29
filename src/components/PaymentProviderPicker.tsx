@@ -35,8 +35,8 @@ export default function PaymentProviderPicker({
   return (
     <div>
       <p
-        className={`mb-2 text-sm font-medium ${
-          isDark ? "text-white/70" : "text-gray-700 dark:text-gray-400"
+        className={`mb-2.5 text-[13px] font-bold ${
+          isDark ? "text-white/70" : "text-[#5b6178] dark:text-muted"
         }`}
       >
         طريقة الدفع
@@ -51,26 +51,28 @@ export default function PaymentProviderPicker({
               disabled={disabled}
               onClick={() => onChange(option.id)}
               aria-pressed={selected}
-              className={`rounded-xl border-2 p-3 text-right transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`rounded-2xl p-4 text-right transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                isDark ? "border-2" : "border"
+              } ${
                 selected
                   ? isDark
                     ? "border-[#00c8ff] bg-[#00c8ff]/10"
-                    : "border-black bg-gray-50 dark:border-white dark:bg-gray-900"
+                    : "border-brand-indigo/55 bg-brand-indigo/8 dark:border-brand-primary/45 dark:bg-brand-primary/8"
                   : isDark
                     ? "border-white/10 bg-white/[0.04] hover:border-white/20"
-                    : "border-gray-200 hover:border-gray-300 dark:border-gray-800 dark:hover:border-gray-700"
+                    : "border-black/8 bg-black/[0.02] hover:border-brand-indigo/30 dark:border-white/8 dark:bg-white/[0.02] dark:hover:border-white/20"
               }`}
             >
               <span
                 className={`block text-sm font-semibold ${
-                  isDark ? "text-white" : "text-black dark:text-white"
+                  isDark ? "text-white" : "text-[#0b1020] dark:text-frost"
                 }`}
               >
                 {option.title}
               </span>
               <span
                 className={`mt-0.5 block text-xs ${
-                  isDark ? "text-white/45" : "text-gray-500 dark:text-gray-400"
+                  isDark ? "text-white/45" : "text-[#8a90a8] dark:text-dim"
                 }`}
               >
                 {option.detail}

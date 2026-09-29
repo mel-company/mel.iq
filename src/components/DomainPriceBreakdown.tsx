@@ -33,7 +33,7 @@ export default function DomainPriceBreakdown({
 
   if (!pricing) {
     return (
-      <p className="mt-1 text-amber-700 dark:text-amber-300">
+      <p className="mt-1 opacity-80">
         الدومين متاح — تعذر قراءة السعر. حاول التحقق مرة أخرى.
       </p>
     );
@@ -42,29 +42,29 @@ export default function DomainPriceBreakdown({
   return (
     <div className="mt-3 space-y-2 text-sm">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-gray-600 dark:text-gray-300">تسجيل الدومين</span>
+        <span className="opacity-75">تسجيل الدومين</span>
         <span className="font-medium" dir="ltr">
           {formatUsd(pricing.registrationUsd)}
         </span>
       </div>
       <div className="flex items-center justify-between gap-3">
-        <span className="text-gray-600 dark:text-gray-300">رسوم MEL</span>
+        <span className="opacity-75">رسوم MEL</span>
         <span className="font-medium" dir="ltr">
           {formatUsd(pricing.markupUsd)}
         </span>
       </div>
-      <div className="flex items-center justify-between gap-3 border-t border-green-200 pt-2 dark:border-green-800">
+      <div className="flex items-center justify-between gap-3 border-t border-black/10 pt-2.5 dark:border-white/15">
         <span className="font-semibold">المجموع</span>
         <span className="text-base font-bold" dir="ltr">
           {formatUsd(pricing.totalUsd)}
         </span>
       </div>
       {pricing.renewalUsd != null && (
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs opacity-65">
           تجديد سنوي لاحقاً: {formatUsd(pricing.renewalUsd)}
         </p>
       )}
-      <p className="text-xs text-gray-500 dark:text-gray-400">
+      <p className="text-xs opacity-65">
         يُحوَّل المبلغ للدينار العراقي عند الدفع
       </p>
     </div>

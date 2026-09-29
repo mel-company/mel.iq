@@ -18,9 +18,18 @@ type DomainSettingsFieldsProps = {
   hideTypePicker?: boolean;
 };
 
+/**
+ * Two hosts, two languages.
+ *
+ * `checkout` is the wizard's own slate chrome. `management` is the store
+ * management page, which is drawn in the brand's dark language — so the
+ * border weight and the availability result live here too rather than being
+ * hardcoded in the markup, where they could only ever suit one of the two.
+ */
 const VARIANT_STYLES = {
   checkout: {
     label: "text-slate-700 dark:text-slate-300",
+    border: "border-2",
     radioSelected:
       "border-slate-900 dark:border-slate-100 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900",
     radioDefault:
@@ -34,22 +43,31 @@ const VARIANT_STYLES = {
     checkBtn:
       "bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-slate-100",
     spinner: "border-slate-600",
+    resultOk:
+      "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200",
+    resultWarn:
+      "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200",
   },
   management: {
-    label: "text-gray-700 dark:text-gray-400",
+    label: "text-[#5b6178] dark:text-muted",
+    border: "border",
     radioSelected:
-      "border-black dark:border-white bg-gray-50 dark:bg-gray-900",
+      "border-brand-indigo/55 bg-brand-indigo/8 dark:border-brand-primary/45 dark:bg-brand-primary/8",
     radioDefault:
-      "border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 bg-white dark:bg-black",
-    radioTitle: "text-black dark:text-white",
-    radioSubtitle: "text-gray-600 dark:text-gray-400",
+      "border-black/8 bg-black/[0.02] hover:border-brand-indigo/30 dark:border-white/8 dark:bg-white/[0.02] dark:hover:border-white/20",
+    radioTitle: "text-[#0b1020] dark:text-frost",
+    radioSubtitle: "text-[#8a90a8] dark:text-dim",
     suffix:
-      "bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600",
+      "bg-black/[0.04] text-[#5b6178] border-black/10 dark:bg-white/[0.06] dark:text-muted dark:border-field-line",
     input:
-      "border-gray-300 dark:border-gray-600 bg-white dark:bg-black text-black dark:text-white focus:ring-black dark:focus:ring-white placeholder:text-gray-400",
+      "border-black/10 bg-black/[0.02] text-[#0b1020] placeholder:text-[#a9adbe] focus:ring-brand-indigo dark:border-field-line dark:bg-field dark:text-frost dark:placeholder:text-dim dark:focus:ring-brand-primary",
     checkBtn:
-      "bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-800 text-black dark:text-white border border-gray-300 dark:border-gray-700",
-    spinner: "border-gray-600",
+      "border border-black/10 bg-black/[0.03] text-[#0b1020] hover:bg-black/[0.06] dark:border-white/12 dark:bg-white/5 dark:text-frost dark:hover:bg-white/10",
+    spinner: "border-brand-indigo dark:border-brand-primary",
+    resultOk:
+      "border-mint/30 bg-mint/10 text-[#00795a] dark:bg-mint/[0.08] dark:text-mint",
+    resultWarn:
+      "border-amber/35 bg-amber/10 text-[#a35400] dark:bg-amber/[0.08] dark:text-amber",
   },
 } as const;
 
@@ -80,7 +98,7 @@ export default function DomainSettingsFields({
           </label>
           <div className="mb-4 grid grid-cols-2 gap-4">
             <label
-              className={`cursor-pointer rounded-lg border-2 p-4 transition-all duration-300 ${
+              className={`cursor-pointer rounded-2xl ${styles.border} p-4 transition-all duration-300 ${
                 domainType === "subdomain"
                   ? styles.radioSelected
                   : styles.radioDefault
@@ -104,7 +122,7 @@ export default function DomainSettingsFields({
               </div>
             </label>
             <label
-              className={`cursor-pointer rounded-lg border-2 p-4 transition-all duration-300 ${
+              className={`cursor-pointer rounded-2xl ${styles.border} p-4 transition-all duration-300 ${
                 domainType === "custom"
                   ? styles.radioSelected
                   : styles.radioDefault
@@ -142,7 +160,7 @@ export default function DomainSettingsFields({
             <>
               <span
                 dir="ltr"
-                className={`rounded-r-xl border-2 border-l-0 px-4 py-3 ${styles.suffix}`}
+                className={`rounded-r-2xl ${styles.border} border-l-0 px-4 py-3 ${styles.suffix}`}
               >
                 .mel.iq
               </span>
@@ -152,7 +170,7 @@ export default function DomainSettingsFields({
                 value={domain}
                 onChange={(e) => onDomainChange(e.target.value)}
                 required
-                className={`flex-1 rounded-l-xl border-2 border-r-0 px-4 py-2 outline-none transition-all duration-300 focus:border-transparent focus:ring-2 ${styles.input}`}
+                className={`flex-1 rounded-l-2xl ${styles.border} border-r-0 px-4 py-2 outline-none transition-all duration-300 focus:border-transparent focus:ring-2 ${styles.input}`}
                 placeholder="example"
               />
             </>
@@ -163,7 +181,7 @@ export default function DomainSettingsFields({
               value={domain}
               onChange={(e) => onDomainChange(e.target.value)}
               required
-              className={`w-full rounded-lg border-2 px-4 py-2 outline-none transition-all duration-300 focus:border-transparent focus:ring-2 ${styles.input}`}
+              className={`w-full rounded-2xl ${styles.border} px-4 py-2 outline-none transition-all duration-300 focus:border-transparent focus:ring-2 ${styles.input}`}
               placeholder="example.com"
             />
           )}
@@ -175,7 +193,7 @@ export default function DomainSettingsFields({
           type="button"
           onClick={onCheck}
           disabled={!domain || isCheckingDomain}
-          className={`w-full py-2 px-4 rounded-lg font-medium text-sm transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${styles.checkBtn}`}
+          className={`w-full rounded-2xl px-4 py-2.5 text-sm font-bold transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50 ${styles.checkBtn}`}
         >
           {isCheckingDomain ? (
             <span className="flex items-center justify-center gap-2">
@@ -192,10 +210,10 @@ export default function DomainSettingsFields({
 
       {domainType === "custom" && dynadotResult && (
         <div
-          className={`mt-3 rounded-lg border-2 p-3 text-sm ${
+          className={`mt-3 rounded-2xl ${styles.border} p-4 text-sm ${
             dynadotResult.available && dynadotResult.supported
-              ? "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
-              : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+              ? styles.resultOk
+              : styles.resultWarn
           }`}
         >
           <p className="font-medium" dir="ltr">
