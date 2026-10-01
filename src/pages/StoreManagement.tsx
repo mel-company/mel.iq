@@ -1289,7 +1289,7 @@ function StoreManagement() {
       },
       {
         onSuccess: () => {
-          toast.success("تم تحديث سلاج المنصة بنجاح");
+          toast.success("تم تحديث دومين المنصة بنجاح");
           resetCheck();
           void refetchStores();
         },
@@ -1391,11 +1391,16 @@ function StoreManagement() {
       icon: LayoutDashboard,
     });
 
+  /** Path 3 (bring-your-own domain) — locked for this release. */
+  const OWNED_DOMAIN_ENABLED = false;
+
   const domainPaths: {
     id: DomainPath;
     title: string;
     subtitle: string;
     icon: IconComponent;
+    disabled?: boolean;
+    badge?: string;
   }[] = [
       {
         id: "subdomain",
@@ -1412,8 +1417,10 @@ function StoreManagement() {
       {
         id: "owned",
         title: "عندي دومين جاهز",
-        subtitle: "ربط دومين موجود",
+        subtitle: OWNED_DOMAIN_ENABLED ? "ربط دومين موجود" : "قريباً",
         icon: ShieldCheck,
+        disabled: !OWNED_DOMAIN_ENABLED,
+        badge: OWNED_DOMAIN_ENABLED ? undefined : "قريباً",
       },
     ];
 
@@ -1568,7 +1575,7 @@ function StoreManagement() {
               hint="الرابط العام للزوار"
             />
             <StatTile
-              label="سلاج المنصة"
+              label="دومين المنصة"
               icon={Globe}
               ltr
               value={platformSlug ? `${platformSlug}.mel.iq` : "—"}
@@ -1581,7 +1588,7 @@ function StoreManagement() {
               value={store.customDomain || "غير مربوط"}
               hint={
                 store.customDomain
-                  ? "يعرض بدل سلاج المنصة"
+                  ? "يعرض بدل دومين المنصة"
                   : "يمكن ربطه من تبويب الدومين"
               }
             />
@@ -1766,12 +1773,12 @@ function StoreManagement() {
               <div className="mx-auto max-w-3xl">
                 <SectionCard
                   title="إعدادات الدومين"
-                  description="اختر المسار المناسب: سلاج MEL، شراء دومين جديد، أو ربط دومين تملكه مسبقاً"
+                  description="اختر المسار المناسب: دومين MEL أو شراء دومين جديد"
                   icon={Globe}
                 >
                   <div className="mb-6 grid gap-3 sm:grid-cols-2">
                     <StatTile
-                      label="سلاج المنصة"
+                      label="دومين المنصة"
                       ltr
                       value={`${platformSlug || "—"}.mel.iq`}
                     />
@@ -1786,8 +1793,10 @@ function StoreManagement() {
                     {domainPaths.map((path) => (
                       <ChoiceCard
                         key={path.id}
-                        selected={domainPath === path.id}
+                        selected={!path.disabled && domainPath === path.id}
+                        disabled={path.disabled}
                         onClick={() => {
+                          if (path.disabled) return;
                           setDomainPath(path.id);
                           if (path.id !== "owned") {
                             handleDomainTypeChange(
@@ -1796,10 +1805,15 @@ function StoreManagement() {
                           }
                         }}
                       >
+                        {path.badge && (
+                          <span className="absolute top-3 start-3 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-muted">
+                            {path.badge}
+                          </span>
+                        )}
                         <path.icon
                           size={18}
                           className={
-                            domainPath === path.id
+                            !path.disabled && domainPath === path.id
                               ? "text-brand-indigo dark:text-brand-primary"
                               : ink.faint
                           }
@@ -1807,14 +1821,17 @@ function StoreManagement() {
                         <div className={`mt-3 text-sm font-bold ${ink.heading}`}>
                           {path.title}
                         </div>
-                        <div dir="ltr" className={`mt-1 text-right text-xs ${ink.faint}`}>
+                        <div
+                          dir={path.id === "owned" ? "rtl" : "ltr"}
+                          className={`mt-1 text-right text-xs ${ink.faint}`}
+                        >
                           {path.subtitle}
                         </div>
                       </ChoiceCard>
                     ))}
                   </div>
 
-                  {domainPath === "owned" ? (
+                  {OWNED_DOMAIN_ENABLED && domainPath === "owned" ? (
                     <BringYourOwnDomain />
                   ) : (
                     <form onSubmit={handleDomainSubmit} className="space-y-5">
@@ -1859,7 +1876,7 @@ function StoreManagement() {
                         ) : domainPath === "buy" && domainPricing ? (
                           `الدفع عبر ${paymentProviderLabel(paymentProvider)} — ${formatUsd(domainPricing.totalUsd)}`
                         ) : (
-                          "حفظ سلاج المنصة"
+                          "حفظ دومين المنصة"
                         )}
                       </button>
                     </form>
