@@ -13,6 +13,13 @@ export type WaitResult =
   | { status: "timeout"; result: DashboardReadyStatus | null }
   | { status: "cancelled" };
 
+/**
+ * DNS/TLS provisioning gate after store create. Off until the next release —
+ * set `VITE_FEATURE_DASHBOARD_READY=true` to turn polling + StoreProvisioningGate back on.
+ */
+const DASHBOARD_READY_ENABLED =
+  import.meta.env.VITE_FEATURE_DASHBOARD_READY === "true";
+
 const DEFAULT_POLL_MS = 4_000;
 const DEFAULT_TIMEOUT_MS = 3 * 60_000;
 
@@ -40,6 +47,8 @@ export function needsDashboardProvisioning(
   url: string,
   subdomain?: string | null,
 ): boolean {
+  if (!DASHBOARD_READY_ENABLED) return false;
+
   const slug = subdomain ? normalizeDomain(subdomain) : "";
   if (!slug) return false;
 
@@ -103,6 +112,21 @@ export function useWaitForDashboardReady(options?: {
       if (!domain) {
         setError("النطاق غير صالح");
         return { status: "timeout", result: null };
+      }
+
+      // Feature locked for this version — skip DNS/TLS poll and continue.
+      if (!DASHBOARD_READY_ENABLED) {
+        const result: DashboardReadyStatus = {
+          ready: true,
+          host: `dash.${domain}.mel.iq`,
+          dnsOk: true,
+          tlsOk: true,
+        };
+        setLastStatus(result);
+        setIsWaiting(false);
+        setTimedOut(false);
+        setError(null);
+        return { status: "ready", result };
       }
 
       cancelRef.current = false;

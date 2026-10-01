@@ -125,6 +125,7 @@ export function usePhoneOtpAuth() {
       try {
         const result = await authAPI.verify({ phone, code });
         const token = result?.token || result?.accessToken;
+        const refreshToken = result?.refreshToken;
         const username = result?.username || phone;
 
         if (!token) {
@@ -132,8 +133,8 @@ export function usePhoneOtpAuth() {
           return false;
         }
 
-        // Writes localStorage `token`, which the axios interceptor attaches.
-        login(token, username);
+        // Writes localStorage token + refreshToken for silent renewals.
+        login(token, username, refreshToken);
         return true;
       } catch (e) {
         setError(getApiErrorMessage(e, "الرمز غير صحيح أو منتهي الصلاحية."));

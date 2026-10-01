@@ -83,20 +83,25 @@ function OTPVerification() {
     const data = result as {
       token?: string;
       accessToken?: string;
+      refreshToken?: string;
       username?: string;
       user?: { phone?: string; name?: string };
     };
     const token = data?.token || data?.accessToken;
+    const refreshToken = data?.refreshToken;
     const username =
       data?.username || data?.user?.phone || data?.user?.name || phone;
 
     if (token) {
       window.localStorage.setItem("token", token);
+      if (refreshToken) {
+        window.localStorage.setItem("refreshToken", refreshToken);
+      }
       window.localStorage.setItem(
         "user",
-        JSON.stringify({ token, username, phone }),
+        JSON.stringify({ token, refreshToken, username, phone }),
       );
-      login(token, username);
+      login(token, username, refreshToken);
     }
     return Boolean(token);
   };

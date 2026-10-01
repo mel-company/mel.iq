@@ -564,9 +564,8 @@ function Dashboard() {
   }, [navigate, displayName]);
 
   const handleLogout = useCallback(() => {
+    // AuthContext.logout already clears token + refreshToken + user.
     logoutFromAuth();
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
 
     logoutMutation.mutate(undefined, {
       onSettled: () => navigate("/"),

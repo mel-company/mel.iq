@@ -47,6 +47,18 @@ export const authAPI = {
     return data;
   },
 
+  refresh: async (refreshToken?: string): Promise<any> => {
+    const body = refreshToken
+      ? { refreshToken }
+      : {
+          refreshToken:
+            localStorage.getItem("refreshToken") ||
+            undefined,
+        };
+    const { data } = await axiosInstance.post<any>("/auth/refresh", body);
+    return data;
+  },
+
   logout: async (): Promise<any> => {
     const { data } = await axiosInstance.post<any>("/auth/logout");
     return data;

@@ -593,18 +593,23 @@ function Checkout() {
           onSuccess: (result: {
             token?: string;
             accessToken?: string;
+            refreshToken?: string;
             username?: string;
           }) => {
             setOtpVerified(true);
             const token = result?.token || result?.accessToken;
+            const refreshToken = result?.refreshToken;
             const username = result?.username || formData.name || phone;
             if (token) {
               window.localStorage.setItem("token", token);
+              if (refreshToken) {
+                window.localStorage.setItem("refreshToken", refreshToken);
+              }
               window.localStorage.setItem(
                 "user",
-                JSON.stringify({ token, username, phone }),
+                JSON.stringify({ token, refreshToken, username, phone }),
               );
-              login(token, username);
+              login(token, username, refreshToken);
             }
 
             const genUsername = `user_${Math.random().toString(36).substr(2, 9)}`;

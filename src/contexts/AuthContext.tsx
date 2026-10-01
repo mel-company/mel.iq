@@ -15,7 +15,11 @@ type Store = {
 type AuthContextValue = {
   user: Store | null;
   loading: boolean;
-  login: (token: string, username: string) => { success: boolean; user: Store };
+  login: (
+    token: string,
+    username: string,
+    refreshToken?: string | null,
+  ) => { success: boolean; user: Store };
   logout: () => void;
 };
 
@@ -25,6 +29,7 @@ function clearBadToken() {
   const token = window.localStorage.getItem("token");
   if (!token || token === "undefined" || token === "null") {
     window.localStorage.removeItem("token");
+    window.localStorage.removeItem("refreshToken");
     window.localStorage.removeItem("user");
   }
 }
@@ -64,12 +69,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setLoading(false);
   }, [meData, meLoading, isError]);
 
-  const login = (token: string, username: string) => {
+  const login = (
+    token: string,
+    username: string,
+    refreshToken?: string | null,
+  ) => {
     const userData = {
       token,
       username,
+      ...(refreshToken ? { refreshToken } : {}),
     };
     window.localStorage.setItem("token", token);
+    if (refreshToken) {
+      window.localStorage.setItem("refreshToken", refreshToken);
+    }
     window.localStorage.setItem("user", JSON.stringify(userData));
     setUser(userData);
     return { success: true, user: userData };
@@ -77,6 +90,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = () => {
     window.localStorage.removeItem("token");
+    window.localStorage.removeItem("refreshToken");
     window.localStorage.removeItem("user");
     setUser(null);
   };
