@@ -1,12 +1,13 @@
 {
   "issuer": "https://www.mel.iq",
   "authorization_endpoint": "https://www.mel.iq/login",
-  "token_endpoint": "https://api.mel.iq/api/v1/auth/verify",
-  "registration_endpoint": "https://www.mel.iq/checkout",
-  "revocation_endpoint": "https://api.mel.iq/api/v1/auth/logout",
+  "token_endpoint": "https://www.mel.iq/api/oauth2/token",
+  "registration_endpoint": "https://www.mel.iq/api/agent/identity",
+  "revocation_endpoint": "https://www.mel.iq/api/oauth2/revoke",
   "jwks_uri": "https://www.mel.iq/.well-known/jwks.json",
   "grant_types_supported": [
-    "urn:ietf:params:oauth:grant-type:device_code",
+    "urn:ietf:params:oauth:grant-type:jwt-bearer",
+    "urn:workos:agent-auth:grant-type:claim",
     "refresh_token",
     "urn:mel:params:oauth:grant-type:phone_otp"
   ],
@@ -18,24 +19,43 @@
     "stores:read",
     "stores:write",
     "orders:read",
-    "orders:write"
+    "orders:write",
+    "agent:preclaim",
+    "agent:full"
   ],
   "service_documentation": "https://www.mel.iq/auth.md",
   "ui_locales_supported": ["ar", "en"],
   "agent_auth": {
     "skill": "https://www.mel.iq/auth.md",
-    "register_uri": "https://www.mel.iq/checkout",
-    "identity_types_supported": ["anonymous", "identity_assertion"],
+    "register_uri": "https://www.mel.iq/api/agent/identity",
+    "identity_endpoint": "https://www.mel.iq/api/agent/identity",
+    "claim_endpoint": "https://www.mel.iq/api/agent/identity/claim",
+    "events_endpoint": "https://www.mel.iq/api/agent/event/notify",
+    "identity_types_supported": [
+      "anonymous",
+      "identity_assertion",
+      "service_auth"
+    ],
     "anonymous": {
       "credential_types_supported": ["bearer"],
-      "claim_uri": "https://www.mel.iq/checkout"
+      "claim_uri": "https://www.mel.iq/api/agent/identity/claim"
     },
     "identity_assertion": {
-      "assertion_types_supported": ["verified_email", "phone_otp"],
+      "assertion_types_supported": [
+        "urn:ietf:params:oauth:token-type:id-jag",
+        "verified_email"
+      ],
       "credential_types_supported": ["bearer"],
-      "claim_uri": "https://api.mel.iq/api/v1/auth/verify"
+      "claim_uri": "https://www.mel.iq/api/agent/identity/claim"
     },
-    "events_supported": ["credential_revoked"],
-    "revocation_uri": "https://api.mel.iq/api/v1/auth/logout"
+    "service_auth": {
+      "credential_types_supported": ["bearer"],
+      "claim_uri": "https://www.mel.iq/api/agent/identity/claim"
+    },
+    "events_supported": [
+      "https://schemas.workos.com/events/agent/auth/identity/assertion/revoked",
+      "credential_revoked"
+    ],
+    "revocation_uri": "https://www.mel.iq/api/oauth2/revoke"
   }
 }

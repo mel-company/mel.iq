@@ -1,5 +1,7 @@
 {
-  "resource": "https://api.mel.iq/api/v1",
+  "resource": "https://www.mel.iq/",
+  "resource_name": "Mel IQ",
+  "resource_logo_uri": "https://www.mel.iq/android-chrome-512x512.png",
   "authorization_servers": ["https://www.mel.iq"],
   "scopes_supported": [
     "openid",
@@ -7,9 +9,10 @@
     "stores:read",
     "stores:write",
     "orders:read",
-    "orders:write"
+    "orders:write",
+    "agent:preclaim",
+    "agent:full"
   ],
   "bearer_methods_supported": ["header"],
-  "resource_documentation": "https://www.mel.iq/auth.md",
-  "resource_signing_alg_values_supported": ["HS256", "RS256"]
+  "resource_documentation": "https://www.mel.iq/auth.md"
 }

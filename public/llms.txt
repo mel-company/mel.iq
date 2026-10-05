@@ -5,6 +5,8 @@
 ## Docs
 
 - [Auth for agents](https://www.mel.iq/auth.md)
+- [OAuth Protected Resource](https://www.mel.iq/.well-known/oauth-protected-resource)
+- [OAuth Authorization Server](https://www.mel.iq/.well-known/oauth-authorization-server)
 - [API docs](https://www.mel.iq/docs/api)
 - [OpenAPI](https://www.mel.iq/docs/openapi.json)
 - [API catalog](https://www.mel.iq/.well-known/api-catalog)

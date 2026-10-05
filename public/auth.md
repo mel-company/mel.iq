@@ -1,65 +1,136 @@
 # auth.md
 
-Mel IQ agent authentication and registration guide for automated clients.
+You are an agent. Mel IQ supports **agentic registration**: discover → register → (claim if needed) → exchange for an access_token → call API → handle revocation.
 
-## Audience
+Mel IQ is an Iraqi ecommerce platform. Merchants also authenticate with phone OTP for the human dashboard; agents should prefer the discovery flow below.
 
-This document is for AI agents and automated clients that need to discover how
-merchants authenticate to Mel IQ (`https://www.mel.iq`) and the platform API
-(`https://api.mel.iq/api/v1`).
+## Step 1 — Discover
 
-## Summary
+### 1a. Fetch the Protected Resource Metadata
 
-Mel uses **phone OTP + JWT bearer tokens**, not a classic browser OAuth redirect
-for merchant login. Discovery metadata is published so agents can locate the
-right endpoints:
+[OAuth Protected Resource Metadata](https://www.mel.iq/.well-known/oauth-protected-resource)
 
-| Document | URL |
-| --- | --- |
-| Protected resource metadata | https://www.mel.iq/.well-known/oauth-protected-resource |
-| Authorization server metadata | https://www.mel.iq/.well-known/oauth-authorization-server |
-| OpenID discovery | https://www.mel.iq/.well-known/openid-configuration |
-| API catalog | https://www.mel.iq/.well-known/api-catalog |
-| OpenAPI | https://www.mel.iq/docs/openapi.json |
+```http
+GET https://www.mel.iq/.well-known/oauth-protected-resource
+```
 
-## Human / agent merchant registration
+### 1b. Fetch the Authorization Server metadata
 
-1. Start checkout: `https://www.mel.iq/checkout`
-2. Create an account with name, email, and Iraqi phone number
-3. Complete OTP verification at `https://www.mel.iq/otp`
-4. API clients exchange OTP for tokens via `POST https://api.mel.iq/api/v1/auth/verify`
+[OAuth Authorization Server Metadata](https://www.mel.iq/.well-known/oauth-authorization-server)
 
-There is no anonymous public write API for creating stores without a merchant
-account. Agents that need automated provisioning should contact Mel support and
-use a provisioned merchant credential.
+```http
+GET https://www.mel.iq/.well-known/oauth-authorization-server
+```
 
-## Phone OTP token flow
+The Authorization Server document includes the `agent_auth` block with:
 
-1. `POST /auth/login` with `{ "phone": "+9647XXXXXXXXX" }` — sends OTP SMS
-2. `POST /auth/verify` with `{ "phone": "...", "code": 123456 }` — returns access + refresh tokens
-3. Call protected routes with `Authorization: Bearer <access_token>`
-4. Refresh with `POST /auth/refresh`
-5. Revoke with `POST /auth/logout`
+- `skill` — this document
+- `identity_endpoint` / `register_uri`
+- `claim_endpoint`
+- `events_endpoint`
+- supported identity types and assertion types
 
-Base URL: `https://api.mel.iq/api/v1`
+Also useful:
 
-## Supported identity types
+- [OpenID configuration](https://www.mel.iq/.well-known/openid-configuration)
+- [OpenAPI](https://www.mel.iq/docs/openapi.json)
+- [API catalog](https://www.mel.iq/.well-known/api-catalog)
 
-- **phone_otp** — primary merchant authentication
-- **verified_email** — collected during registration / checkout
-- **anonymous** — browse marketing pages and public discovery docs only
+## Step 2 — Pick a method
+
+1. **ID-JAG / identity_assertion** — you can mint an audience-bound identity assertion for Mel
+2. **service_auth** — you only have the user's email; claim ceremony required
+3. **anonymous** — no user identity yet; optional deferred claim
+
+Human merchants may still use phone OTP via the dashboard login at [https://www.mel.iq/login](https://www.mel.iq/login).
+
+## Step 3 — Register
+
+```http
+POST https://www.mel.iq/api/agent/identity
+Content-Type: application/json
+```
+
+### identity_assertion
+
+```json
+{
+  "type": "identity_assertion",
+  "assertion_type": "urn:ietf:params:oauth:token-type:id-jag",
+  "assertion": "<ID-JAG JWT>"
+}
+```
+
+### service_auth
+
+```json
+{
+  "type": "service_auth",
+  "login_hint": "user@example.com"
+}
+```
+
+### anonymous
+
+```json
+{
+  "type": "anonymous"
+}
+```
+
+Registration returns a service-signed `identity_assertion` (and optionally a claim block). It does **not** return an API access token directly.
+
+## Step 4 — Claim ceremony (when required)
+
+```http
+POST https://www.mel.iq/api/agent/identity/claim
+Content-Type: application/json
+```
+
+Surface `user_code` + `verification_uri` to the user. The user completes claim in the browser, then the agent polls the token endpoint with the claim grant.
+
+## Step 5 — Exchange the assertion
+
+```http
+POST https://www.mel.iq/api/oauth2/token
+Content-Type: application/x-www-form-urlencoded
+```
+
+```
+grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=<identity_assertion>
+```
+
+Claim polling grant:
+
+```
+grant_type=urn:workos:agent-auth:grant-type:claim&claim_token=<claim_token>
+```
+
+## Step 6 — Use the access_token
+
+Call Mel APIs with:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Primary API base: `https://api.mel.iq/api/v1`
 
 ## Credential use
 
 - Send bearer tokens in the `Authorization` header only
-- Do not embed tokens in query strings
-- Treat refresh tokens as secrets
-- Prefer the protected-resource metadata scopes listed at
-  `/.well-known/oauth-protected-resource`
+- Do not put tokens in query strings
+- Treat refresh tokens / claim tokens as secrets
+- Prefer scopes from the Protected Resource Metadata
+
+## Revocation
+
+- Credential layer: [https://www.mel.iq/api/oauth2/revoke](https://www.mel.iq/api/oauth2/revoke)
+- Registration / provider events: [https://www.mel.iq/api/agent/event/notify](https://www.mel.iq/api/agent/event/notify)
 
 ## Support
 
-- Contact form: https://www.mel.iq/#contact
-- Support email: hassan.adnan@mel.iq
-- Privacy: https://www.mel.iq/privacy-policy
-- Delete account: https://www.mel.iq/delete-account
+- Contact: [https://www.mel.iq/#contact](https://www.mel.iq/#contact)
+- Email: hassan.adnan@mel.iq
+- Privacy: [https://www.mel.iq/privacy-policy](https://www.mel.iq/privacy-policy)
+- Delete account: [https://www.mel.iq/delete-account](https://www.mel.iq/delete-account)

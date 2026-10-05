@@ -1,4 +1,8 @@
 {
+  "proxy": {
+    "entrypoint": "proxy.ts",
+    "matcher": ["/"]
+  },
   "redirects": [
     {
       "source": "/:path*",
@@ -30,7 +34,11 @@
       "headers": [
         {
           "key": "Link",
-          "value": "</.well-known/api-catalog>; rel=\"api-catalog\", </.well-known/ai-catalog.json>; rel=\"describedby\"; type=\"application/json\", </docs/openapi.json>; rel=\"service-desc\"; type=\"application/json\", </auth.md>; rel=\"service-doc\"; type=\"text/markdown\", </.well-known/mcp/server-card.json>; rel=\"alternate\"; type=\"application/json\", </.well-known/agent-skills/index.json>; rel=\"alternate\"; type=\"application/json\""
+          "value": "</.well-known/api-catalog>; rel=\"api-catalog\", </.well-known/ai-catalog.json>; rel=\"describedby\"; type=\"application/json\", </docs/openapi.json>; rel=\"service-desc\"; type=\"application/json\", </auth.md>; rel=\"service-doc\"; type=\"text/markdown\", </.well-known/oauth-protected-resource>; rel=\"oauth-protected-resource\"; type=\"application/json\", </.well-known/oauth-authorization-server>; rel=\"oauth-authorization-server\"; type=\"application/json\", </.well-known/mcp/server-card.json>; rel=\"alternate\"; type=\"application/json\", </.well-known/agent-skills/index.json>; rel=\"alternate\"; type=\"application/json\", </agent/home.md>; rel=\"alternate\"; type=\"text/markdown\""
+        },
+        {
+          "key": "WWW-Authenticate",
+          "value": "Bearer realm=\"mel\", resource_metadata=\"https://www.mel.iq/.well-known/oauth-protected-resource\""
         }
       ]
     },
@@ -39,7 +47,11 @@
       "headers": [
         {
           "key": "Link",
-          "value": "</.well-known/api-catalog>; rel=\"api-catalog\", </.well-known/ai-catalog.json>; rel=\"describedby\"; type=\"application/json\", </docs/openapi.json>; rel=\"service-desc\"; type=\"application/json\", </auth.md>; rel=\"service-doc\"; type=\"text/markdown\""
+          "value": "</.well-known/api-catalog>; rel=\"api-catalog\", </.well-known/ai-catalog.json>; rel=\"describedby\"; type=\"application/json\", </docs/openapi.json>; rel=\"service-desc\"; type=\"application/json\", </auth.md>; rel=\"service-doc\"; type=\"text/markdown\", </.well-known/oauth-protected-resource>; rel=\"oauth-protected-resource\"; type=\"application/json\", </.well-known/oauth-authorization-server>; rel=\"oauth-authorization-server\"; type=\"application/json\""
+        },
+        {
+          "key": "WWW-Authenticate",
+          "value": "Bearer realm=\"mel\", resource_metadata=\"https://www.mel.iq/.well-known/oauth-protected-resource\""
         }
       ]
     },
@@ -47,7 +59,8 @@
       "source": "/agent/home.md",
       "headers": [
         { "key": "Content-Type", "value": "text/markdown; charset=utf-8" },
-        { "key": "x-markdown-tokens", "value": "420" }
+        { "key": "x-markdown-tokens", "value": "420" },
+        { "key": "Vary", "value": "Accept" }
       ]
     },
     {
