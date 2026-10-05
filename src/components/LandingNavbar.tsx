@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { label: "من نحن", hash: "#about" },
   { label: "الميزات", hash: "#features" },
   { label: "الباقات", hash: "#pricing" },
+  { label: "التطبيق", hash: "#download" },
   { label: "تواصل معنا", hash: "#contact" },
 ];
 

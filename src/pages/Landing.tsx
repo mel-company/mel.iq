@@ -9,14 +9,15 @@ import FeaturesSection from "../components/landing/FeaturesSection";
 import ProductShowcase from "../components/landing/ProductShowcase";
 import PricingSection from "../components/landing/PricingSection";
 import FaqSection from "../components/landing/FaqSection";
+import AppDownloadSection from "../components/landing/AppDownloadSection";
 import ContactSection from "../components/landing/ContactSection";
 
 /**
  * The landing page, in the order the Figma frame stacks it: hero, partner
  * strip, the "about" manifesto with its stat bar, the benefits bento, the
- * platform and features blocks, the two product decks, pricing, the FAQ, and
- * the contact block. The footer comes from MarketingShell, which every
- * marketing route shares.
+ * platform and features blocks, the two product decks, pricing, the FAQ,
+ * the app download CTA, and the contact block. The footer comes from
+ * MarketingShell, which every marketing route shares.
  */
 function Landing() {
   return (
@@ -38,6 +39,7 @@ function Landing() {
         <ProductShowcase />
         <PricingSection />
         <FaqSection />
+        <AppDownloadSection />
         <ContactSection />
       </div>
     </MarketingShell>
