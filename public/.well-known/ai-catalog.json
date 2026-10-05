@@ -1,0 +1,52 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Mel IQ",
+    "identifier": "did:web:www.mel.iq"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:www.mel.iq:server:mcp",
+      "displayName": "Mel public MCP server",
+      "type": "application/mcp-server-card+json",
+      "url": "https://www.mel.iq/.well-known/mcp/server-card.json",
+      "representativeQueries": [
+        "how do I create an online store with Mel",
+        "what are Mel pricing plans",
+        "where can I download the Mel Android app",
+        "how do merchants contact Mel support"
+      ]
+    },
+    {
+      "identifier": "urn:air:www.mel.iq:api:platform",
+      "displayName": "Mel platform HTTP API",
+      "type": "application/vnd.oai.openapi+json",
+      "url": "https://www.mel.iq/docs/openapi.json",
+      "representativeQueries": [
+        "Mel API OpenAPI specification",
+        "authenticate to Mel with phone OTP",
+        "submit a Mel contact form via API"
+      ]
+    },
+    {
+      "identifier": "urn:air:www.mel.iq:skill:create-store",
+      "displayName": "Create a Mel storefront",
+      "type": "text/markdown",
+      "url": "https://www.mel.iq/.well-known/agent-skills/create-store/SKILL.md",
+      "representativeQueries": [
+        "help me launch an Iraqi ecommerce store",
+        "steps to sign up for Mel and pick a plan"
+      ]
+    },
+    {
+      "identifier": "urn:air:www.mel.iq:docs:auth",
+      "displayName": "Mel agent authentication guide",
+      "type": "text/markdown",
+      "url": "https://www.mel.iq/auth.md",
+      "representativeQueries": [
+        "how do AI agents authenticate to Mel",
+        "Mel OAuth protected resource metadata"
+      ]
+    }
+  ]
+}

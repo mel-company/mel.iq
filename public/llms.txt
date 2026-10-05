@@ -1,0 +1,21 @@
+# Mel IQ
+
+> Mel IQ is an Iraqi platform for creating and managing online stores.
+
+## Docs
+
+- [Auth for agents](https://www.mel.iq/auth.md)
+- [API docs](https://www.mel.iq/docs/api)
+- [OpenAPI](https://www.mel.iq/docs/openapi.json)
+- [API catalog](https://www.mel.iq/.well-known/api-catalog)
+- [ARD catalog](https://www.mel.iq/.well-known/ai-catalog.json)
+- [MCP server card](https://www.mel.iq/.well-known/mcp/server-card.json)
+- [Agent skills](https://www.mel.iq/.well-known/agent-skills/index.json)
+
+## Product
+
+- Pricing: https://www.mel.iq/#pricing
+- Checkout: https://www.mel.iq/checkout
+- Contact: https://www.mel.iq/#contact
+- Android app: https://play.google.com/store/apps/details?id=com.almashreq.mel
+- iOS app: https://apps.apple.com/us/app/mel-platform/id6810126830

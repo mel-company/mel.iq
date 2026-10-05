@@ -1,0 +1,34 @@
+# Mel IQ API documentation
+
+Machine-oriented overview of Mel IQ public APIs for agents.
+
+## Base URLs
+
+- Platform API: `https://api.mel.iq/api/v1`
+- Marketing / discovery site: `https://www.mel.iq`
+
+## Specs and catalogs
+
+- OpenAPI: [/docs/openapi.json](https://www.mel.iq/docs/openapi.json)
+- API catalog (RFC 9727): [/.well-known/api-catalog](https://www.mel.iq/.well-known/api-catalog)
+- ARD manifest: [/.well-known/ai-catalog.json](https://www.mel.iq/.well-known/ai-catalog.json)
+- Auth guide: [/auth.md](https://www.mel.iq/auth.md)
+- MCP server card: [/.well-known/mcp/server-card.json](https://www.mel.iq/.well-known/mcp/server-card.json)
+
+## Auth
+
+Merchants authenticate with Iraqi phone OTP. Agents should follow `/auth.md`.
+Protected API calls use `Authorization: Bearer <token>`.
+
+## Public MCP tools
+
+`POST https://www.mel.iq/api/mcp` exposes read-only discovery tools:
+
+- `get_mel_overview`
+- `get_app_download_links`
+- `get_pricing_entry_points`
+- `get_support_contacts`
+
+## Status
+
+Health: [https://www.mel.iq/api/health](https://www.mel.iq/api/health)

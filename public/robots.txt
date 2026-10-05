@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
+Content-Signal: search=yes, ai-train=no, ai-input=yes
 
 # منع الزحف للداشبورد
 Disallow: /dashboard/
@@ -11,5 +12,8 @@ Disallow: /support/
 # منع API
 Disallow: /api/
 
+# Agentic Resource Discovery
+Agentmap: https://www.mel.iq/.well-known/ai-catalog.json
+
 # Sitemap
-Sitemap: https://mel.iq/sitemap.xml
+Sitemap: https://www.mel.iq/sitemap.xml

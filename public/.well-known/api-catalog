@@ -1,0 +1,50 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://api.mel.iq/api/v1",
+      "service-desc": [
+        {
+          "href": "https://www.mel.iq/docs/openapi.json",
+          "type": "application/json"
+        }
+      ],
+      "service-doc": [
+        {
+          "href": "https://www.mel.iq/docs/api",
+          "type": "text/markdown"
+        },
+        {
+          "href": "https://www.mel.iq/auth.md",
+          "type": "text/markdown"
+        }
+      ],
+      "status": [
+        {
+          "href": "https://www.mel.iq/api/health",
+          "type": "application/json"
+        }
+      ]
+    },
+    {
+      "anchor": "https://www.mel.iq/api/mcp",
+      "service-desc": [
+        {
+          "href": "https://www.mel.iq/.well-known/mcp/server-card.json",
+          "type": "application/json"
+        }
+      ],
+      "service-doc": [
+        {
+          "href": "https://www.mel.iq/docs/api",
+          "type": "text/markdown"
+        }
+      ],
+      "status": [
+        {
+          "href": "https://www.mel.iq/api/health",
+          "type": "application/json"
+        }
+      ]
+    }
+  ]
+}

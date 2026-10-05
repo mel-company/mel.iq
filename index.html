@@ -15,6 +15,13 @@
   <!-- Canonical -->
   <link rel="canonical" href="https://www.mel.iq/" />
 
+  <!-- Agent discovery (HTML hints; Link response headers also advertise these) -->
+  <link rel="api-catalog" href="/.well-known/api-catalog" />
+  <link rel="describedby" href="/.well-known/ai-catalog.json" type="application/json" />
+  <link rel="service-desc" href="/docs/openapi.json" type="application/json" />
+  <link rel="service-doc" href="/auth.md" type="text/markdown" />
+  <link rel="alternate" href="/llms.txt" type="text/plain" title="llms.txt" />
+
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Mel IQ" />

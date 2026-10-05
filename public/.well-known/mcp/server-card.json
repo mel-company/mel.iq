@@ -1,0 +1,48 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json",
+  "version": "1.0",
+  "protocolVersion": "2025-06-18",
+  "serverInfo": {
+    "name": "mel-iq",
+    "title": "Mel IQ",
+    "version": "1.0.0",
+    "description": "Public Mel IQ tools for discovering pricing, app downloads, and merchant onboarding.",
+    "homepage": "https://www.mel.iq"
+  },
+  "description": "Discover Mel IQ ecommerce platform resources for Iraqi merchants.",
+  "documentationUrl": "https://www.mel.iq/docs/api",
+  "iconUrl": "https://www.mel.iq/android-chrome-512x512.png",
+  "transport": {
+    "type": "streamable-http",
+    "endpoint": "/api/mcp"
+  },
+  "capabilities": {
+    "tools": {
+      "listChanged": false
+    },
+    "resources": {},
+    "prompts": {}
+  },
+  "authentication": {
+    "required": false,
+    "schemes": []
+  },
+  "tools": [
+    {
+      "name": "get_mel_overview",
+      "description": "Return a short overview of Mel IQ and key public URLs."
+    },
+    {
+      "name": "get_app_download_links",
+      "description": "Return Google Play and App Store links for the Mel merchant apps."
+    },
+    {
+      "name": "get_pricing_entry_points",
+      "description": "Return URLs and guidance for Mel pricing and checkout."
+    },
+    {
+      "name": "get_support_contacts",
+      "description": "Return Mel support and contact entry points."
+    }
+  ]
+}

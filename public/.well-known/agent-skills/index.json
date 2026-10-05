@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "create-store",
+      "type": "skill-md",
+      "description": "Guide merchants through launching an Iraqi ecommerce storefront on Mel IQ, including pricing, checkout, and app downloads.",
+      "url": "/.well-known/agent-skills/create-store/SKILL.md",
+      "digest": "sha256:7d8052a75b76971deb45b9013215d9a5f46bdc4ce54d8fa65465ed94e76cbbd5"
+    },
+    {
+      "name": "discovery",
+      "type": "skill-md",
+      "description": "Locate Mel IQ machine-readable discovery documents: API catalog, ARD, OAuth metadata, MCP card, and skills index.",
+      "url": "/.well-known/agent-skills/discovery/SKILL.md",
+      "digest": "sha256:8f264271b457841abe4d60dc3559237829e392c7cc25b38a982597cff7db5296"
+    }
+  ]
+}

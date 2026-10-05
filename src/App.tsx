@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import DevProgressPreview from "./pages/__DevProgressPreview";
 import DevManagePreview from "./pages/__DevManagePreview";
 import Navbar from "./components/Navbar";
+import WebMcpTools from "./components/WebMcpTools";
 import { MarketingShell } from "./components/LandingNavbar";
 import Landing from "./pages/Landing";
 import Pricing from "./pages/Pricing";
@@ -44,6 +45,7 @@ function ProtectedRoute({ children }: ProtectedRouteProps) {
 function App() {
   return (
     <div className="min-h-screen bg-white dark:bg-black transition-colors duration-200">
+      <WebMcpTools />
       <Toaster />
       <Routes>
         {/* No navbar on the auth screens: the frames are standalone, and a

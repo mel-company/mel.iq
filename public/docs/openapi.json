@@ -1,0 +1,185 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Mel IQ Platform API",
+    "version": "1.0.0",
+    "description": "Public discovery surface for Mel IQ merchant authentication and contact endpoints used by www.mel.iq. The live API base is https://api.mel.iq/api/v1.",
+    "contact": {
+      "name": "Mel IQ Support",
+      "email": "hassan.adnan@mel.iq",
+      "url": "https://www.mel.iq/#contact"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.mel.iq/api/v1",
+      "description": "Production API"
+    },
+    {
+      "url": "https://www.mel.iq",
+      "description": "Marketing site + public agent endpoints"
+    }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "summary": "Send phone OTP",
+        "operationId": "sendPhoneOtp",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phone"],
+                "properties": {
+                  "phone": {
+                    "type": "string",
+                    "description": "E.164 Iraqi phone number",
+                    "example": "+9647701234567"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP dispatched"
+          }
+        }
+      }
+    },
+    "/auth/verify": {
+      "post": {
+        "summary": "Verify OTP and issue bearer tokens",
+        "operationId": "verifyPhoneOtp",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phone", "code"],
+                "properties": {
+                  "phone": { "type": "string" },
+                  "code": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Access and refresh tokens issued"
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Current merchant profile",
+        "operationId": "getMe",
+        "tags": ["Auth"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Authenticated merchant"
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "summary": "Refresh access token",
+        "operationId": "refreshToken",
+        "tags": ["Auth"],
+        "responses": {
+          "200": {
+            "description": "New tokens"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Revoke session",
+        "operationId": "logout",
+        "tags": ["Auth"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Logged out"
+          }
+        }
+      }
+    },
+    "/contact": {
+      "post": {
+        "summary": "Submit contact form",
+        "operationId": "submitContact",
+        "tags": ["Support"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "subject", "message"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "phone": { "type": "string" },
+                  "subject": { "type": "string" },
+                  "message": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message accepted"
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "servers": [{ "url": "https://www.mel.iq" }],
+        "summary": "Public health check for agent discovery",
+        "operationId": "siteHealth",
+        "tags": ["Discovery"],
+        "responses": {
+          "200": {
+            "description": "Site agent discovery surface is healthy"
+          }
+        }
+      }
+    },
+    "/api/mcp": {
+      "post": {
+        "servers": [{ "url": "https://www.mel.iq" }],
+        "summary": "Public Mel MCP Streamable HTTP endpoint",
+        "operationId": "mcp",
+        "tags": ["Discovery"],
+        "responses": {
+          "200": {
+            "description": "MCP JSON-RPC response"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}
