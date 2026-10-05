@@ -23,6 +23,9 @@ import { Toaster } from "./components/ui/sonner";
 import NotFound from "./pages/NotFound";
 import AuthRedirectError from "./pages/AuthRedirectError";
 import PublicTicketChat from "./pages/PublicTicketChat";
+import SeoTopicPage, { SeoGuidesIndex } from "./pages/seo/SeoTopicPage";
+import { SEO_TOPIC_SLUGS } from "./seo/topics";
+import SeoHead from "./seo/SeoHead";
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -99,10 +102,23 @@ function App() {
           element={<DevManagePreview />}
         />
         <Route path="/" element={<Landing />} />
+        <Route path="/guides" element={<SeoGuidesIndex />} />
+        {SEO_TOPIC_SLUGS.map((slug) => (
+          <Route
+            key={slug}
+            path={`/${slug}`}
+            element={<SeoTopicPage slug={slug} />}
+          />
+        ))}
         <Route
           path="/pricing"
           element={
             <MarketingShell>
+              <SeoHead
+                title="باقات ميل | أسعار إنشاء متجر إلكتروني في العراق"
+                description="قارن باقات ميل لإنشاء وإدارة متجرك الإلكتروني في العراق. تجربة مجانية 14 يوماً ثم اختر الباقة المناسبة لحجم مبيعاتك."
+                path="/pricing"
+              />
               <Pricing />
             </MarketingShell>
           }
@@ -111,6 +127,11 @@ function App() {
           path="/about"
           element={
             <MarketingShell>
+              <SeoHead
+                title="من نحن | Mel IQ — منصة المتاجر الإلكترونية العراقية"
+                description="تعرف على ميل: منصة عراقية لإنشاء وإدارة المتاجر الإلكترونية ونقاط البيع بمساعد ذكي بالعربية."
+                path="/about"
+              />
               <About />
             </MarketingShell>
           }
@@ -119,6 +140,11 @@ function App() {
           path="/contact"
           element={
             <MarketingShell>
+              <SeoHead
+                title="تواصل معنا | دعم Mel IQ"
+                description="تواصل مع فريق ميل في العراق للمساعدة في إطلاق متجرك الإلكتروني أو أسئلة الباقات والدعم."
+                path="/contact"
+              />
               <Contact />
             </MarketingShell>
           }
