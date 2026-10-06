@@ -80,27 +80,22 @@
     fetchpriority="high"
   />
 
-  <!-- Cairo is only a fallback behind self-hosted Setar XS. Load it async so
-       it cannot block first paint the way a synchronous stylesheet would. -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Critical Setar faces for first paint. Cairo (Google Fonts) was removed —
+       it was only a fallback and cost ~1.3s of render-blocking on Slow 4G. -->
   <link
     rel="preload"
-    as="style"
-    href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap"
+    as="font"
+    type="font/woff2"
+    href="/fonts/Setar%20XS/SetarXSTrial-Light.woff2"
+    crossorigin
   />
   <link
-    rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap"
-    media="print"
-    onload="this.media='all'"
+    rel="preload"
+    as="font"
+    type="font/woff2"
+    href="/fonts/Setar%20XS/SetarXSTrial-Bold.woff2"
+    crossorigin
   />
-  <noscript>
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap"
-    />
-  </noscript>
 
   <!-- Structured Data (enriched at runtime per-route via SeoHead) -->
   <script type="application/ld+json">

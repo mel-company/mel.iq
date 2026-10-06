@@ -62,16 +62,19 @@ function TrustBadge() {
 
       <div className="flex shrink-0 items-center">
         {AVATARS.map((src, i) => (
-          <img
-            key={src}
-            src={src}
-            alt=""
-            width={38}
-            height={38}
-            aria-hidden
-            className="size-[38px] shrink-0 rounded-full object-cover -mr-5 last:mr-0"
-            style={{ zIndex: AVATARS.length - i }}
-          />
+          <picture key={src}>
+            <source type="image/webp" srcSet={src.replace(/\.png$/, ".webp")} />
+            <img
+              src={src}
+              alt=""
+              width={38}
+              height={38}
+              aria-hidden
+              decoding="async"
+              className="size-[38px] shrink-0 rounded-full object-cover -mr-5 last:mr-0"
+              style={{ zIndex: AVATARS.length - i }}
+            />
+          </picture>
         ))}
       </div>
     </div>
