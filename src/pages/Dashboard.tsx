@@ -196,7 +196,7 @@ const EmptyState = ({ onCreateStore }: { onCreateStore: () => void }) => (
         className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-l from-brand-violet to-brand-indigo px-8 py-3 text-sm font-bold text-white shadow-[0_16px_40px_-18px_rgba(79,96,249,0.9)] transition-opacity hover:opacity-90"
       >
         <Plus size={18} />
-        إنشاء متجر جديد
+        أنشئ متجرك
       </button>
     </div>
   </div>
@@ -592,13 +592,26 @@ function Dashboard() {
               </a>
               مرحباً، {displayName}
             </h1>
-            <button
-              onClick={handleCreateNewStore}
-              className="inline-flex items-center gap-1 rounded-2xl bg-linear-to-l from-brand-violet to-brand-indigo px-6 py-3 text-base font-bold text-white shadow-[0_16px_40px_-18px_rgba(79,96,249,0.9)] transition-opacity hover:opacity-90"
-            >
-              متجر جديد
-              <Plus size={18} />
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {stores.length === 0 && (
+                <button
+                  type="button"
+                  onClick={handleCreateNewStore}
+                  className="inline-flex items-center gap-1 rounded-2xl bg-linear-to-l from-brand-violet to-brand-indigo px-6 py-3 text-base font-bold text-white shadow-[0_16px_40px_-18px_rgba(79,96,249,0.9)] transition-opacity hover:opacity-90"
+                >
+                  أنشئ متجرك
+                  <Plus size={18} />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={logoutMutation.isPending}
+                className="inline-flex items-center justify-center rounded-2xl border border-[#0b1020]/12 bg-white/60 px-5 py-3 text-base font-bold text-[#0b1020] transition-colors hover:bg-white/90 disabled:opacity-50 dark:border-white/15 dark:bg-white/5 dark:text-frost dark:hover:bg-white/10"
+              >
+                تسجيل الخروج
+              </button>
+            </div>
           </div>
         </div>
       </header>

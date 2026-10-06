@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertCircle, Loader2 } from "@/components/icons";
 import { useLogin } from "@/api/wrappers/auth.wrappers";
@@ -15,7 +15,11 @@ import BrandPanel from "@/components/auth/BrandPanel";
 
 function Login() {
   const navigate = useNavigate();
-  const [phone, setPhone] = useState("");
+  const location = useLocation();
+  const prefilledPhone = toLocalDigits(
+    String((location.state as { phone?: string } | null)?.phone ?? ""),
+  );
+  const [phone, setPhone] = useState(prefilledPhone);
   const [noAccount, setNoAccount] = useState(false);
   /** Server-side failures, which outlive a keystroke unlike the format check. */
   const [apiError, setApiError] = useState("");
@@ -23,7 +27,7 @@ function Login() {
    * Format complaints stay quiet until the field is left with something in it,
    * or submitted — tabbing past an empty field is not a mistake worth flagging.
    */
-  const [touched, setTouched] = useState(false);
+  const [touched, setTouched] = useState(Boolean(prefilledPhone));
   const { mutate: login, isPending } = useLogin();
 
   const formatError = iqPhoneError(phone);

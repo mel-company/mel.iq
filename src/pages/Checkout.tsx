@@ -11,6 +11,7 @@ import {
 import {
   useAddStore,
   useCheckStoreDomainAvailability,
+  useFetchStores,
 } from "@/api/wrappers/store.wrappers";
 import { useDynadotSearch } from "@/api/wrappers/dynadot.wrappers";
 import DomainPriceBreakdown from "@/components/DomainPriceBreakdown";
@@ -28,6 +29,7 @@ import {
   getApiErrorMessage,
   isPhoneTakenError,
 } from "@/utils/otp";
+import { normalizeApiResponse } from "@/utils/storeUrls";
 import {
   formatIqPhone,
   iqPhoneError,
@@ -147,6 +149,26 @@ function Checkout() {
       : plans.data?.data || []
     : [];
 
+  /**
+   * One store per merchant. If they already have one, checkout is not the
+   * place to mint a second — send them back to the dashboard instead.
+   */
+  const { data: storesData, isLoading: storesLoading } = useFetchStores(
+    undefined,
+    Boolean(user),
+  );
+  const existingStoreCount = useMemo(
+    () => normalizeApiResponse(storesData).length,
+    [storesData],
+  );
+
+  useEffect(() => {
+    if (!user || storesLoading) return;
+    if (existingStoreCount < 1) return;
+    toast.info("لديك متجر واحد مسبقاً. كل حساب يحق له متجر واحد فقط.");
+    navigate("/dashboard", { replace: true });
+  }, [user, storesLoading, existingStoreCount, navigate]);
+
   // Always start from step 1 (plan selection) unless skipToStep is provided
   // User must select a plan before creating a store
   const initialStep = location.state?.skipToStep || 1;
@@ -244,6 +266,11 @@ function Checkout() {
    * a half-typed number isn't scolded on its first keystroke.
    */
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
+  /**
+   * Set when register fails because the phone already belongs to an account —
+   * shown under the phone field so the merchant sees it, not only a toast.
+   */
+  const [phoneTakenError, setPhoneTakenError] = useState("");
   /** Drives the success pill the frame shows once the code checks out. */
   const [otpVerified, setOtpVerified] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(
@@ -371,7 +398,7 @@ function Checkout() {
   const localPhone = /^(\+|964)/.test(formData.phone)
     ? toLocalDigits(formData.phone)
     : formData.phone;
-  const phoneError = iqPhoneError(formData.phone);
+  const phoneError = phoneTakenError || iqPhoneError(formData.phone);
   const nameError =
     formData.name.trim().length >= 2 ? "" : "يرجى إدخال الاسم الكامل (حرفان على الأقل).";
   const emailError = EMAIL_RE.test(formData.email.trim())
@@ -396,6 +423,7 @@ function Checkout() {
   const handlePhoneChange = (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
+    setPhoneTakenError("");
     setFormData((prev) => ({
       ...prev,
       phone: e.target.value.replace(/\D/g, ""),
@@ -526,28 +554,15 @@ function Checkout() {
     setCurrentStep(2);
   };
 
-  const continueWithExistingPhone = (phoneE164: string) => {
-    // الرقم مسجّل مسبقاً (حتى لو ما اكتمل verify) → نعيد إرسال OTP عبر login
-    loginMutation(
-      { phone: phoneE164 },
-      {
-        onSuccess: (data) => {
-          toast.success(
-            "هذا الرقم مسجّل مسبقاً. أرسلنا رمز تحقق جديد لإكمال الحساب.",
-          );
-          proceedToOtpStep(phoneE164, data);
-        },
-        onError: (loginError) => {
-          // لا تستخدم /auth/send-otp هنا — يحتاج JWT والضيف ما عنده توكن بعد
-          toast.error(
-            getApiErrorMessage(
-              loginError,
-              "الرقم مسجّل لكن تعذر إرسال رمز التحقق. جرّب تسجيل الدخول من /login.",
-            ),
-          );
-        },
-      },
-    );
+  const stopForExistingPhone = (phoneE164: string) => {
+    // الرقم مسجّل مسبقاً → نوقف إنشاء الحساب ونوجّهه لتسجيل الدخول
+    setPhoneTakenError("هذا الرقم لديه حساب مسبقاً. سجّل الدخول للمتابعة.");
+    setTouchedFields((prev) => ({ ...prev, phone: true }));
+    toast.error("هذا الرقم لديه حساب مسبقاً. سجّل الدخول بدل إنشاء حساب جديد.");
+    navigate("/login", {
+      replace: false,
+      state: { phone: toLocalDigits(phoneE164) },
+    });
   };
 
   const handleStep1Submit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -601,9 +616,9 @@ function Checkout() {
               proceedToOtpStep(phoneE164, data);
             },
             onError: (error) => {
-              // الرقم صار بالداتابيس قبل ما تكمل verify → نكمّل عبر login/OTP
+              // الرقم صار بالداتابيس قبل ما تكمل verify → نوقف المسار ونبلّغه
               if (isPhoneTakenError(error)) {
-                continueWithExistingPhone(phoneE164);
+                stopForExistingPhone(phoneE164);
                 return;
               }
               toast.error(
@@ -694,7 +709,17 @@ function Checkout() {
       toast.error("الرجاء اختيار خطة قبل المتابعة");
       return;
     }
-    // Proceed to payment step
+
+    // Free plans never hit the payment gateway — skip step 4 entirely.
+    const free =
+      Boolean(formData.plan.is_free) ||
+      Number(formData.plan.monthly_price ?? 0) === 0;
+    if (free) {
+      setPaymentCompleted(true);
+      setCurrentStep(5);
+      return;
+    }
+
     setCurrentStep(4);
   };
 
@@ -789,6 +814,12 @@ function Checkout() {
 
   const handleWebsiteCustomization = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (existingStoreCount >= 1) {
+      toast.info("لديك متجر واحد مسبقاً. كل حساب يحق له متجر واحد فقط.");
+      navigate("/dashboard", { replace: true });
+      return;
+    }
 
     const data = new FormData();
 
@@ -1213,7 +1244,13 @@ function Checkout() {
                       لديك حساب؟{" "}
                       <button
                         type="button"
-                        onClick={() => navigate("/login")}
+                        onClick={() =>
+                          navigate("/login", {
+                            state: {
+                              phone: toLocalDigits(formData.phone),
+                            },
+                          })
+                        }
                         className="font-bold text-brand-primary hover:underline"
                       >
                         تسجيل الدخول
@@ -1768,7 +1805,7 @@ function Checkout() {
                 <StepFooter
                   submitLabel="متابعة"
                   disabled={!domainChecked || domainAvailable === false}
-                  onBack={() => setCurrentStep(4)}
+                  onBack={() => setCurrentStep(isPlanFree ? 3 : 4)}
                 />
               </form>
             </div>

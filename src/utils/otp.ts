@@ -56,11 +56,17 @@ export function isPhoneTakenError(error: unknown): boolean {
   const err = error as {
     response?: {
       status?: number;
-      data?: { message?: string | string[]; error?: string };
+      data?: { message?: string | string[]; error?: string; code?: string };
     };
   };
+  const status = err?.response?.status;
+  if (status === 409 || status === 422) return true;
+
   const raw =
-    err?.response?.data?.message ?? err?.response?.data?.error ?? "";
+    err?.response?.data?.message ??
+    err?.response?.data?.error ??
+    err?.response?.data?.code ??
+    "";
   const msg = (Array.isArray(raw) ? raw.join(" ") : String(raw)).toLowerCase();
 
   return (
