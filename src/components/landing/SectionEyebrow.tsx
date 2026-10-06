@@ -34,13 +34,18 @@ function Flank({ side }: { side: "start" | "end" }) {
  *               page, `start` for the one that sits in a column and keeps the
  *               label flush with the start edge of its paragraph — the right
  *               edge, under RTL.
+ * @param as     Landmark element for the label. Defaults to `h2` so card
+ *               titles (`h3`) stay in descending order. Pass `p` when a real
+ *               `h1`/`h2` follows immediately (SEO topic pages, app download).
  */
 function SectionEyebrow({
   children,
   align = "center",
+  as: Tag = "h2",
 }: {
   children: React.ReactNode;
   align?: "center" | "start";
+  as?: "h2" | "p";
 }) {
   return (
     <div
@@ -49,7 +54,7 @@ function SectionEyebrow({
       }`}
     >
       <Flank side="start" />
-      <span className="text-eyebrow-label whitespace-nowrap">{children}</span>
+      <Tag className="text-eyebrow-label whitespace-nowrap">{children}</Tag>
       <Flank side="end" />
     </div>
   );

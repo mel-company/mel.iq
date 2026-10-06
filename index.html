@@ -68,10 +68,39 @@
   <!-- Theme Color -->
   <meta name="theme-color" content="#060b18" />
 
-  <!-- Fonts -->
+  <!-- LCP: hero phone mockup (WebP). Discover early so Slow-4G mobile is not
+       waiting on the JS bundle to insert the <img>. -->
+  <link
+    rel="preload"
+    as="image"
+    type="image/webp"
+    href="/images/landing/hero-phone-420.webp"
+    imagesrcset="/images/landing/hero-phone-420.webp 420w, /images/landing/hero-phone.webp 840w"
+    imagesizes="(min-width: 1024px) 560px, min(100vw - 2rem, 420px)"
+    fetchpriority="high"
+  />
+
+  <!-- Cairo is only a fallback behind self-hosted Setar XS. Load it async so
+       it cannot block first paint the way a synchronous stylesheet would. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link
+    rel="preload"
+    as="style"
+    href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap"
+  />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap"
+    media="print"
+    onload="this.media='all'"
+  />
+  <noscript>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap"
+    />
+  </noscript>
 
   <!-- Structured Data (enriched at runtime per-route via SeoHead) -->
   <script type="application/ld+json">

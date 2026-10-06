@@ -45,22 +45,8 @@
   <url>
     <loc>https://www.mel.iq/privacy-policy</loc>
     <lastmod>2026-10-06</lastmod>
-    <changefreq>monthly</changefreq>
+    <changefreq>weekly</changefreq>
     <priority>0.30</priority>
-  </url>
-
-  <url>
-    <loc>https://www.mel.iq/terms-of-use</loc>
-    <lastmod>2026-10-06</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.30</priority>
-  </url>
-
-  <url>
-    <loc>https://www.mel.iq/delete-account</loc>
-    <lastmod>2026-10-06</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.25</priority>
   </url>
 
   <url>

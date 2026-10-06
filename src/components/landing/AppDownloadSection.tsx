@@ -82,7 +82,7 @@ function AppDownloadSection() {
         <div className="flex w-full flex-col items-center gap-8 text-center lg:w-[48%] lg:items-start lg:text-right">
           <div className="flex flex-col items-center gap-6 lg:items-start">
             <div data-reveal>
-              <SectionEyebrow align="start">حمّل التطبيق</SectionEyebrow>
+              <SectionEyebrow align="start" as="p">حمّل التطبيق</SectionEyebrow>
             </div>
             <h2
               data-reveal
@@ -124,15 +124,24 @@ function AppDownloadSection() {
           className="w-full max-w-[420px] shrink-0 lg:w-[42%] lg:max-w-[560px]"
           style={{ "--reveal-delay": "100ms" } as React.CSSProperties}
         >
-          <img
-            src="/images/landing/hero-phone.png"
-            alt=""
-            aria-hidden
-            width={658}
-            height={781}
-            draggable={false}
-            className="animate-drift pointer-events-none block h-auto w-full select-none"
-          />
+          <picture>
+            <source
+              type="image/webp"
+              srcSet="/images/landing/hero-phone-420.webp 420w, /images/landing/hero-phone.webp 840w"
+              sizes="(min-width: 1024px) 560px, min(100vw - 2rem, 420px)"
+            />
+            <img
+              src="/images/landing/hero-phone.png"
+              alt=""
+              aria-hidden
+              width={658}
+              height={781}
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+              className="animate-drift pointer-events-none block h-auto w-full select-none"
+            />
+          </picture>
         </div>
       </div>
     </section>

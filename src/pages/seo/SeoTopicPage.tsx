@@ -70,7 +70,7 @@ function TopicBody({ topic }: { topic: SeoTopic }) {
           </nav>
 
           <header className="mb-12 flex flex-col items-start gap-6 text-right">
-            <SectionEyebrow align="start">{topic.eyebrow}</SectionEyebrow>
+            <SectionEyebrow align="start" as="p">{topic.eyebrow}</SectionEyebrow>
             <h1 className="text-display max-w-[20ch]">{topic.title}</h1>
             {topic.intro.map((p) => (
               <p key={p.slice(0, 24)} className="text-prose-lg max-w-[720px]">
@@ -201,7 +201,7 @@ export function SeoGuidesIndex() {
         schemas={schemas}
       />
       <div className="mx-auto max-w-[900px] px-4 py-16 sm:px-6">
-        <SectionEyebrow>أدلة ميل</SectionEyebrow>
+        <SectionEyebrow as="p">أدلة ميل</SectionEyebrow>
         <h1 className="text-display mt-6 mb-4 text-right">
           أدلة التجارة الإلكترونية في العراق
         </h1>

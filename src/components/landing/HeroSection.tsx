@@ -72,16 +72,26 @@ function HeroSection() {
           style={{ "--reveal-delay": "120ms" } as React.CSSProperties}
         >
           {/* The float lives on the image, not the revealing wrapper: the two
-              would otherwise both be animating `translate`. */}
-          <img
-            src="/images/landing/hero-phone.png"
-            alt=""
-            aria-hidden
-            width={658}
-            height={781}
-            draggable={false}
-            className="animate-drift pointer-events-none block h-auto w-full select-none"
-          />
+              would otherwise both be animating `translate`.
+              WebP + srcset keep the LCP candidate under ~25KB on mobile. */}
+          <picture>
+            <source
+              type="image/webp"
+              srcSet="/images/landing/hero-phone-420.webp 420w, /images/landing/hero-phone.webp 840w"
+              sizes="(min-width: 1024px) 560px, min(100vw - 2rem, 420px)"
+            />
+            <img
+              src="/images/landing/hero-phone.png"
+              alt=""
+              aria-hidden
+              width={658}
+              height={781}
+              fetchPriority="high"
+              decoding="async"
+              draggable={false}
+              className="animate-drift pointer-events-none block h-auto w-full select-none"
+            />
+          </picture>
         </div>
       </div>
     </section>

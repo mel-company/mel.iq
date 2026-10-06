@@ -85,15 +85,20 @@ function PlatformSection() {
         </div>
 
         <div data-reveal="zoom" className="w-full shrink-0 lg:w-[50%]">
-          <img
-            src="/images/landing/platform-phones.png"
-            alt=""
-            aria-hidden
-            width={844}
-            height={657}
-            draggable={false}
-            className="pointer-events-none block h-auto w-full select-none"
-          />
+          <picture>
+            <source type="image/webp" srcSet="/images/landing/platform-phones.webp" />
+            <img
+              src="/images/landing/platform-phones.png"
+              alt=""
+              aria-hidden
+              width={844}
+              height={657}
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+              className="pointer-events-none block h-auto w-full select-none"
+            />
+          </picture>
         </div>
       </div>
     </section>

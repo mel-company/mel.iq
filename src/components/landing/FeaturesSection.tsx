@@ -120,12 +120,17 @@ function FeaturesSection() {
                 500×650 box that clips it. */}
             <div className="relative aspect-[500/650] w-full overflow-hidden">
               <div className="absolute inset-x-[3.6%] top-0 aspect-[465/919]">
-                <img
-                  src="/images/landing/features-phone-frame.png"
-                  alt=""
-                  aria-hidden
-                  className="absolute inset-0 size-full"
-                />
+                <picture>
+                  <source type="image/webp" srcSet="/images/landing/features-phone-frame.webp" />
+                  <img
+                    src="/images/landing/features-phone-frame.png"
+                    alt=""
+                    aria-hidden
+                    loading="lazy"
+                    decoding="async"
+                    className="absolute inset-0 size-full"
+                  />
+                </picture>
                 {/* The exported frame carries a placeholder screen, so the real
                     one is laid over it, inset by the bezel (21/465 and 15/919
                     in the frame's own units).
@@ -133,12 +138,17 @@ function FeaturesSection() {
                     replaced element, so insets alone do not stretch it — it
                     keeps its intrinsic aspect and slides out past the bezel. */}
                 <div className="absolute inset-[1.64%_4.53%] overflow-hidden rounded-[9%_/_4.5%]">
-                  <img
-                    src="/images/landing/features-phone-screen.png"
-                    alt=""
-                    aria-hidden
-                    className="size-full object-cover object-top"
-                  />
+                  <picture>
+                    <source type="image/webp" srcSet="/images/landing/features-phone-screen.webp" />
+                    <img
+                      src="/images/landing/features-phone-screen.png"
+                      alt=""
+                      aria-hidden
+                      loading="lazy"
+                      decoding="async"
+                      className="size-full object-cover object-top"
+                    />
+                  </picture>
                 </div>
               </div>
             </div>

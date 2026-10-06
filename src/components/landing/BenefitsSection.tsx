@@ -218,14 +218,19 @@ function BenefitsSection() {
                 المخزون تلقائياً، وكل طلب يظهر في قائمة واحدة مهما كان مصدره —
                 لا ازدواجية ولا نقص مفاجئ في البضاعة.
               </CardBody>
-              <img
-                src="/images/landing/bento-pos.png"
-                alt=""
-                aria-hidden
-                width={543}
-                height={224}
-                className="relative block h-auto w-full"
-              />
+              <picture>
+                <source type="image/webp" srcSet="/images/landing/bento-pos.webp" />
+                <img
+                  src="/images/landing/bento-pos.png"
+                  alt=""
+                  aria-hidden
+                  width={543}
+                  height={224}
+                  loading="lazy"
+                  decoding="async"
+                  className="relative block h-auto w-full"
+                />
+              </picture>
             </Card>
 
             <Card delay={120} className="justify-center gap-9 px-8 pb-[18px] pt-8">
@@ -238,14 +243,19 @@ function BenefitsSection() {
                 بأرقام واضحة. اعرف ما يُباع ومتى ولمن، وخذ قراراتك بثقة بدل
                 التخمين.
               </CardBody>
-              <img
-                src="/images/landing/bento-reports.png"
-                alt=""
-                aria-hidden
-                width={549}
-                height={277}
-                className="relative block h-auto w-full"
-              />
+              <picture>
+                <source type="image/webp" srcSet="/images/landing/bento-reports.webp" />
+                <img
+                  src="/images/landing/bento-reports.png"
+                  alt=""
+                  aria-hidden
+                  width={549}
+                  height={277}
+                  loading="lazy"
+                  decoding="async"
+                  className="relative block h-auto w-full"
+                />
+              </picture>
             </Card>
           </div>
         </div>
