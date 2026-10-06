@@ -33,8 +33,10 @@ import {
 } from "@/utils/phone";
 import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
 import StoreProvisioningGate from "@/components/StoreProvisioningGate";
-import { Loader2, Upload, X, ArrowRightIcon } from "@/components/icons";
+import { Loader2, Upload, X } from "@/components/icons";
 import CheckoutStepper from "@/components/checkout/CheckoutStepper";
+import CheckoutShell from "@/components/checkout/CheckoutShell";
+import CheckoutBrandRail from "@/components/checkout/CheckoutBrandRail";
 import OtpInputs from "@/components/auth/OtpInputs";
 import {
   CheckBox,
@@ -290,12 +292,15 @@ function Checkout() {
   }, [user, currentStep, otpSent, sendOtpMutation, formData.phone]);
 
   const steps = [
-    { number: 1, title: "المعلومات", icon: "👤" },
-    { number: 2, title: "التحقق", icon: "🔐" },
-    { number: 3, title: "اختيار الخطة", icon: "📦" },
-    { number: 4, title: "الدفع", icon: "💳" },
-    { number: 5, title: "تخصيص المتجر", icon: "⚙️" },
+    { number: 1, title: "المعلومات" },
+    { number: 2, title: "التحقق" },
+    { number: 3, title: "اختيار الخطة" },
+    { number: 4, title: "الدفع" },
+    { number: 5, title: "تخصيص المتجر" },
   ];
+
+  const activeStepTitle =
+    steps.find((s) => s.number === currentStep)?.title ?? steps[0].title;
 
   const checkDomainAvailabilityMutation = useCheckStoreDomainAvailability();
   const dynadotSearchMutation = useDynadotSearch();
@@ -904,46 +909,51 @@ function Checkout() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-ink py-14 font-setar text-white">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage: `
-            linear-gradient(rgba(149, 158, 254, 0.025) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(149, 158, 254, 0.025) 1px, transparent 1px)
-          `,
-          backgroundSize: "109px 109px",
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-[383px] end-[-120px] size-[759px] rounded-full bg-[#1b5c8f]/25 blur-[180px]"
-      />
+    <CheckoutShell>
+      {/* Brand rail first → right under RTL; plans/form fill the left. */}
+      <div className="flex w-full flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
+        <CheckoutBrandRail
+          currentStep={currentStep}
+          totalSteps={steps.length}
+          stepTitle={activeStepTitle}
+        />
 
-      <Link
-        to="/"
-        className="absolute top-5 start-5 z-10 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-muted transition-colors hover:bg-white/10 hover:text-frost sm:top-8 sm:start-8"
-      >
-        <ArrowRightIcon size={16} />
-        الرئيسية
-      </Link>
+        <div className="flex min-w-0 flex-1 flex-col gap-6">
+          {/* Mobile brand strip */}
+          <div className="flex items-center justify-end gap-3 lg:hidden">
+            <div className="flex flex-col text-right">
+              <span dir="ltr" className="text-lg font-extrabold text-white">
+                mel.iq
+              </span>
+              <span className="text-xs text-[#8b92b0]">نظام إدارة المتاجر</span>
+            </div>
+            <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(233.96deg,#b657ff_23.8%,#00bfff_76.3%)]">
+              <img
+                src="/images/landing/mel-mark.svg"
+                alt=""
+                aria-hidden
+                width={48}
+                height={48}
+                className="size-12"
+              />
+            </span>
+          </div>
 
-      <div className="relative mx-auto flex max-w-[1064px] flex-col gap-5 px-4 sm:px-6">
-        {!location.state?.skipToStep && (
-          <CheckoutStepper steps={steps} currentStep={currentStep} />
-        )}
+          {!location.state?.skipToStep && (
+            <CheckoutStepper steps={steps} currentStep={currentStep} />
+          )}
 
-        {/* Step Content */}
-        <div className="rounded-3xl bg-ink-raised p-6 text-right sm:p-9">
+          {/* Step content — open on the atmosphere (no nested chrome box). */}
+          <div className="text-right">
           {/* Step 1: User Info - Only for non-logged in users */}
           {currentStep === 1 && !location.state?.skipToStep && (
+            <div className="rounded-[28px] border border-white/[0.07] bg-[#0a0d1c]/90 p-6 sm:p-9">
             <div className="flex flex-col gap-[22px]">
               <div className="flex flex-col gap-1.5">
-                <h2 className="text-[30px] font-extrabold leading-[45px] text-frost">
+                <h2 className="text-[28px] font-extrabold leading-tight text-white sm:text-[32px]">
                   {user ? "المتابعة إلى التحقق" : "أنشئ حسابك"}
                 </h2>
-                <p className="text-sm leading-[21px] text-muted">
+                <p className="text-sm leading-6 text-[#9aa1bd]">
                   {user
                     ? "سنرسل رمز تحقق إلى رقمك المسجل للمتابعة"
                     : "تجربة مجانية 14 يوماً — بدون بطاقة ائتمانية، وتقدر تلغي في أي وقت"}
@@ -1166,24 +1176,26 @@ function Checkout() {
                 </form>
               )}
             </div>
+            </div>
           )}
 
           {/* Step 2: OTP Verification */}
           {currentStep === 2 && (
-            <div className="flex flex-col items-center gap-[22px] py-6 text-center">
+            <div className="rounded-[28px] border border-white/[0.07] bg-[#0a0d1c]/90 p-6 sm:p-9">
+            <div className="flex flex-col items-center gap-[22px] py-2 text-center">
               <div className="flex flex-col items-center gap-1.5">
-                <h2 className="text-[30px] font-extrabold leading-[45px] text-frost">
+                <h2 className="text-[28px] font-extrabold leading-tight text-white sm:text-[32px]">
                   تحقق من رقمك
                 </h2>
-                <p className="flex flex-wrap items-center justify-center gap-1.5 text-sm leading-[21px] text-muted">
+                <p className="flex flex-wrap items-center justify-center gap-1.5 text-sm leading-6 text-[#9aa1bd]">
                   أرسلنا رمزاً من {CHECKOUT_OTP_LENGTH} أرقام إلى
-                  <span dir="ltr" className="font-semibold text-frost">
+                  <span dir="ltr" className="font-semibold text-white">
                     {formatIqPhone(formData.phone)}
                   </span>
                   <button
                     type="button"
                     onClick={() => setCurrentStep(1)}
-                    className="text-[13px] font-bold text-brand-primary hover:underline"
+                    className="text-[13px] font-bold text-[#7b8cff] hover:underline"
                   >
                     تعديل
                   </button>
@@ -1241,27 +1253,26 @@ function Checkout() {
                 </div>
               </form>
             </div>
+            </div>
           )}
 
-          {/* Step 3: Plan Selection */}
+          {/* Step 3: Plan Selection — open layout like the Mel mockup */}
           {currentStep === 3 && (
             <div className="flex flex-col gap-8">
-              <div className="flex flex-col gap-1.5">
-                {/* The frame heads this step "طريقة الدفع", which is step 4's
-                    title left in by mistake — this is the plan picker. */}
-                <h2 className="text-[30px] font-extrabold leading-[45px] text-frost">
+              <div className="flex flex-col gap-2">
+                <h2 className="text-[32px] font-extrabold leading-tight text-white sm:text-[36px]">
                   اختر خطتك
                 </h2>
-                <p className="text-sm leading-[21px] text-muted">
+                <p className="text-[15px] leading-6 text-[#9aa1bd]">
                   لن يُخصم أي مبلغ اليوم — تبدأ الفوترة بعد انتهاء التجربة المجانية
                 </p>
               </div>
 
               {plans.isLoading ? (
-                <p className="py-10 text-center text-sm text-muted">جاري تحميل الباقات…</p>
+                <p className="py-10 text-center text-sm text-[#9aa1bd]">جاري تحميل الباقات…</p>
               ) : plansData.length === 0 ? (
                 <div className="flex flex-col items-center gap-4 py-10">
-                  <p className="text-sm text-muted">
+                  <p className="text-sm text-[#9aa1bd]">
                     {plans.isError
                       ? "تعذر تحميل الباقات."
                       : "لا توجد باقات متاحة حالياً."}
@@ -1270,7 +1281,7 @@ function Checkout() {
                     type="button"
                     onClick={() => void plans.refetch()}
                     disabled={plans.isFetching}
-                    className="flex h-[46px] items-center justify-center gap-2 rounded-[14px] border border-white/12 bg-white/[0.04] px-6 text-[13px] font-bold text-frost transition-colors hover:bg-white/[0.08] disabled:opacity-40"
+                    className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/12 bg-white/[0.04] px-6 text-[13px] font-bold text-white transition-colors hover:bg-white/[0.08] disabled:opacity-40"
                   >
                     {plans.isFetching ? (
                       <Loader2 size={16} className="animate-spin" />
@@ -1280,7 +1291,7 @@ function Checkout() {
                   </button>
                 </div>
               ) : (
-                <div className="grid items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   {plansData.map((plan: any) => {
                     const selected = formData.plan?.id === plan.id;
                     const price = plan.monthly_price
@@ -1292,55 +1303,54 @@ function Checkout() {
                         type="button"
                         onClick={() => handlePlanSelect(plan)}
                         aria-pressed={selected}
-                        className={
+                        className={`relative rounded-[24px] border text-right transition-all ${
                           selected
-                            ? // A gradient 1px frame, as on the landing page's
-                              // featured tier.
-                              "relative rounded-3xl bg-gradient-to-b from-[#463bbf] via-[#9c96e3] to-[#463bbf] p-px text-right"
-                            : "relative rounded-3xl border border-hairline text-right transition-colors hover:border-brand-secondary/30"
-                        }
+                            ? "border-[#4f60f9]/70 bg-[#0c1024] shadow-[0_0_32px_rgba(79,96,249,0.28)]"
+                            : "border-white/[0.08] bg-[#0a0d1c]/95 hover:border-[#4f60f9]/35"
+                        }`}
                       >
-                        <div
-                          className={`flex h-full flex-col gap-6 rounded-3xl px-7 pb-8 pt-7 ${
-                            selected ? "bg-[#06051e]" : "bg-ink-panel"
-                          }`}
-                        >
-                          <div className="flex flex-col gap-4">
-                            <h3 className="text-3xl font-bold text-frost">
-                              {plan.name || ""}
-                            </h3>
-                            <p className="text-sm leading-6 text-[#cac9d1]">
+                        <div className="flex h-full flex-col gap-6 px-6 pb-7 pt-7">
+                          <div className="flex flex-col gap-3">
+                            <div className="flex items-start justify-between gap-2">
+                              {selected && (
+                                <span className="rounded-full bg-[#4f60f9]/20 px-2.5 py-0.5 text-[11px] font-bold text-[#9eb0ff]">
+                                  مختارة
+                                </span>
+                              )}
+                              <h3 className="flex-1 text-right text-[28px] font-bold text-white sm:text-[32px]">
+                                {plan.name || ""}
+                              </h3>
+                            </div>
+                            <p className="text-[13px] leading-6 text-[#a8aec8]">
                               {plan.description || ""}
                             </p>
-                            <span className="h-px w-full bg-gradient-to-l from-[#0c0f26] via-[#3f48d9] to-[#0c0f26]" />
+                            <span className="h-px w-full bg-gradient-to-l from-transparent via-[#4f60f9]/50 to-transparent" />
                           </div>
 
-                          <ul className="flex flex-col gap-4">
+                          <ul className="flex flex-col gap-3.5">
                             {planFeatures(plan).map((feature, idx) => (
-                                <li key={idx} className="flex items-center gap-3">
-                                  <span className="flex-1 text-[15px] leading-snug text-frost">
-                                    {feature}
-                                  </span>
-                                  <span
-                                    aria-hidden
-                                    className="flex size-[29px] shrink-0 items-center justify-center rounded-[10px] bg-[#131331]"
-                                  >
-                                    <span className="size-[7px] rounded-full bg-brand-primary" />
-                                  </span>
-                                </li>
+                              <li key={idx} className="flex items-center gap-3">
+                                <span className="flex-1 text-right text-[14px] leading-snug text-[#e8eaf4]">
+                                  {feature}
+                                </span>
+                                <span
+                                  aria-hidden
+                                  className="size-2.5 shrink-0 rounded-full bg-[#4f60f9] shadow-[0_0_8px_rgba(79,96,249,0.8)]"
+                                />
+                              </li>
                             ))}
                           </ul>
 
                           <p className="mt-auto flex items-end justify-end gap-1 pt-2">
                             {price ? (
                               <>
-                                <span className="text-4xl font-medium tracking-tight text-frost">
-                                  {price} د.ع
+                                <span className="text-[34px] font-medium tracking-tight text-white">
+                                  {price}
                                 </span>
-                                <span className="text-base text-[#73799b]">/شهرياً</span>
+                                <span className="pb-1 text-sm text-[#73799b]">د.ع /شهرياً</span>
                               </>
                             ) : (
-                              <span className="text-4xl font-medium text-frost">اتصل بنا</span>
+                              <span className="text-[28px] font-medium text-white">اتصل بنا</span>
                             )}
                           </p>
                         </div>
@@ -1351,7 +1361,7 @@ function Checkout() {
               )}
 
               <StepFooter
-                submitLabel="متابعة إلى الدفع"
+                submitLabel="متابعة"
                 disabled={!formData.plan}
                 onSubmit={handlePlanSelection}
                 onBack={() => setCurrentStep(2)}
@@ -1360,12 +1370,13 @@ function Checkout() {
           )}
 
           {currentStep === 4 && (
+            <div className="rounded-[28px] border border-white/[0.07] bg-[#0a0d1c]/90 p-6 sm:p-9">
             <div className="flex flex-col gap-8">
               <div className="flex flex-col gap-1.5">
-                <h2 className="text-[30px] font-extrabold leading-[45px] text-frost">
+                <h2 className="text-[28px] font-extrabold leading-tight text-white sm:text-[32px]">
                   طريقة الدفع
                 </h2>
-                <p className="text-sm leading-[21px] text-muted">
+                <p className="text-sm leading-6 text-[#9aa1bd]">
                   لن يُخصم أي مبلغ اليوم — تبدأ الفوترة بعد انتهاء التجربة المجانية
                 </p>
               </div>
@@ -1378,7 +1389,7 @@ function Checkout() {
               ) : (
                 <div className="flex flex-col gap-8 lg:flex-row-reverse lg:items-start">
                   <div className="flex flex-1 flex-col gap-5">
-                    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       {PAYMENT_METHODS.map((method) => {
                         const selected = formData.paymentMethod === method.id;
                         return (
@@ -1393,9 +1404,9 @@ function Checkout() {
                               }))
                             }
                             aria-pressed={selected}
-                            className={`flex flex-col gap-3 rounded-[18px] border p-4 text-right transition-colors ${
+                            className={`flex flex-col gap-3 rounded-[18px] border p-4 text-right transition-all ${
                               selected
-                                ? "border-brand-primary bg-brand-primary/5"
+                                ? "border-brand-primary bg-brand-primary/10 shadow-[0_0_24px_rgba(79,96,249,0.2)]"
                                 : "border-field-line bg-field hover:border-line"
                             } disabled:cursor-not-allowed disabled:opacity-40`}
                           >
@@ -1441,8 +1452,8 @@ function Checkout() {
 
                   {/* Subscription summary — every figure here comes from the
                       selected plan, so it stays true when plans change. */}
-                  <aside className="flex w-full flex-col gap-4 rounded-[18px] bg-field p-5 lg:w-[320px]">
-                    <h3 className="text-sm font-bold text-frost">ملخص الاشتراك</h3>
+                  <aside className="flex w-full flex-col gap-4 rounded-[22px] border border-[#4f60f9]/30 bg-[#12162c] p-5 lg:w-[320px]">
+                    <h3 className="text-sm font-bold text-white">ملخص الاشتراك</h3>
 
                     <div className="flex items-center justify-between rounded-xl bg-brand-primary/8 p-3">
                       <button
@@ -1513,15 +1524,17 @@ function Checkout() {
                 onBack={() => setCurrentStep(3)}
               />
             </div>
+            </div>
           )}
 
           {currentStep === 5 && (
+            <div className="rounded-[28px] border border-white/[0.07] bg-[#0a0d1c]/90 p-6 sm:p-9">
             <div className="flex flex-col gap-[22px]">
               <div className="flex flex-col gap-1.5">
-                <h2 className="text-[30px] font-extrabold leading-[45px] text-frost">
+                <h2 className="text-[28px] font-extrabold leading-tight text-white sm:text-[32px]">
                   خصّص متجرك
                 </h2>
-                <p className="text-sm leading-[21px] text-muted">
+                <p className="text-sm leading-6 text-[#9aa1bd]">
                   آخر خطوة — يمكنك تغيير كل هذا لاحقاً من الإعدادات
                 </p>
               </div>
@@ -1712,7 +1725,9 @@ function Checkout() {
                 />
               </form>
             </div>
+            </div>
           )}
+          </div>
         </div>
       </div>
 
@@ -1730,7 +1745,7 @@ function Checkout() {
           if (pendingTemplatesNav) goToTemplates(pendingTemplatesNav);
         }}
       />
-    </div>
+    </CheckoutShell>
   );
 }
 

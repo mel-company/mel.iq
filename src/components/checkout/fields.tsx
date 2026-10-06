@@ -191,12 +191,12 @@ export function StepFooter({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex w-full items-center justify-between gap-4">
+    <div className="flex w-full flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
       <button
         type={onSubmit ? "button" : "submit"}
         onClick={onSubmit}
         disabled={busy || disabled}
-        className="flex h-[52px] w-[180px] items-center justify-center rounded-[14px] bg-gradient-to-l from-brand-violet to-brand-indigo px-5 text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40 sm:w-[220px]"
+        className="flex h-[52px] w-full items-center justify-center rounded-2xl bg-gradient-to-l from-[#4f60f9] to-[#7569ff] px-8 text-[15px] font-bold text-white shadow-[0_0_24px_rgba(79,96,249,0.35)] transition-opacity hover:opacity-90 disabled:opacity-40 sm:w-auto sm:min-w-[160px]"
       >
         {busy ? <Loader2 size={18} className="animate-spin" /> : submitLabel}
       </button>
@@ -207,7 +207,7 @@ export function StepFooter({
         <button
           type="button"
           onClick={onBack}
-          className="flex h-[52px] items-center justify-center rounded-[14px] border border-white/12 bg-white/[0.04] px-6 text-[15px] font-bold text-frost transition-colors hover:bg-white/[0.08]"
+          className="flex h-[52px] w-full items-center justify-center rounded-[18px] border border-white/12 bg-white/[0.04] px-6 text-[15px] font-bold text-frost transition-colors hover:bg-white/[0.08] sm:w-auto"
         >
           {backLabel}
         </button>
