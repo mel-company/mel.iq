@@ -1,5 +1,6 @@
 import { Facebook, Instagram, Linkedin, Tiktok, XTwitter, Youtube } from "../icons";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import type { MouseEvent } from "react";
 import { SEO_TOPICS } from "../../seo/topics";
 
 /** In RTL reading order — Instagram is the first one an Arabic reader meets. */
@@ -14,18 +15,31 @@ const SOCIALS = [
 
 const LEGAL = [
   { label: "سياسة الخصوصية", to: "/privacy-policy" },
+  { label: "شروط الاستخدام", to: "/terms-of-use" },
   { label: "حذف الحساب", to: "/delete-account" },
-  { label: "شروط الاستخدام", to: null },
 ];
 
+/**
+ * Product links match the landing nav: scroll to sections on `/`, not the
+ * old standalone /pricing /about /contact routes.
+ */
 const FOOTER_PRODUCT = [
-  { label: "الباقات", to: "/pricing" },
+  { label: "الباقات", to: "/#pricing", hash: "#pricing" },
   { label: "الأدلة", to: "/guides" },
-  { label: "تواصل معنا", to: "/contact" },
-  { label: "من نحن", to: "/about" },
+  { label: "تواصل معنا", to: "/#contact", hash: "#contact" },
+  { label: "من نحن", to: "/#about", hash: "#about" },
 ];
 
 function SiteFooter() {
+  const location = useLocation();
+
+  const handleSectionLink = (hash?: string) => (e: MouseEvent) => {
+    if (!hash || location.pathname !== "/") return;
+    e.preventDefault();
+    document.querySelector(hash)?.scrollIntoView({ behavior: "smooth" });
+    window.history.replaceState(null, "", hash);
+  };
+
   return (
     <footer className="bg-gradient-to-b from-[#03010f] to-[#11054d] px-6 py-14 lg:px-24">
       <div className="mx-auto max-w-[1541px]">
@@ -79,7 +93,11 @@ function SiteFooter() {
             <ul className="flex flex-col gap-2">
               {FOOTER_PRODUCT.map((item) => (
                 <li key={item.to}>
-                  <Link to={item.to} className="hover:text-frost">
+                  <Link
+                    to={item.to}
+                    onClick={handleSectionLink(item.hash)}
+                    className="hover:text-frost"
+                  >
                     {item.label}
                   </Link>
                 </li>
@@ -105,13 +123,9 @@ function SiteFooter() {
           <ul className="flex flex-wrap items-center justify-center gap-5">
             {LEGAL.map((item) => (
               <li key={item.label}>
-                {item.to ? (
-                  <Link to={item.to} className="transition-colors hover:text-frost">
-                    {item.label}
-                  </Link>
-                ) : (
-                  item.label
-                )}
+                <Link to={item.to} className="transition-colors hover:text-frost">
+                  {item.label}
+                </Link>
               </li>
             ))}
           </ul>

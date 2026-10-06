@@ -1187,7 +1187,13 @@ function Checkout() {
 
                   <CheckBox checked={acceptedTerms} onChange={setAcceptedTerms}>
                     أوافق على{" "}
-                    <span className="font-bold text-brand-primary">الشروط والأحكام</span>{" "}
+                    <Link
+                      to="/terms-of-use"
+                      className="font-bold text-brand-primary hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      شروط الاستخدام
+                    </Link>{" "}
                     و{" "}
                     <Link
                       to="/privacy-policy"

@@ -11,6 +11,7 @@ import Contact from "./pages/Contact";
 import Checkout from "./pages/Checkout";
 import CheckoutPaymentReturn from "./pages/CheckoutPaymentReturn";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfUse from "./pages/TermsOfUse";
 import DeleteAccount from "./pages/DeleteAccount";
 import Templates from "./pages/Templates";
 import Login from "./pages/Login";
@@ -154,6 +155,14 @@ function App() {
           element={
             <MarketingShell>
               <PrivacyPolicy />
+            </MarketingShell>
+          }
+        />
+        <Route
+          path="/terms-of-use"
+          element={
+            <MarketingShell>
+              <TermsOfUse />
             </MarketingShell>
           }
         />
