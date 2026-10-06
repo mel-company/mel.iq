@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -18,7 +18,10 @@ import type { DynadotSearchResult } from "@/api/endpoints/dynadot.endpoints";
 import { useSetCustomDomain } from "@/api/wrappers/domain.wrappers";
 import { extractPlatformSlug } from "@/hooks/useDomainCheck";
 import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
-import { useInitPlatformPayment } from "@/api/wrappers/platform-payment.wrapper";
+import {
+  useBillingProviders,
+  useInitPlatformPayment,
+} from "@/api/wrappers/platform-payment.wrapper";
 import { CHECKOUT_DRAFT_KEY, LAST_PAYMENT_ID_KEY } from "@/pages/CheckoutPaymentReturn";
 import { toast } from "sonner";
 import {
@@ -65,16 +68,25 @@ const GOVERNORATES = [
 ];
 
 /**
- * The payment tiles the frame draws.
+ * The payment tiles the frame draws — how each one *looks*, not whether it
+ * may be used.
  *
- * QiCard and ZainCash share the same `/platform-payments/init` flow; the
- * only difference is `provider`. Card and FIB stay visible but disabled.
+ * QiCard and ZainCash share the same `/platform-payments/init` flow; the only
+ * difference is `provider`. Card and FIB have no integration at all and are
+ * permanently «قريباً».
+ *
+ * The two live ones used to carry `available: true`, typed in here, which
+ * made this file a second answer to a question the server already had: an
+ * operator can switch a gateway off for platform billing, and this could not
+ * see it. The tile stayed, the buyer chose it, the plan was priced, a payment
+ * row was created, and `chargeWithGateway` refused them at the end.
+ * `available` is now decided per render from the server's own list.
  */
 const PAYMENT_METHODS = [
-  { id: "card", title: "بطاقة بنكية", detail: "Visa · Mastercard", mark: "VC", tint: "bg-brand-primary/15 text-brand-primary", available: false, provider: null },
-  { id: "zaincash", title: "زين كاش", detail: "ZainCash", mark: "Z", tint: "bg-[#ff5252]/15 text-[#ff5252]", available: true, provider: "ZAIN_CASH" as const },
-  { id: "qicard", title: "كي كارد", detail: "Qi Card", mark: "Q", tint: "bg-amber/15 text-amber", available: true, provider: "QI_CARD" as const },
-  { id: "fib", title: "FIB", detail: "المصرف الأول", mark: "F", tint: "bg-brand-secondary/15 text-brand-secondary", available: false, provider: null },
+  { id: "card", title: "بطاقة بنكية", detail: "Visa · Mastercard", mark: "VC", tint: "bg-brand-primary/15 text-brand-primary", provider: null },
+  { id: "zaincash", title: "زين كاش", detail: "ZainCash", mark: "Z", tint: "bg-[#ff5252]/15 text-[#ff5252]", provider: "ZAIN_CASH" as const },
+  { id: "qicard", title: "كي كارد", detail: "Qi Card", mark: "Q", tint: "bg-amber/15 text-amber", provider: "QI_CARD" as const },
+  { id: "fib", title: "FIB", detail: "المصرف الأول", mark: "F", tint: "bg-brand-secondary/15 text-brand-secondary", provider: null },
 ];
 
 /** Business categories offered on the account step. */
@@ -147,6 +159,35 @@ function Checkout() {
   const { mutate: setCustomDomainMutation } = useSetCustomDomain();
   const { mutate: initPaymentMutation, isPending: isInitiatingPayment } =
     useInitPlatformPayment();
+  const { data: billingProviders } = useBillingProviders();
+
+  /**
+   * The tiles, with availability decided by the server rather than by hand.
+   *
+   * A gateway-backed tile is available when the platform is actually
+   * accepting that gateway for billing; `card` and `fib` never are, because
+   * nothing implements them.
+   *
+   * Until the list arrives — and if it never does — the two gateways stay
+   * available. A buyer with a card in hand being told the platform accepts
+   * nothing is a lost sale and nothing they can fix, while an offered
+   * gateway that turns out to be withdrawn is one readable refusal and
+   * another tile to pick. The failure directions are not symmetric, so this
+   * takes the recoverable one.
+   */
+  const paymentMethods = useMemo(
+    () =>
+      PAYMENT_METHODS.map((method) => ({
+        ...method,
+        available:
+          method.provider !== null &&
+          (!billingProviders ||
+            billingProviders.some(
+              (option) => option.provider === method.provider,
+            )),
+      })),
+    [billingProviders],
+  );
   const {
     timedOut: provisioningTimedOut,
     lastStatus: provisioningStatus,
@@ -674,7 +715,7 @@ function Checkout() {
       return;
     }
 
-    const selectedMethod = PAYMENT_METHODS.find(
+    const selectedMethod = paymentMethods.find(
       (method) => method.id === formData.paymentMethod,
     );
     if (!selectedMethod?.available || !selectedMethod.provider) {
@@ -1390,7 +1431,7 @@ function Checkout() {
                 <div className="flex flex-col gap-8 lg:flex-row-reverse lg:items-start">
                   <div className="flex flex-1 flex-col gap-5">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      {PAYMENT_METHODS.map((method) => {
+                      {paymentMethods.map((method) => {
                         const selected = formData.paymentMethod === method.id;
                         return (
                           <button
@@ -1515,7 +1556,7 @@ function Checkout() {
                   !formData.plan ||
                   (!isPlanFree &&
                     !paymentCompleted &&
-                    !PAYMENT_METHODS.some(
+                    !paymentMethods.some(
                       (method) =>
                         method.id === formData.paymentMethod && method.available,
                     ))
