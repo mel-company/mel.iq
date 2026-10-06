@@ -5,6 +5,7 @@ import {
   useEffect,
   ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMe } from "@/api/wrappers/auth.wrappers";
 
 type Store = {
@@ -39,6 +40,7 @@ type AuthProviderProps = {
 };
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -93,6 +95,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     window.localStorage.removeItem("refreshToken");
     window.localStorage.removeItem("user");
     setUser(null);
+    // Drop cached /auth/me, stores, etc. — otherwise the nav stays "logged in"
+    // until a hard refresh because React Query still holds the old session.
+    queryClient.clear();
   };
 
   return (

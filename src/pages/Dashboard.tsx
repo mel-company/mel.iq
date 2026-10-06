@@ -564,13 +564,16 @@ function Dashboard() {
   }, [navigate, displayName]);
 
   const handleLogout = useCallback(() => {
-    // AuthContext.logout already clears token + refreshToken + user.
-    logoutFromAuth();
-
+    // Hit the server first so the session cookie dies while credentials still
+    // exist; then wipe local state + cache and hard-reload home so the nav
+    // cannot stay "logged in" off a stale React Query /auth/me.
     logoutMutation.mutate(undefined, {
-      onSettled: () => navigate("/"),
+      onSettled: () => {
+        logoutFromAuth();
+        window.location.assign("/");
+      },
     });
-  }, [logoutFromAuth, logoutMutation, navigate]);
+  }, [logoutFromAuth, logoutMutation]);
 
   if (isLoading) return <LoadingSkeleton />;
 
