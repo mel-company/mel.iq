@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import WebMcpTools from "./components/WebMcpTools";
+import ScrollToTop from "./components/ScrollToTop";
 import { MarketingShell } from "./components/LandingNavbar";
 import Landing from "./pages/Landing";
 import { useAuth } from "./contexts/AuthContext";
@@ -63,6 +64,7 @@ function RouteFallback() {
 function App() {
   return (
     <div className="min-h-screen bg-white dark:bg-black transition-colors duration-200">
+      <ScrollToTop />
       <WebMcpTools />
       <Toaster />
       <Suspense fallback={<RouteFallback />}>
