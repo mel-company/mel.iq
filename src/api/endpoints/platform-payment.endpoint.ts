@@ -76,6 +76,20 @@ export const platformPaymentAPI = {
     return data;
   },
 
+  /**
+   * Store-scoped init (Store JWT). Same payload shape as `init`, including
+   * `CHANGE_PLAN` for GO → PLUS upgrades.
+   */
+  storeInit: async (
+    payload: PlatformPaymentInitPayload,
+  ): Promise<PlatformPayment> => {
+    const { data } = await axiosInstance.post<PlatformPayment>(
+      "/platform-payments/store/init",
+      payload,
+    );
+    return data;
+  },
+
   getStatus: async (id: string): Promise<PlatformPayment> => {
     const { data } = await axiosInstance.get<PlatformPayment>(
       `/platform-payments/${id}`,

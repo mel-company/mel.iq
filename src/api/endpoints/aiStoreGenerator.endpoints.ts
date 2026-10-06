@@ -352,7 +352,16 @@ export const aiStoreGeneratorAPI = {
     periodStart?: string;
     periodEnd?: string;
     generations: { included?: number; used?: number; remaining: number; purchased?: number };
-    editor: { included?: number; used?: number; remaining: number; purchased?: number };
+    editor: {
+      included?: number;
+      used?: number;
+      remaining: number;
+      purchased?: number;
+      /** When true, the merchant is on GO — show PLUS upgrade, not a credits pack. */
+      upgradeRequired?: boolean;
+      requiredPlan?: string;
+      requiredPlanName?: string;
+    };
   }> => {
     const { data } = await axiosInstance.get("/credits/me");
     return data;

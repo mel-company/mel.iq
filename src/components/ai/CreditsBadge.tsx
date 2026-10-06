@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Sparkles } from "@/components/icons";
+import { Link } from "react-router-dom";
+import { Rocket, Sparkles } from "@/components/icons";
 import { useCredits } from "@/api/wrappers/aiStoreGenerator.wrappers";
 import { useAuth } from "@/contexts/AuthContext";
 import BuyCreditsModal from "./BuyCreditsModal";
@@ -16,7 +17,21 @@ export default function CreditsBadge() {
   const generations = data.generations?.remaining ?? 0;
   const editor = data.editor?.remaining ?? 0;
   const purchased = data.generations?.purchased ?? 0;
+  const upgradeRequired = Boolean(data.editor?.upgradeRequired);
   const out = !unlimited && generations <= 0 && editor <= 0 && purchased <= 0;
+
+  if (upgradeRequired) {
+    const planName = data.editor?.requiredPlanName || "MEL PLUS";
+    return (
+      <Link
+        to="/dashboard"
+        className="inline-flex items-center gap-1.5 rounded-full border border-brand-violet/35 bg-brand-violet/10 px-3 py-1 text-xs text-brand-secondary transition-colors hover:bg-brand-violet/20"
+      >
+        <Rocket size={12} />
+        محرر AI · ترقية إلى {planName}
+      </Link>
+    );
+  }
 
   return (
     <>

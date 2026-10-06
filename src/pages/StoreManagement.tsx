@@ -22,7 +22,14 @@ import {
   useUpdateSubscription,
 } from "@/api/wrappers/subscription.wrapper";
 import { useInitPlatformPayment, usePlatformPaymentStatus } from "@/api/wrappers/platform-payment.wrapper";
-import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
+import {
+  useFetchAllPlans,
+  useFetchStorePlans,
+  usePlanEntitlements,
+} from "@/api/wrappers/plan.wrappers";
+import type { PlanFeatureKey } from "@/api/endpoints/plan.endpoint";
+import { PlanUpgradeGate } from "@/components/PlanUpgradeGate";
+import { featureLabel, isFeatureLocked } from "@/utils/planUpgrade";
 import {
   AlertCircle,
   ArrowRightIcon,
@@ -78,8 +85,15 @@ const MANAGE_TABS: {
   ];
 
 const RENEWAL_RETURN_KEY = "mel_renewal_return";
+const CHANGE_PLAN_RETURN_KEY = "mel_change_plan_return";
 const DOMAIN_PURCHASE_RETURN_KEY = "mel_domain_purchase_return";
 const LAST_PAYMENT_ID_KEY = "mel_last_platform_payment_id";
+
+const LOCKED_FEATURE_ORDER: PlanFeatureKey[] = [
+  "ai_editor",
+  "team_users",
+  "mobile_app",
+];
 
 // Types
 interface Store {
@@ -610,6 +624,8 @@ const ModalFooter = ({ children }: { children: React.ReactNode }) => (
 const SubscriptionPanel = ({
   subscription,
   isPlanBasic,
+  lockedFeatures,
+  upgradePlanName,
   onRenew,
   onPause,
   onResume,
@@ -619,6 +635,8 @@ const SubscriptionPanel = ({
 }: {
   subscription: Subscription | null;
   isPlanBasic: boolean;
+  lockedFeatures?: Array<PlanFeatureKey | string>;
+  upgradePlanName?: string;
   onRenew: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -657,6 +675,10 @@ const SubscriptionPanel = ({
       ? "text-[#a35400] dark:text-amber"
       : "text-[#00795a] dark:text-mint";
 
+  const lockedOrdered = LOCKED_FEATURE_ORDER.filter((f) =>
+    isFeatureLocked(lockedFeatures, f),
+  );
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -688,6 +710,22 @@ const SubscriptionPanel = ({
           value={formatDate(subscription.end_at)}
         />
       </div>
+
+      {lockedOrdered.length > 0 && (
+        <div className="space-y-3">
+          <p className={`text-xs font-bold ${ink.body}`}>ميزات مقفلة في خطتك</p>
+          {lockedOrdered.map((feature) => (
+            <PlanUpgradeGate
+              key={feature}
+              feature={feature}
+              requiredPlanName={upgradePlanName || "MEL PLUS"}
+              message={`${featureLabel(feature)} غير مشمول في خطتك الحالية.`}
+              onUpgradeClick={onUpgrade}
+              className="border-black/8 dark:border-white/10 [&_.text-frost]:text-[#0b1020] dark:[&_.text-frost]:text-frost [&_.text-muted]:text-[#5b6178] dark:[&_.text-muted]:text-muted [&_.text-dim]:text-[#8a90a8] dark:[&_.text-dim]:text-dim"
+            />
+          ))}
+        </div>
+      )}
 
       {isPlanBasic ? (
         <div className={`rounded-2xl p-5 ${inset}`}>
@@ -887,11 +925,15 @@ function StoreManagement() {
       ? (JSON.parse(domainReturnRaw) as { storeId?: string; domain?: string })
       : null;
     const isDomainPurchase = Boolean(domainReturn?.domain);
+    const isChangePlan = Boolean(sessionStorage.getItem(CHANGE_PLAN_RETURN_KEY));
 
     if (returnStatus === "PAID") {
       if (isDomainPurchase) {
         toast.success("تم الدفع بنجاح! سيتم تسجيل الدومين وربطه بمتجرك.");
         void refetchStores();
+      } else if (isChangePlan) {
+        toast.success("تم الدفع بنجاح وتمت ترقية الخطة");
+        void refetchSubscriptions();
       } else {
         toast.success("تم الدفع بنجاح وتم تجديد الاشتراك");
         void refetchSubscriptions();
@@ -900,11 +942,14 @@ function StoreManagement() {
       toast.error(
         isDomainPurchase
           ? "فشلت عملية دفع الدومين. حاول مرة أخرى."
-          : "فشلت عملية الدفع. حاول مرة أخرى.",
+          : isChangePlan
+            ? "فشلت عملية ترقية الخطة. حاول مرة أخرى."
+            : "فشلت عملية الدفع. حاول مرة أخرى.",
       );
     }
 
     sessionStorage.removeItem(RENEWAL_RETURN_KEY);
+    sessionStorage.removeItem(CHANGE_PLAN_RETURN_KEY);
     sessionStorage.removeItem(DOMAIN_PURCHASE_RETURN_KEY);
     sessionStorage.removeItem(LAST_PAYMENT_ID_KEY);
 
@@ -930,6 +975,11 @@ function StoreManagement() {
   const updateSubscriptionMutation = useUpdateSubscription();
   const updateStoreMutation = useUpdateStore();
   const { data: plansData } = useFetchAllPlans();
+  const { data: storePlansData } = useFetchStorePlans(storeId, Boolean(storeId));
+  const { data: entitlements } = usePlanEntitlements(
+    storeId,
+    Boolean(storeId),
+  );
 
   const {
     domain,
@@ -1165,6 +1215,17 @@ function StoreManagement() {
   };
 
   const handleUpgrade = () => {
+    setPaymentProvider(null);
+    const preferred =
+      entitlements?.upgradeTo?.planId ||
+      storePlansData?.plans?.find(
+        (p) =>
+          String(p.code || p.name || "")
+            .toUpperCase()
+            .includes("PLUS"),
+      )?.id ||
+      null;
+    setSelectedPlanId(preferred);
     setShowUpgradeModal(true);
   };
 
@@ -1173,25 +1234,87 @@ function StoreManagement() {
       toast.error("الرجاء اختيار خطة للترقية");
       return;
     }
+    if (!storeId) {
+      toast.error("تعذر تحديد المتجر");
+      return;
+    }
+    if (!paymentProvider) {
+      toast.error("الرجاء اختيار طريقة الدفع");
+      return;
+    }
 
-    updateSubscriptionMutation.mutate(
-      {
-        id: subscription.id,
-        data: {
-          planId: selectedPlanId,
+    const catalogue = Array.isArray(plansData)
+      ? plansData
+      : (plansData as any)?.data ||
+        (plansData as any)?.plans ||
+        storePlansData?.plans ||
+        [];
+    const target = catalogue.find((p: any) => p.id === selectedPlanId);
+    const isFreeTarget =
+      target?.is_free === true || !(Number(target?.monthly_price) > 0);
+
+    // Free → free plan swap can stay a direct update; paid upgrades go through
+    // CHANGE_PLAN so the merchant is charged for PLUS.
+    if (isFreeTarget) {
+      updateSubscriptionMutation.mutate(
+        {
+          id: subscription.id,
+          data: { planId: selectedPlanId },
         },
+        {
+          onSuccess: () => {
+            toast.success("تم ترقية الاشتراك بنجاح");
+            setShowUpgradeModal(false);
+            setSelectedPlanId(null);
+            setPaymentProvider(null);
+          },
+          onError: (error: any) => {
+            toast.error(
+              error?.response?.data?.message || "حدث خطأ في ترقية الاشتراك",
+            );
+            console.error("Error upgrading subscription:", error);
+          },
+        },
+      );
+      return;
+    }
+
+    sessionStorage.setItem(
+      CHANGE_PLAN_RETURN_KEY,
+      JSON.stringify({ storeId, planId: selectedPlanId }),
+    );
+
+    initPaymentMutation.mutate(
+      {
+        type: "CHANGE_PLAN",
+        planId: selectedPlanId,
+        storeId,
+        billingPeriod: "MONTHLY",
+        provider: paymentProvider,
+        returnBaseUrl: `${window.location.origin}/store/${storeId}/manage`,
       },
       {
-        onSuccess: () => {
-          toast.success("تم ترقية الاشتراك بنجاح");
-          setShowUpgradeModal(false);
-          setSelectedPlanId(null);
+        onSuccess: (data) => {
+          const redirectUrl = data?.redirectUrl;
+          const paymentId = data?.id;
+          if (!redirectUrl) {
+            toast.error("تعذر بدء عملية الدفع");
+            sessionStorage.removeItem(CHANGE_PLAN_RETURN_KEY);
+            return;
+          }
+          if (paymentId) {
+            sessionStorage.setItem(LAST_PAYMENT_ID_KEY, String(paymentId));
+          }
+          window.location.href = redirectUrl;
         },
         onError: (error: any) => {
-          toast.error("حدث خطأ في ترقية الاشتراك");
-          console.error("Error upgrading subscription:", error);
+          sessionStorage.removeItem(CHANGE_PLAN_RETURN_KEY);
+          toast.error(
+            error?.response?.data?.message || "حدث خطأ في بدء دفع الترقية",
+          );
+          console.error("Error initiating change-plan payment:", error);
         },
-      }
+      },
     );
   };
 
@@ -1895,6 +2018,10 @@ function StoreManagement() {
                 <SubscriptionPanel
                   subscription={subscription}
                   isPlanBasic={isPlanBasic}
+                  lockedFeatures={entitlements?.locked}
+                  upgradePlanName={
+                    entitlements?.upgradeTo?.planName || "MEL PLUS"
+                  }
                   onRenew={handleRenew}
                   onPause={handlePause}
                   onResume={handleResume}
@@ -1906,7 +2033,9 @@ function StoreManagement() {
                     pause: pauseMutation.isPending,
                     resume: resumeMutation.isPending,
                     cancel: cancelMutation.isPending,
-                    upgrade: updateSubscriptionMutation.isPending,
+                    upgrade:
+                      updateSubscriptionMutation.isPending ||
+                      initPaymentMutation.isPending,
                   }}
                 />
               </SectionCard>
@@ -2089,22 +2218,28 @@ function StoreManagement() {
           onClose={() => {
             setShowUpgradeModal(false);
             setSelectedPlanId(null);
+            setPaymentProvider(null);
           }}
         >
           <p className={`text-sm ${ink.body}`}>
-            اختر الخطة التي تريد الترقية إليها:
+            اختر الخطة التي تريد الترقية إليها. الترقية إلى MEL PLUS تُفعَّل بعد
+            إتمام الدفع.
           </p>
 
           <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
             {(() => {
-              const plans = Array.isArray(plansData)
+              const fromStore = storePlansData?.plans;
+              const fromPublic = Array.isArray(plansData)
                 ? plansData
                 : (plansData as any)?.data || (plansData as any)?.plans || [];
+              const plans = (fromStore?.length ? fromStore : fromPublic) as any[];
               return plans
                 .filter((plan: any) => plan.enabled !== false)
                 .map((plan: any) => {
                   const isSelected = selectedPlanId === plan.id;
-                  const isCurrentPlan = subscription?.plan?.name === plan.name;
+                  const isCurrentPlan =
+                    subscription?.plan?.id === plan.id ||
+                    subscription?.plan?.name === plan.name;
                   return (
                     <ChoiceCard
                       key={plan.id}
@@ -2149,11 +2284,23 @@ function StoreManagement() {
             })()}
           </div>
 
+          <div className="mt-6">
+            <PaymentProviderPicker
+              value={paymentProvider}
+              onChange={setPaymentProvider}
+              disabled={
+                updateSubscriptionMutation.isPending ||
+                initPaymentMutation.isPending
+              }
+            />
+          </div>
+
           <ModalFooter>
             <button
               onClick={() => {
                 setShowUpgradeModal(false);
                 setSelectedPlanId(null);
+                setPaymentProvider(null);
               }}
               className={btnGhost}
             >
@@ -2161,14 +2308,22 @@ function StoreManagement() {
             </button>
             <button
               onClick={handleConfirmUpgrade}
-              disabled={!selectedPlanId || updateSubscriptionMutation.isPending}
+              disabled={
+                !selectedPlanId ||
+                !paymentProvider ||
+                updateSubscriptionMutation.isPending ||
+                initPaymentMutation.isPending
+              }
               className={btnPrimary}
             >
-              {updateSubscriptionMutation.isPending ? (
+              {updateSubscriptionMutation.isPending ||
+              initPaymentMutation.isPending ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
                   جاري...
                 </>
+              ) : paymentProvider ? (
+                `ادفع عبر ${paymentProviderLabel(paymentProvider)}`
               ) : (
                 <>
                   <Rocket size={16} />

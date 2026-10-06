@@ -33,6 +33,14 @@ export const useInitPlatformPayment = () => {
   });
 };
 
+/** Prefer when the session already carries a Store JWT. */
+export const useInitStorePlatformPayment = () => {
+  return useMutation({
+    mutationFn: (payload: PlatformPaymentInitPayload) =>
+      platformPaymentAPI.storeInit(payload),
+  });
+};
+
 export const usePlatformPaymentStatus = (
   id: string | null,
   enabled = true,
