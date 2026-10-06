@@ -1,65 +1,48 @@
 import { ArrowUpLeft } from "../icons";
 import { Link } from "react-router-dom";
 import SectionEyebrow from "./SectionEyebrow";
+import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 
-type Plan = {
+type PlanCardModel = {
+  id: string;
   name: string;
   blurb: string;
   features: string[];
-  /** `null` on the enterprise tier, where the price is a conversation. */
+  /** `null` when the tier is contact-sales or free with no listed price. */
   price: string | null;
   priceLabel: string;
-  /** The middle tier is raised and carries the gradient border and button. */
   featured?: boolean;
+  contactOnly?: boolean;
 };
 
-/** In RTL reading order. The frame runs أساسي / أحترافي / مؤسسي left to
- *  right, so the cheapest tier is listed last and lands on the left. */
-const PLANS: Plan[] = [
-  {
-    name: "مؤسسي",
-    blurb: "للشركات الكبيرة والسلاسل متعددة الفروع بمتطلبات متقدمة.",
-    features: [
-      "كل مميزات الاحتراف",
-      "وصول كامل لواجهة API",
-      "فروع ومستخدمون متعددون",
-      "تكاملات مخصصة حسب الطلب",
-      "مدير حساب مخصص",
-      "اتفاقية مستوى خدمة (SLA)",
-    ],
-    price: null,
-    priceLabel: "اتصل بنا",
-  },
-  {
-    name: "أحترافي",
-    blurb: "للمشاريع المتنامية التي تحتاج أدوات تسويق وتحليلات كاملة.",
-    features: [
-      "كل مميزات الأساسي + نطاق مخصص",
-      "لوحة تحليلات وإحصائيات متقدمة",
-      "إدارة المخزون ونقطة بيع (POS)",
-      "تكامل بوابات الدفع ومزودي الشحن",
-      "أدوات التسويق: حملات وعروض ترويجية",
-      "دعم ذو أولوية على مدار الساعة",
-    ],
-    price: "96,000 د.ع",
-    priceLabel: "/شهرياً",
-    featured: true,
-  },
-  {
-    name: "أساسي",
-    blurb: "مثالي للمشاريع الصغيرة التي تبدأ البيع عبر الإنترنت.",
-    features: [
-      "منتجات غير محدودة",
-      "متجر إلكتروني + تطبيق للعملاء",
-      "دعم متعدد اللغات (عربي | إنجليزي)",
-      "إدارة الطلبات والإشعارات",
-      "كوبونات وخصومات",
-      "دعم فني عبر الدردشة",
-    ],
-    price: "53,000 د.ع",
-    priceLabel: "/شهرياً",
-  },
-];
+function planFeatures(plan: any): string[] {
+  return (plan?.features || [])
+    .map((row: any) => row?.feature ?? row)
+    .filter((f: any) => f && f.enabled !== false)
+    .map((f: any) => String(f.name || "").trim())
+    .filter(Boolean);
+}
+
+function toCardModel(plan: any): PlanCardModel {
+  const monthly = Number(plan.monthly_price);
+  const hasPrice = Number.isFinite(monthly) && monthly > 0;
+  const contactOnly =
+    plan.contact_sales === true ||
+    String(plan.code || plan.name || "")
+      .toUpperCase()
+      .includes("ENTERPRISE");
+
+  return {
+    id: String(plan.id),
+    name: String(plan.name || plan.code || "خطة"),
+    blurb: String(plan.description || ""),
+    features: planFeatures(plan),
+    price: hasPrice && !contactOnly ? monthly.toLocaleString("en-IQ") : null,
+    priceLabel: contactOnly ? "اتصل بنا" : hasPrice ? "د.ع /شهرياً" : "مجاناً",
+    featured: Boolean(plan.most_popular),
+    contactOnly,
+  };
+}
 
 /** The bullet marker: a dark plate with a small brand dot centred on it. */
 function FeatureMarker() {
@@ -73,7 +56,11 @@ function FeatureMarker() {
   );
 }
 
-function PlanCard({ plan, delay = 0 }: { plan: Plan; delay?: number }) {
+function PlanCard({ plan, delay = 0 }: { plan: PlanCardModel; delay?: number }) {
+  const href = plan.contactOnly
+    ? "/contact"
+    : `/checkout?planId=${encodeURIComponent(plan.id)}`;
+
   return (
     <div
       data-reveal
@@ -93,20 +80,24 @@ function PlanCard({ plan, delay = 0 }: { plan: Plan; delay?: number }) {
       >
         <div className="flex flex-col gap-6 text-right">
           <h3 className="text-4xl font-bold text-frost lg:text-5xl">{plan.name}</h3>
-          <p className="text-sm leading-7 text-[#cac9d1]">{plan.blurb}</p>
+          {plan.blurb ? (
+            <p className="text-sm leading-7 text-[#cac9d1]">{plan.blurb}</p>
+          ) : null}
           <div className="h-px w-full bg-gradient-to-l from-[#0c0f26] via-[#3f48d9] to-[#0c0f26]" />
         </div>
 
-        <ul className="flex flex-col gap-5">
-          {plan.features.map((feature) => (
-            <li key={feature} className="flex items-center gap-4">
-              <span className="flex-1 text-right text-[15px] leading-[1.43] text-frost">
-                {feature}
-              </span>
-              <FeatureMarker />
-            </li>
-          ))}
-        </ul>
+        {plan.features.length > 0 && (
+          <ul className="flex flex-col gap-5">
+            {plan.features.map((feature) => (
+              <li key={feature} className="flex items-center gap-4">
+                <span className="flex-1 text-right text-[15px] leading-[1.43] text-frost">
+                  {feature}
+                </span>
+                <FeatureMarker />
+              </li>
+            ))}
+          </ul>
+        )}
 
         {/* Pushed to the card's foot so the three prices line up even though
             the blurbs above them wrap to different heights. */}
@@ -121,7 +112,7 @@ function PlanCard({ plan, delay = 0 }: { plan: Plan; delay?: number }) {
           </p>
 
           <Link
-            to={plan.price ? "/checkout" : "/contact"}
+            to={href}
             className={
               plan.featured
                 ? "relative inline-flex items-center gap-3 rounded-full bg-gradient-to-b from-[#343754]/60 via-[#aab1ec]/60 to-[#343754]/60 p-px shadow-[0_0_16px_rgba(52,92,232,0.6)] transition-shadow hover:shadow-[0_0_24px_rgba(52,92,232,0.85)]"
@@ -135,7 +126,7 @@ function PlanCard({ plan, delay = 0 }: { plan: Plan; delay?: number }) {
                   : "bg-[#00031c]"
               }`}
             >
-              ابدأ الآن
+              {plan.contactOnly ? "تواصل معنا" : "ابدأ الآن"}
               <ArrowUpLeft size={16} />
             </span>
           </Link>
@@ -145,7 +136,41 @@ function PlanCard({ plan, delay = 0 }: { plan: Plan; delay?: number }) {
   );
 }
 
+function PricingSkeleton() {
+  return (
+    <div className="grid w-full max-w-[1240px] items-stretch gap-6 lg:grid-cols-2">
+      {[0, 1].map((i) => (
+        <div
+          key={i}
+          className="h-[420px] animate-pulse rounded-3xl border border-hairline bg-ink-panel/60"
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Landing pricing — pulled live from `GET /plan` so GO / PLUS (and whatever
+ * the catalogue ships next) stay in sync with Checkout instead of the old
+ * hardcoded أساسي / احترافي / مؤسسي cards.
+ */
 function PricingSection() {
+  const { data, isLoading, isError, refetch, isFetching } = useFetchAllPlans();
+
+  const cards: PlanCardModel[] = (() => {
+    const raw = Array.isArray(data)
+      ? data
+      : (data as any)?.data || (data as any)?.plans || [];
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((plan: any) => plan && plan.enabled !== false)
+      .map(toCardModel);
+  })();
+
+  // RTL catalogue: keep API order but put featured (PLUS) where the design
+  // emphasises it — middle/first visually under RTL grid when only two cards.
+  const ordered = [...cards].sort((a, b) => Number(b.featured) - Number(a.featured));
+
   return (
     <section id="pricing" className="relative overflow-hidden px-4 py-20 sm:px-6 lg:py-24">
       <div
@@ -168,11 +193,33 @@ function PricingSection() {
           </p>
         </div>
 
-        <div className="grid w-full max-w-[1240px] items-stretch gap-6 lg:grid-cols-3">
-          {PLANS.map((plan, i) => (
-            <PlanCard key={plan.name} plan={plan} delay={i * 120} />
-          ))}
-        </div>
+        {isLoading ? (
+          <PricingSkeleton />
+        ) : isError || ordered.length === 0 ? (
+          <div className="flex flex-col items-center gap-4 text-center">
+            <p className="text-sm text-muted">
+              {isError ? "تعذر تحميل الباقات." : "لا توجد باقات متاحة حالياً."}
+            </p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              className="rounded-full border border-white/15 px-5 py-2 text-sm text-frost hover:bg-white/5 disabled:opacity-40"
+            >
+              {isFetching ? "جاري..." : "إعادة المحاولة"}
+            </button>
+          </div>
+        ) : (
+          <div
+            className={`grid w-full max-w-[1240px] items-stretch gap-6 ${
+              ordered.length >= 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"
+            }`}
+          >
+            {ordered.map((plan, i) => (
+              <PlanCard key={plan.id} plan={plan} delay={i * 120} />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

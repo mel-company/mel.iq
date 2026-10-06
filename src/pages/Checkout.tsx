@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
   useRegister,
@@ -139,6 +139,7 @@ function resolveOtpPhone(user: unknown, formPhone: string): string | null {
 function Checkout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { user, login } = useAuth();
 
   // Fetch plans first
@@ -318,19 +319,35 @@ function Checkout() {
     // timeout: gate stays open with retry / continue buttons
   };
 
-  // Set default plan if skipToStep is 3 and no plan selected
+  // Preselect from ?planId= (landing pricing CTA) or from skipToStep defaults.
   useEffect(() => {
-    if (
-      location.state?.skipToStep === 3 &&
-      !formData.plan &&
-      plansData.length > 0
-    ) {
-      const defaultPlan = plansData.find((plan: any) => plan.name === "Go");
+    if (formData.plan || plansData.length === 0) return;
+
+    const fromQuery = searchParams.get("planId");
+    if (fromQuery) {
+      const match = plansData.find(
+        (plan: any) =>
+          String(plan.id) === fromQuery ||
+          String(plan.uuid || "") === fromQuery ||
+          String(plan.code || "").toUpperCase() === fromQuery.toUpperCase(),
+      );
+      if (match) {
+        setFormData((prev) => ({ ...prev, plan: match }));
+        return;
+      }
+    }
+
+    if (location.state?.skipToStep === 3) {
+      const defaultPlan = plansData.find(
+        (plan: any) =>
+          String(plan.code || plan.name || "").toUpperCase() === "GO" ||
+          plan.name === "Go",
+      );
       if (defaultPlan) {
         setFormData((prev) => ({ ...prev, plan: defaultPlan }));
       }
     }
-  }, [plansData, location.state?.skipToStep]);
+  }, [plansData, location.state?.skipToStep, searchParams, formData.plan]);
 
   // If user is logged in and on step 2, send OTP automatically
   useEffect(() => {
