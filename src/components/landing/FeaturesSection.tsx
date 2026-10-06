@@ -123,7 +123,7 @@ function FeaturesSection() {
                 <picture>
                   <source type="image/webp" srcSet="/images/landing/features-phone-frame.webp" />
                   <img
-                    src="/images/landing/features-phone-frame.png"
+                    src="/images/landing/features-phone-frame.webp"
                     alt=""
                     aria-hidden
                     loading="lazy"
@@ -141,7 +141,7 @@ function FeaturesSection() {
                   <picture>
                     <source type="image/webp" srcSet="/images/landing/features-phone-screen.webp" />
                     <img
-                      src="/images/landing/features-phone-screen.png"
+                      src="/images/landing/features-phone-screen.webp"
                       alt=""
                       aria-hidden
                       loading="lazy"

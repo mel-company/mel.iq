@@ -131,7 +131,7 @@ function AppDownloadSection() {
               sizes="(min-width: 1024px) 560px, min(100vw - 2rem, 420px)"
             />
             <img
-              src="/images/landing/hero-phone.png"
+              src="/images/landing/hero-phone.webp"
               alt=""
               aria-hidden
               width={658}

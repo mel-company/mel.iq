@@ -88,7 +88,7 @@ function PlatformSection() {
           <picture>
             <source type="image/webp" srcSet="/images/landing/platform-phones.webp" />
             <img
-              src="/images/landing/platform-phones.png"
+              src="/images/landing/platform-phones.webp"
               alt=""
               aria-hidden
               width={844}

@@ -3,11 +3,11 @@ import { Star } from "./icons";
 /** Exported from the Figma frame — the five faces are photographs, not avatars
  *  we can synthesise, so they ship as assets. */
 const AVATARS = [
-  "/images/landing/avatar-1.png",
-  "/images/landing/avatar-2.png",
-  "/images/landing/avatar-3.png",
-  "/images/landing/avatar-4.png",
-  "/images/landing/avatar-5.png",
+  "/images/landing/avatar-1.webp",
+  "/images/landing/avatar-2.webp",
+  "/images/landing/avatar-3.webp",
+  "/images/landing/avatar-4.webp",
+  "/images/landing/avatar-5.webp",
 ];
 
 const RATING = 4.5;
@@ -62,19 +62,17 @@ function TrustBadge() {
 
       <div className="flex shrink-0 items-center">
         {AVATARS.map((src, i) => (
-          <picture key={src}>
-            <source type="image/webp" srcSet={src.replace(/\.png$/, ".webp")} />
-            <img
-              src={src}
-              alt=""
-              width={38}
-              height={38}
-              aria-hidden
-              decoding="async"
-              className="size-[38px] shrink-0 rounded-full object-cover -mr-5 last:mr-0"
-              style={{ zIndex: AVATARS.length - i }}
-            />
-          </picture>
+          <img
+            key={src}
+            src={src}
+            alt=""
+            width={38}
+            height={38}
+            aria-hidden
+            decoding="async"
+            className="size-[38px] shrink-0 rounded-full object-cover -mr-5 last:mr-0"
+            style={{ zIndex: AVATARS.length - i }}
+          />
         ))}
       </div>
     </div>

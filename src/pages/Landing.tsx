@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+import { Link } from "react-router-dom";
 import { MarketingShell } from "../components/LandingNavbar";
 import SeoHead, {
   breadcrumbSchema,
@@ -5,19 +7,21 @@ import SeoHead, {
   softwareApplicationSchema,
 } from "../seo/SeoHead";
 import { LANDING_FAQS } from "../seo/landingFaqs";
-import GenerationHistory from "../components/ai/GenerationHistory";
 import HeroSection from "../components/landing/HeroSection";
 import PartnerStrip from "../components/landing/PartnerStrip";
-import AboutSection from "../components/landing/AboutSection";
-import BenefitsSection from "../components/landing/BenefitsSection";
-import PlatformSection from "../components/landing/PlatformSection";
-import FeaturesSection from "../components/landing/FeaturesSection";
-import ProductShowcase from "../components/landing/ProductShowcase";
-import PricingSection from "../components/landing/PricingSection";
-import FaqSection from "../components/landing/FaqSection";
-import AppDownloadSection from "../components/landing/AppDownloadSection";
-import ContactSection from "../components/landing/ContactSection";
-import { Link } from "react-router-dom";
+
+// Below-the-fold blocks stay out of the initial JS parse so desktop TBT
+// and "unused JavaScript" stay down. Hero + partners paint first.
+const GenerationHistory = lazy(() => import("../components/ai/GenerationHistory"));
+const AboutSection = lazy(() => import("../components/landing/AboutSection"));
+const BenefitsSection = lazy(() => import("../components/landing/BenefitsSection"));
+const PlatformSection = lazy(() => import("../components/landing/PlatformSection"));
+const FeaturesSection = lazy(() => import("../components/landing/FeaturesSection"));
+const ProductShowcase = lazy(() => import("../components/landing/ProductShowcase"));
+const PricingSection = lazy(() => import("../components/landing/PricingSection"));
+const FaqSection = lazy(() => import("../components/landing/FaqSection"));
+const AppDownloadSection = lazy(() => import("../components/landing/AppDownloadSection"));
+const ContactSection = lazy(() => import("../components/landing/ContactSection"));
 
 const LANDING_SCHEMAS = [
   softwareApplicationSchema(),
@@ -61,18 +65,20 @@ function Landing() {
         <HeroSection />
         <PartnerStrip />
 
-        {/* Only renders for merchants who already have stores. */}
-        <GenerationHistory />
+        <Suspense fallback={null}>
+          {/* Only renders for merchants who already have stores. */}
+          <GenerationHistory />
 
-        <AboutSection />
-        <BenefitsSection />
-        <PlatformSection />
-        <FeaturesSection />
-        <ProductShowcase />
-        <PricingSection />
-        <FaqSection />
-        <AppDownloadSection />
-        <ContactSection />
+          <AboutSection />
+          <BenefitsSection />
+          <PlatformSection />
+          <FeaturesSection />
+          <ProductShowcase />
+          <PricingSection />
+          <FaqSection />
+          <AppDownloadSection />
+          <ContactSection />
+        </Suspense>
 
         {/* SEO internal-link cluster — crawlable topical hub links. */}
         <section className="relative px-4 pb-16 sm:px-6">

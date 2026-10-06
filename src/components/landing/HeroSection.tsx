@@ -1,5 +1,27 @@
+import { lazy, Suspense } from "react";
 import TrustBadge from "../TrustBadge";
-import PromptComposer from "../ai/PromptComposer";
+
+const PromptComposer = lazy(() => import("../ai/PromptComposer"));
+
+/** Same outer chrome as the real composer so lazy-load does not shift layout. */
+function ComposerFallback() {
+  return (
+    <div className="w-full" aria-hidden>
+      <div className="mx-auto w-full max-w-[791px] rounded-[32px] border border-white/5 p-3 backdrop-blur-[50px]">
+        <div className="flex flex-col gap-3 rounded-3xl p-3">
+          <div className="min-h-[117px] w-full animate-pulse rounded-[18px] bg-white/5" />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex gap-2">
+              <div className="size-11 animate-pulse rounded-xl bg-white/5" />
+              <div className="size-11 animate-pulse rounded-xl bg-white/5" />
+            </div>
+            <div className="h-11 w-28 animate-pulse rounded-xl bg-white/5" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * The hero: the phone mockup on the left, the pitch and the composer on the
@@ -59,7 +81,11 @@ function HeroSection() {
             className="w-full"
             style={{ "--reveal-delay": "270ms" } as React.CSSProperties}
           >
-            <PromptComposer />
+            {/* PromptComposer pulls AuthModal, GenerationProgress, and the AI
+                API client — keep it off the critical path so TBT stays low. */}
+            <Suspense fallback={<ComposerFallback />}>
+              <PromptComposer />
+            </Suspense>
           </div>
         </div>
 
@@ -81,7 +107,7 @@ function HeroSection() {
               sizes="(min-width: 1024px) 560px, min(100vw - 2rem, 420px)"
             />
             <img
-              src="/images/landing/hero-phone.png"
+              src="/images/landing/hero-phone.webp"
               alt=""
               aria-hidden
               width={658}

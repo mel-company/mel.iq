@@ -21,7 +21,7 @@ type Product = {
 
 const PRODUCTS: Product[] = [
   {
-    image: "/images/landing/product-charger.png",
+    image: "/images/landing/product-charger.webp",
     rating: "4.8",
     tags: ["قيمنق", "كيبوردات", "بلايستيشن 5"],
     name: "شاحن متنقل 20000 مللي أمبير شحن سريع",
@@ -31,7 +31,7 @@ const PRODUCTS: Product[] = [
     now: "52,000",
   },
   {
-    image: "/images/landing/product-earbuds.png",
+    image: "/images/landing/product-earbuds.webp",
     rating: "4.8",
     tags: ["قيمنق", "كيبوردات", "بلايستيشن 5"],
     name: "سماعات لاسلكية بلوتوث 5.3 مع إلغاء الضوضاء",
@@ -41,7 +41,7 @@ const PRODUCTS: Product[] = [
     now: "89,000",
   },
   {
-    image: "/images/landing/product-watch.png",
+    image: "/images/landing/product-watch.webp",
     rating: "4.6",
     tags: ["شاومي", "ساعات ذكية"],
     name: "ساعة ذكية مع شاشة AMOLED ومقاومة للماء",
@@ -51,7 +51,7 @@ const PRODUCTS: Product[] = [
     now: "125,000",
   },
   {
-    image: "/images/landing/product-speaker.png",
+    image: "/images/landing/product-speaker.webp",
     rating: "4.9",
     tags: ["مكبرات صوت"],
     name: "مكبر صوت بلوتوث محمول مقاوم للماء",
@@ -87,6 +87,7 @@ function ProductCard({ product }: { product: Product }) {
           width={136}
           height={166}
           loading="lazy"
+          decoding="async"
           className="h-[166px] w-[136px] object-cover"
         />
 
@@ -232,11 +233,13 @@ function ProductShowcase() {
             className="flex w-full shrink-0 flex-col items-start gap-3 px-4 sm:px-6 lg:w-[38%] lg:pe-0"
           >
             <img
-              src="/images/landing/offers-flame.png"
+              src="/images/landing/offers-flame.webp"
               alt=""
               aria-hidden
               width={78}
               height={78}
+              loading="lazy"
+              decoding="async"
               className="size-[78px]"
             />
             <h2 className="text-section-title text-right">

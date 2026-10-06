@@ -221,7 +221,7 @@ function BenefitsSection() {
               <picture>
                 <source type="image/webp" srcSet="/images/landing/bento-pos.webp" />
                 <img
-                  src="/images/landing/bento-pos.png"
+                  src="/images/landing/bento-pos.webp"
                   alt=""
                   aria-hidden
                   width={543}
@@ -246,7 +246,7 @@ function BenefitsSection() {
               <picture>
                 <source type="image/webp" srcSet="/images/landing/bento-reports.webp" />
                 <img
-                  src="/images/landing/bento-reports.png"
+                  src="/images/landing/bento-reports.webp"
                   alt=""
                   aria-hidden
                   width={549}
