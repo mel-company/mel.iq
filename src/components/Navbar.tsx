@@ -42,26 +42,6 @@ function Navbar() {
               الرئيسية
             </Link>
             <Link
-              to="/pricing"
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                isActive("/pricing")
-                  ? "text-black dark:text-white bg-gray-100 dark:bg-gray-900"
-                  : "text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-900"
-              }`}
-            >
-              الأسعار
-            </Link>
-            <Link
-              to="/about"
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                isActive("/about")
-                  ? "text-black dark:text-white bg-gray-100 dark:bg-gray-900"
-                  : "text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-900"
-              }`}
-            >
-              حولنا
-            </Link>
-            <Link
               to="/contact"
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 isActive("/contact")
@@ -69,7 +49,7 @@ function Navbar() {
                   : "text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-900"
               }`}
             >
-              اتصل بنا
+              تواصل معنا
             </Link>
           </div>
 
@@ -208,28 +188,6 @@ function Navbar() {
                 الرئيسية
               </Link>
               <Link
-                to="/pricing"
-                onClick={() => setMobileMenuOpen(false)}
-                className={`px-4 py-3 rounded-md text-base font-medium transition-colors ${
-                  isActive("/pricing")
-                    ? "text-black dark:text-white bg-gray-100 dark:bg-gray-900"
-                    : "text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-900"
-                }`}
-              >
-                الأسعار
-              </Link>
-              <Link
-                to="/about"
-                onClick={() => setMobileMenuOpen(false)}
-                className={`px-4 py-3 rounded-md text-base font-medium transition-colors ${
-                  isActive("/about")
-                    ? "text-black dark:text-white bg-gray-100 dark:bg-gray-900"
-                    : "text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-900"
-                }`}
-              >
-                حولنا
-              </Link>
-              <Link
                 to="/contact"
                 onClick={() => setMobileMenuOpen(false)}
                 className={`px-4 py-3 rounded-md text-base font-medium transition-colors ${
@@ -238,7 +196,7 @@ function Navbar() {
                     : "text-gray-700 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-900"
                 }`}
               >
-                اتصل بنا
+                تواصل معنا
               </Link>
 
               {/* Mobile Login/Dashboard Button */}

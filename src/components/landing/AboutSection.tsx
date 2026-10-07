@@ -84,7 +84,7 @@ function AboutSection() {
 
         <Link
           data-reveal
-          to="/about"
+          to="/#about"
           // The border is a gradient, so it is a 1px padding box with the
           // ground inset over it rather than a `border-color`.
           className="relative inline-flex items-center gap-3 overflow-hidden rounded-full bg-gradient-to-b from-[#4d4d4d]/25 via-white/25 to-transparent p-px shadow-[0_0_25px_rgba(178,130,255,0.15)] transition-shadow hover:shadow-[0_0_32px_rgba(178,130,255,0.3)]"

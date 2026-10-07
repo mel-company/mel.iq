@@ -9,22 +9,28 @@ import SiteFooter from "./landing/SiteFooter";
 /**
  * The redesigned marketing chrome.
  *
- * The landing page is now one long page holding the features, pricing and
- * contact blocks, so the nav items scroll to sections on `/` and fall back to
- * navigating there first when the visitor is on another route. The standalone
- * /pricing, /about and /contact pages still exist and still render inside
- * this shell.
+ * The landing page is one long page (about / features / pricing / …). Contact
+ * is the only other marketing route (`/contact`); nav "تواصل معنا" goes there.
  */
 const NAV_ITEMS = [
   { label: "من نحن", hash: "#about" },
   { label: "الميزات", hash: "#features" },
   { label: "الباقات", hash: "#pricing" },
   { label: "التطبيق", hash: "#download" },
-  { label: "تواصل معنا", hash: "#contact" },
-];
+  { label: "تواصل معنا", to: "/contact" },
+] as const;
 
-/** Which nav item the current scroll position belongs to. */
-const SECTION_FOR_INDEX = NAV_ITEMS.map((item) => item.hash.replace("#", ""));
+type NavItem = (typeof NAV_ITEMS)[number];
+
+/** Section ids watched for the active-nav indicator (hash items only). */
+const SECTION_FOR_INDEX = NAV_ITEMS.map((item) =>
+  "hash" in item ? item.hash.replace("#", "") : "",
+);
+
+function navItemHref(item: NavItem): string {
+  if ("to" in item) return item.to;
+  return `/${item.hash}`;
+}
 
 function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
   const { user, loading } = useAuth();
@@ -89,9 +95,13 @@ function LandingNavbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // Which section is in view, on the landing page only. Everywhere else the
-  // indicator sits on "منصة ميل", since none of the anchors are present.
+  // Which section is in view on `/`. On `/contact`, highlight تواصل معنا.
   useEffect(() => {
+    if (location.pathname === "/contact") {
+      setActiveIndex(NAV_ITEMS.findIndex((item) => "to" in item && item.to === "/contact"));
+      return;
+    }
+
     if (location.pathname !== "/") {
       setActiveIndex(0);
       return;
@@ -119,17 +129,19 @@ function LandingNavbar() {
     return () => observer.disconnect();
   }, [location.pathname]);
 
-  const handleNavigate = (index: number, hash: string) => (
+  const handleNavigate = (index: number, item: NavItem) => (
     e: React.MouseEvent,
   ) => {
     setMobileOpen(false);
     setActiveIndex(index);
 
+    if ("to" in item) return; // plain route — let the Link navigate
+
     if (location.pathname !== "/") return; // let the router take us home first
 
     e.preventDefault();
-    document.querySelector(hash)?.scrollIntoView({ behavior: "smooth" });
-    window.history.replaceState(null, "", hash);
+    document.querySelector(item.hash)?.scrollIntoView({ behavior: "smooth" });
+    window.history.replaceState(null, "", item.hash);
   };
 
   /** The logo is the way back to the top, which no nav item covers. */
@@ -171,8 +183,8 @@ function LandingNavbar() {
           {NAV_ITEMS.map((item, i) => (
             <Link
               key={item.label}
-              to={`/${item.hash}`}
-              onClick={handleNavigate(i, item.hash)}
+              to={navItemHref(item)}
+              onClick={handleNavigate(i, item)}
               className={`text-nav flex h-14 w-28 items-center justify-center whitespace-nowrap py-2.5 transition-colors ${i === activeIndex ? "text-white" : "text-white/60 hover:text-white"
                 }`}
             >
@@ -219,8 +231,8 @@ function LandingNavbar() {
           {NAV_ITEMS.map((item, i) => (
             <Link
               key={item.label}
-              to={`/${item.hash}`}
-              onClick={handleNavigate(i, item.hash)}
+              to={navItemHref(item)}
+              onClick={handleNavigate(i, item)}
               className={`text-nav rounded-xl px-3 py-2.5 transition-colors ${i === activeIndex
                 ? "bg-white/10 text-white"
                 : "text-white/60 hover:bg-white/5 hover:text-white"

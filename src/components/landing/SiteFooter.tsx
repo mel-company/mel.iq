@@ -26,7 +26,7 @@ const LEGAL = [
 const FOOTER_PRODUCT = [
   { label: "الباقات", to: "/#pricing", hash: "#pricing" },
   { label: "الأدلة", to: "/guides" },
-  { label: "تواصل معنا", to: "/#contact", hash: "#contact" },
+  { label: "تواصل معنا", to: "/contact" },
   { label: "من نحن", to: "/#about", hash: "#about" },
 ];
 

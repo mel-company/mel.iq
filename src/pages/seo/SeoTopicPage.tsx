@@ -85,7 +85,7 @@ function TopicBody({ topic }: { topic: SeoTopic }) {
                 ابدأ متجرك الآن
               </Link>
               <Link
-                to="/pricing"
+                to="/#pricing"
                 className="flex h-14 items-center justify-center rounded-[18px] border border-white/15 px-6 text-base text-white transition-colors hover:bg-white/5"
               >
                 عرض الباقات

@@ -14,8 +14,6 @@ import SeoHead from "./seo/SeoHead";
 // is not paying for Checkout, Dashboard, and the rest on first paint.
 const DevProgressPreview = lazy(() => import("./pages/__DevProgressPreview"));
 const DevManagePreview = lazy(() => import("./pages/__DevManagePreview"));
-const Pricing = lazy(() => import("./pages/Pricing"));
-const About = lazy(() => import("./pages/About"));
 const Contact = lazy(() => import("./pages/Contact"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const CheckoutPaymentReturn = lazy(() => import("./pages/CheckoutPaymentReturn"));
@@ -119,41 +117,12 @@ function App() {
             path="/__dev/store/:storeId/manage"
             element={<DevManagePreview />}
           />
+
+          {/* Marketing: only `/` and `/contact`. Old /about + /pricing
+              redirect into landing sections so bookmarks still work. */}
           <Route path="/" element={<Landing />} />
-          <Route path="/guides" element={<SeoGuidesIndex />} />
-          {SEO_TOPIC_SLUGS.map((slug) => (
-            <Route
-              key={slug}
-              path={`/${slug}`}
-              element={<SeoTopicPage slug={slug} />}
-            />
-          ))}
-          <Route
-            path="/pricing"
-            element={
-              <MarketingShell>
-                <SeoHead
-                  title="باقات ميل | أسعار إنشاء متجر إلكتروني في العراق"
-                  description="قارن باقات ميل لإنشاء وإدارة متجرك الإلكتروني في العراق. شهر أول مجاني ثم 6 أشهر بنصف السعر — اختر الباقة المناسبة لحجم مبيعاتك."
-                  path="/pricing"
-                />
-                <Pricing />
-              </MarketingShell>
-            }
-          />
-          <Route
-            path="/about"
-            element={
-              <MarketingShell>
-                <SeoHead
-                  title="من نحن | Mel IQ — منصة المتاجر الإلكترونية العراقية"
-                  description="تعرف على ميل: منصة عراقية لإنشاء وإدارة المتاجر الإلكترونية ونقاط البيع بمساعد ذكي بالعربية."
-                  path="/about"
-                />
-                <About />
-              </MarketingShell>
-            }
-          />
+          <Route path="/about" element={<Navigate to="/#about" replace />} />
+          <Route path="/pricing" element={<Navigate to="/#pricing" replace />} />
           <Route
             path="/contact"
             element={
@@ -167,6 +136,15 @@ function App() {
               </MarketingShell>
             }
           />
+
+          <Route path="/guides" element={<SeoGuidesIndex />} />
+          {SEO_TOPIC_SLUGS.map((slug) => (
+            <Route
+              key={slug}
+              path={`/${slug}`}
+              element={<SeoTopicPage slug={slug} />}
+            />
+          ))}
           <Route
             path="/privacy-policy"
             element={
