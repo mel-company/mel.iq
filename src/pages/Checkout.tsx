@@ -22,7 +22,13 @@ import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 import {
   useBillingProviders,
   useInitPlatformPayment,
+  useSubscriptionQuote,
 } from "@/api/wrappers/platform-payment.wrapper";
+import {
+  quoteDue,
+  quoteExplanation,
+  quoteNextCharge,
+} from "@/utils/subscription-quote";
 import { CHECKOUT_DRAFT_KEY, LAST_PAYMENT_ID_KEY } from "@/pages/CheckoutPaymentReturn";
 import { toast } from "sonner";
 import {
@@ -288,12 +294,42 @@ function Checkout() {
   const monthlyPrice = Number(formData.plan?.monthly_price ?? 0);
   const isPlanFree = Boolean(formData.plan?.is_free) || monthlyPrice === 0;
   const planPriceLabel = monthlyPrice ? monthlyPrice.toLocaleString("en-IQ") : "0";
-  /** End of the 14-day trial — the date the first charge actually lands. */
-  const firstChargeDate = new Date(Date.now() + 14 * 864e5).toLocaleDateString("ar", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+
+  /**
+   * What this buyer actually owes, and when the first real charge lands.
+   *
+   * Both were invented here. The summary hardcoded a «تجربة مجانية 14 يوماً»
+   * line, a 0 د.ع total and a first-charge date 14 days out — on a promo that is
+   * one free *month* and then six at half price, and on an offer that is once
+   * per owner. So the dates were wrong by a fortnight, the half-price ladder was
+   * disclosed nowhere at all, and a buyer who had already spent their free month
+   * on an earlier store was shown a total of zero and then charged.
+   *
+   * Only asked once the buyer has a token and a plan — the quote is
+   * subscription state, not catalogue data.
+   */
+  const planIdForQuote =
+    formData.plan?.uuid || formData.plan?.planId || formData.plan?.id || null;
+  const { data: quote, isLoading: quoteLoading } = useSubscriptionQuote(
+    user && planIdForQuote && !isPlanFree
+      ? {
+          type: "INITIAL_SUBSCRIPTION",
+          planId: String(planIdForQuote),
+          billingPeriod: "MONTHLY",
+        }
+      : null,
+  );
+  const dueToday = quoteDue(quote);
+  /**
+   * What the buyer owes now, as a number.
+   *
+   * Defaults to "something is owed" until the quote lands, so the form asks for a
+   * payment method rather than letting somebody through and needing one later —
+   * the same direction the manage screen takes.
+   */
+  const dueNow = quote === undefined ? Infinity : quote.amount;
+  const promoExplanation = quoteExplanation(quote);
+  const firstChargeDate = quoteNextCharge(quote);
 
   const goToTemplates = (nav: {
     websiteType: string;
@@ -760,7 +796,16 @@ function Checkout() {
     const selectedMethod = paymentMethods.find(
       (method) => method.id === formData.paymentMethod,
     );
-    if (!selectedMethod?.available || !selectedMethod.provider) {
+
+    /**
+     * A gateway is only needed when there is money to move through it.
+     *
+     * The summary beside this says «المستحق اليوم 0 د.ع» on a first monthly
+     * period, and the form still refused to continue until the buyer had chosen
+     * a payment method that would never be used. The manage screen learned this
+     * when its picker was hidden for a free renewal; this is the same rule.
+     */
+    if (dueNow > 0 && (!selectedMethod?.available || !selectedMethod.provider)) {
       toast.error("الرجاء اختيار طريقة دفع");
       return;
     }
@@ -784,7 +829,9 @@ function Checkout() {
       {
         type: "INITIAL_SUBSCRIPTION",
         planId,
-        provider: selectedMethod.provider,
+        // Omitted when nothing is due: the server resolves its own default and
+        // then never opens a transaction.
+        provider: selectedMethod?.provider ?? undefined,
         billingPeriod: "MONTHLY",
         returnBaseUrl: `${window.location.origin}/checkout/payment-return`,
       },
@@ -823,16 +870,17 @@ function Checkout() {
               setFormData((prev) => ({ ...prev, paymentId: String(paymentId) }));
             }
             /**
-             * Deliberately says nothing about *why* nothing is due. The promo
-             * is one free month and then six at half price, while the panel
-             * above still advertises a 14-day trial and dates the first charge
-             * accordingly — naming a duration here would just add a third
-             * answer. Fix the copy, then make this specific.
+             * Says which months the quote covered rather than naming the offer,
+             * so this cannot drift from the ladder the way the hardcoded
+             * «تجربة مجانية 14 يوماً» copy did. `quoteExplanation` is the same
+             * sentence the summary panel shows.
              */
             toast.success(
               Number(data?.amount) > 0
                 ? "تم تأكيد الدفع"
-                : "لا حاجة للدفع الآن — تم تأكيد اشتراكك",
+                : promoExplanation
+                  ? `لا حاجة للدفع الآن — ${promoExplanation}`
+                  : "لا حاجة للدفع الآن — تم تأكيد اشتراكك",
             );
             setCurrentStep(5);
             return;
@@ -1091,7 +1139,7 @@ function Checkout() {
                 <p className="text-sm leading-6 text-[#9aa1bd]">
                   {user
                     ? "سنرسل رمز تحقق إلى رقمك المسجل للمتابعة"
-                    : "تجربة مجانية 14 يوماً — بدون بطاقة ائتمانية، وتقدر تلغي في أي وقت"}
+                    : "شهر أول مجاناً ثم 6 أشهر بنصف السعر — وتقدر تلغي في أي وقت"}
                 </p>
               </div>
 
@@ -1625,25 +1673,39 @@ function Checkout() {
                         <dd className="text-frost">{planPriceLabel} د.ع</dd>
                         <dt className="text-muted">الاشتراك / شهر</dt>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <dd className="text-mint">-{planPriceLabel} د.ع</dd>
-                        <dt className="text-muted">تجربة مجانية 14 يوماً</dt>
-                      </div>
+                      {quote && quote.savings > 0 && (
+                        <div className="flex items-center justify-between">
+                          <dd className="text-mint">
+                            -{quote.savings.toLocaleString("en-IQ")} د.ع
+                          </dd>
+                          <dt className="text-muted">خصم العرض</dt>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between">
                         <dd className="text-frost">0 د.ع</dd>
                         <dt className="text-muted">الضريبة</dt>
                       </div>
                       <div className="mt-1 flex items-center justify-between border-t border-white/8 pt-3">
-                        <dd className="text-xl font-bold text-frost">0 د.ع</dd>
+                        <dd className="text-xl font-bold text-frost">
+                          {quoteLoading ? "..." : dueToday}
+                        </dd>
                         <dt className="text-sm font-bold text-frost">المستحق اليوم</dt>
                       </div>
                     </dl>
 
+                    {promoExplanation && (
+                      <p className="text-[11px] leading-5 text-muted">
+                        {promoExplanation}
+                      </p>
+                    )}
+
                     <p className="rounded-xl border border-mint/25 bg-mint/8 p-3 text-[11px] leading-5 text-muted">
-                      <span className="block font-bold text-mint">
-                        أول دفعة: {firstChargeDate}
-                      </span>
-                      سنذكّرك قبل 3 أيام من انتهاء التجربة، ويمكنك الإلغاء بدون رسوم.
+                      {firstChargeDate && (
+                        <span className="block font-bold text-mint">
+                          أول دفعة: {firstChargeDate}
+                        </span>
+                      )}
+                      سنذكّرك قبل 3 أيام من موعد التجديد، ويمكنك الإلغاء بدون رسوم.
                     </p>
                   </aside>
                 </div>
@@ -1662,6 +1724,7 @@ function Checkout() {
                   !formData.plan ||
                   (!isPlanFree &&
                     !paymentCompleted &&
+                    dueNow > 0 &&
                     !paymentMethods.some(
                       (method) =>
                         method.id === formData.paymentMethod && method.available,

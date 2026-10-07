@@ -3,12 +3,34 @@ import {
   platformPaymentAPI,
   PlatformPayment,
   PlatformPaymentInitPayload,
+  SubscriptionQuoteQuery,
 } from "../endpoints/platform-payment.endpoint";
 
 export const platformPaymentKeys = {
   all: ["platform-payments"] as const,
   detail: (id: string) => [...platformPaymentKeys.all, id] as const,
   providers: () => [...platformPaymentKeys.all, "providers"] as const,
+  quote: (query: SubscriptionQuoteQuery) =>
+    [...platformPaymentKeys.all, "quote", query] as const,
+};
+
+/**
+ * What this period costs this buyer, asked of the server rather than worked out
+ * from a plan's monthly price — which cannot see the intro ladder and so was
+ * wrong for everybody still inside the offer.
+ */
+export const useSubscriptionQuote = (
+  query: SubscriptionQuoteQuery | null,
+  enabled = true,
+) => {
+  return useQuery({
+    queryKey: platformPaymentKeys.quote(query ?? ({} as SubscriptionQuoteQuery)),
+    queryFn: () => platformPaymentAPI.quote(query!),
+    enabled: enabled && !!query?.planId,
+    // A price on a button the buyer is about to press: re-asked, not remembered,
+    // because the ladder moves when they pay.
+    staleTime: 0,
+  });
 };
 
 /**

@@ -5,32 +5,78 @@ export type PlanFeatureKey = "ai_editor" | "team_users" | "mobile_app";
 
 export type PlanCode = "GO" | "PLUS" | string;
 
+/**
+ * One locked feature, as the server sends it.
+ *
+ * `plusLockedFeatures` returns objects — `{ feature, requiredPlan, message }` —
+ * and this file used to type `locked` as `PlanFeatureKey[]`, a list of plain
+ * strings. So `isFeatureLocked`'s `locked.includes("ai_editor")` compared a
+ * string against objects, was always false, and **every PLUS gate in the app
+ * stood open**. A declared type that disagrees with the wire is worse than no
+ * type: it made the bug invisible at the one place a reader would check.
+ */
+export type LockedFeature = {
+  feature: PlanFeatureKey | string;
+  requiredPlan?: PlanCode;
+  message?: string;
+};
+
+/** `GET /plan/entitlements`, as the server actually answers it. */
 export type PlanEntitlements = {
-  /** Features the current store plan may use. */
-  allowed?: PlanFeatureKey[];
-  /** Features that need a higher plan — show upgrade UI instead of calling the API. */
-  locked?: PlanFeatureKey[];
-  currentPlan?: {
+  subscription?: {
+    id?: string;
+    status?: string;
+    start_at?: string;
+    end_at?: string;
+    /** Whether the term currently covers today. */
+    inForce?: boolean;
+    promo_free_claimed?: boolean;
+    promo_discount_months_used?: number;
+  };
+  /** The plan on the subscription, with its marketing `pricing` block. */
+  plan?: {
     id?: string;
     code?: PlanCode;
     name?: string;
+    description?: string;
+    monthly_price?: number;
+    yearly_price?: number;
   };
+  /** What the store may use **now** — the floor once the term lapses. */
+  entitlements?: {
+    max_users?: number;
+    ai_store_credits?: number;
+    ai_editor_credits?: number;
+    has_mobile_app?: boolean;
+    has_ai_editor?: boolean;
+  };
+  /** Features that need a higher plan — show upgrade UI instead of calling the API. */
+  locked?: LockedFeature[];
+  upgradeAvailable?: boolean;
   upgradeTo?: {
-    planId?: string;
+    /** Resolved from the catalogue; `null` when PLUS is disabled. */
+    planId?: string | null;
     planCode?: PlanCode;
     planName?: string;
-  };
+  } | null;
   /** Loose pass-through for fields the server may add. */
   [key: string]: unknown;
 };
 
+/**
+ * `GET /plan/store-plans`, as the server actually answers it: the catalogue
+ * under `data`, and the store's current plan id beside it.
+ *
+ * This was typed as `{ current, plans }` and read through an `unwrap` that
+ * returned `data.data` whenever the payload had a `data` key — which this one
+ * always does. So the envelope was thrown away, the function returned the plans
+ * array while claiming to return this object, and every reader of `.plans` and
+ * `.current` got `undefined`. The page worked only because a string match on
+ * plan names was sitting behind it as a fallback.
+ */
 export type StorePlansResponse = {
-  current?: {
-    id?: string;
-    code?: PlanCode;
-    name?: string;
-  };
-  plans?: Array<{
+  currentPlan?: { planId?: string } | null;
+  data?: Array<{
     id: string;
     code?: PlanCode;
     name: string;
@@ -39,16 +85,12 @@ export type StorePlansResponse = {
     yearly_price?: number;
     most_popular?: boolean;
     enabled?: boolean;
+    is_free?: boolean;
   }>;
-  [key: string]: unknown;
+  total?: number;
+  page?: number;
+  limit?: number;
 };
-
-function unwrap<T>(data: T | { data: T }): T {
-  if (data && typeof data === "object" && "data" in data) {
-    return (data as { data: T }).data ?? (data as T);
-  }
-  return data as T;
-}
 
 export const planAPI = {
   fetchAll: async (): Promise<any> => {
@@ -66,11 +108,12 @@ export const planAPI = {
    * Prefer this over bare `/plan` when deciding GO → PLUS upgrades.
    */
   fetchStorePlans: async (storeId?: string): Promise<StorePlansResponse> => {
-    const { data } = await axiosInstance.get<StorePlansResponse | { data: StorePlansResponse }>(
+    // Returned whole. `unwrap` used to strip the envelope this response *is*.
+    const { data } = await axiosInstance.get<StorePlansResponse>(
       "/plan/store-plans",
       { params: storeId ? { storeId } : undefined },
     );
-    return unwrap(data);
+    return data;
   },
 
   /**
@@ -78,11 +121,11 @@ export const planAPI = {
    * Call before rendering AI Editor / team / mobile-app entry points.
    */
   fetchEntitlements: async (storeId?: string): Promise<PlanEntitlements> => {
-    const { data } = await axiosInstance.get<PlanEntitlements | { data: PlanEntitlements }>(
+    const { data } = await axiosInstance.get<PlanEntitlements>(
       "/plan/entitlements",
       { params: storeId ? { storeId } : undefined },
     );
-    return unwrap(data);
+    return data;
   },
 };
 

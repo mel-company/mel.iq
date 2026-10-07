@@ -26,8 +26,8 @@ function Pricing() {
             اختر خطتك
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            اختر خطة الاشتراك المثالية التي تناسب احتياجاتك. جميع الخطط تشمل
-            فترة تجريبية مجانية لمدة 14 يوماً.
+            اختر خطة الاشتراك المثالية التي تناسب احتياجاتك. جميع الخطط تبدأ
+            بشهر مجاني ثم 6 أشهر بنصف السعر.
           </p>
         </div>
 
@@ -144,11 +144,11 @@ function Pricing() {
             </div>
             <div className="bg-white dark:bg-black p-6 rounded-lg shadow border border-gray-200 dark:border-gray-800 transition-all">
               <h3 className="text-xl font-semibold text-black dark:text-white mb-2">
-                هل هناك فترة تجريبية مجانية؟
+                هل هناك عرض للبداية؟
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                جميع الخطط تشمل فترة تجريبية مجانية لمدة 14 يوماً. لا حاجة
-                لبطاقة ائتمانية للبدء.
+                الشهر الأول مجاني، ثم 6 أشهر بنصف السعر، ثم السعر الكامل.
+                العرض مرة واحدة لكل حساب وعلى الفوترة الشهرية.
               </p>
             </div>
             <div className="bg-white dark:bg-black p-6 rounded-lg shadow border border-gray-200 dark:border-gray-800 transition-all">
@@ -156,8 +156,7 @@ function Pricing() {
                 ما هي طرق الدفع المقبولة؟
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                نقبل جميع البطاقات الائتمانية الرئيسية، PayPal، والتحويلات
-                المصرفية للخطط المؤسسية.
+                زين كاش وكي كارد. تُعرض الطرق المتاحة فعلياً في صفحة الدفع.
               </p>
             </div>
             <div className="bg-white dark:bg-black p-6 rounded-lg shadow border border-gray-200 dark:border-gray-800 transition-all">
