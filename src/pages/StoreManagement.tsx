@@ -19,15 +19,26 @@ import {
   usePauseSubscription,
   useResumeSubscription,
   useCancelSubscription,
-  useUpdateSubscription,
 } from "@/api/wrappers/subscription.wrapper";
-import { useInitPlatformPayment, usePlatformPaymentStatus } from "@/api/wrappers/platform-payment.wrapper";
+import {
+  useInitPlatformPayment,
+  usePlatformPaymentStatus,
+  useSubscriptionQuote,
+} from "@/api/wrappers/platform-payment.wrapper";
+import {
+  quoteDue,
+  quoteExplanation,
+  quoteNextCharge,
+} from "@/utils/subscription-quote";
 import {
   useFetchAllPlans,
   useFetchStorePlans,
   usePlanEntitlements,
 } from "@/api/wrappers/plan.wrappers";
-import type { PlanFeatureKey } from "@/api/endpoints/plan.endpoint";
+import type {
+  LockedFeature,
+  PlanFeatureKey,
+} from "@/api/endpoints/plan.endpoint";
 import { PlanUpgradeGate } from "@/components/PlanUpgradeGate";
 import { featureLabel, isFeatureLocked } from "@/utils/planUpgrade";
 import {
@@ -635,7 +646,8 @@ const SubscriptionPanel = ({
 }: {
   subscription: Subscription | null;
   isPlanBasic: boolean;
-  lockedFeatures?: Array<PlanFeatureKey | string>;
+  /** As the server sends it: objects, not strings. See `isFeatureLocked`. */
+  lockedFeatures?: Array<LockedFeature | string>;
   upgradePlanName?: string;
   onRenew: () => void;
   onPause: () => void;
@@ -972,7 +984,6 @@ function StoreManagement() {
   const pauseMutation = usePauseSubscription();
   const resumeMutation = useResumeSubscription();
   const cancelMutation = useCancelSubscription();
-  const updateSubscriptionMutation = useUpdateSubscription();
   const updateStoreMutation = useUpdateStore();
   const { data: plansData } = useFetchAllPlans();
   const { data: storePlansData } = useFetchStorePlans(storeId, Boolean(storeId));
@@ -1036,6 +1047,69 @@ function StoreManagement() {
     return normalized[0] || null;
   }, [subscriptionsData]);
 
+  /**
+   * What the chosen renewal actually costs, asked of the server each time the
+   * duration changes.
+   *
+   * The modal offered 1, 6 and 12 months and a free-text box and named no price
+   * at all, so a merchant chose a term without being told what it came to — and
+   * the amount is not derivable here anyway, because the intro ladder lives on
+   * their subscription.
+   */
+  const renewDuration = customDuration
+    ? parseInt(customDuration)
+    : selectedDuration;
+  const renewPlanId = subscription?.plan?.id || subscription?.planId || null;
+  const renewQuote = useSubscriptionQuote(
+    showRenewModal &&
+      renewPlanId &&
+      storeId &&
+      // Only the server's own bounds. An earlier version also demanded a
+      // multiple of 12 above 12 months, which suppressed the quote for 13–23 —
+      // durations that bill monthly and are perfectly priceable. The merchant
+      // typed 13 into the box and the price went blank.
+      renewDuration >= 1 &&
+      renewDuration <= 24
+      ? {
+          type: "RENEWAL",
+          planId: String(renewPlanId),
+          storeId,
+          durationMonths: renewDuration,
+          billingPeriod: renewDuration % 12 === 0 ? "YEARLY" : "MONTHLY",
+        }
+      : null,
+  );
+
+  /**
+   * Whether this renewal needs a gateway at all.
+   *
+   * Hiding the picker is not enough on its own — `handleConfirmRenew` refuses
+   * without a provider, so a free renewal would have been blocked by a control
+   * that was no longer on screen. Both read this.
+   *
+   * Defaults to "yes" until the quote arrives: offering a payment method that
+   * turns out to be unnecessary is recoverable, demanding none and then needing
+   * one is not.
+   */
+  const renewNeedsPayment =
+    renewQuote.data === undefined ? true : renewQuote.data.amount > 0;
+
+  /** The same question for the plan the upgrade modal has selected. */
+  const upgradeQuote = useSubscriptionQuote(
+    showUpgradeModal && selectedPlanId && storeId
+      ? {
+          type: "CHANGE_PLAN",
+          planId: selectedPlanId,
+          storeId,
+          billingPeriod: "MONTHLY",
+        }
+      : null,
+  );
+
+  /** As `renewNeedsPayment`, for the plan the upgrade modal has selected. */
+  const upgradeNeedsPayment =
+    upgradeQuote.data === undefined ? true : upgradeQuote.data.amount > 0;
+
   const storeUrl =
     store?.storeUrl ||
     (store?.customDomain
@@ -1079,6 +1153,13 @@ function StoreManagement() {
       return;
     }
 
+    // Matches the server's cap, so the refusal is readable here instead of
+    // arriving as a validation error on a number this form asked for.
+    if (duration > 24) {
+      toast.error("أقصى مدة للتجديد 24 شهراً");
+      return;
+    }
+
     const planId = subscription.plan?.id || subscription.planId;
     const isFree =
       subscription.plan?.is_free === true ||
@@ -1089,7 +1170,10 @@ function StoreManagement() {
         toast.error("تعذر تحديد الخطة للتجديد");
         return;
       }
-      if (!paymentProvider) {
+      // Only when money is actually moving. A renewal the intro month covers
+      // needs no gateway, and the picker is hidden for it — demanding one here
+      // would block it behind a control that is not on screen.
+      if (renewNeedsPayment && !paymentProvider) {
         toast.error("الرجاء اختيار طريقة الدفع");
         return;
       }
@@ -1104,16 +1188,56 @@ function StoreManagement() {
           type: "RENEWAL",
           planId,
           storeId,
-          provider: paymentProvider,
+          // Omitted for a renewal with nothing to pay — the server resolves its
+          // own default and then never opens a transaction.
+          provider: paymentProvider ?? undefined,
           durationMonths: duration,
-          billingPeriod: duration >= 12 ? "YEARLY" : "MONTHLY",
+          /**
+           * Only a whole number of years bills yearly.
+           *
+           * This was `duration >= 12`, and the yearly price is flat per
+           * payment — so 13 to 24 months all cost one year, and the box below
+           * this modal's presets lets the merchant type the number. The server
+           * now refuses the combination outright; sending the period that
+           * matches the months is what keeps every duration purchasable, with
+           * 13–23 billed monthly (dearer than a year, which is correct — they
+           * are not buying a year).
+           */
+          billingPeriod: duration % 12 === 0 ? "YEARLY" : "MONTHLY",
           returnBaseUrl: `${window.location.origin}/store/${storeId}/manage`,
         },
         {
           onSuccess: (data) => {
             const redirectUrl = data?.redirectUrl;
             const paymentId = data?.id;
+
+            /**
+             * Already settled, with no gateway page — and on this surface the
+             * term has **already been extended**.
+             *
+             * A renewal priced at 0 IQD (the subscription has not claimed its
+             * intro month) is written `PAID` and fulfilled server-side before
+             * this callback runs. Reporting «تعذر بدء عملية الدفع» told the
+             * merchant their renewal had failed on the one path where it had
+             * definitely succeeded, and left them pressing the button again.
+             */
+            if (data?.status === "PAID") {
+              sessionStorage.removeItem(RENEWAL_RETURN_KEY);
+              toast.success(
+                Number(data?.amount) > 0
+                  ? "تم الدفع بنجاح وتم تجديد الاشتراك"
+                  : "تم تجديد الاشتراك — لا مبلغ مستحق",
+              );
+              setShowRenewModal(false);
+              setSelectedDuration(1);
+              setCustomDuration("");
+              setPaymentProvider(null);
+              void refetchSubscriptions();
+              return;
+            }
+
             if (!redirectUrl) {
+              sessionStorage.removeItem(RENEWAL_RETURN_KEY);
               toast.error("تعذر بدء عملية الدفع");
               return;
             }
@@ -1123,6 +1247,7 @@ function StoreManagement() {
             window.location.href = redirectUrl;
           },
           onError: (error: any) => {
+            sessionStorage.removeItem(RENEWAL_RETURN_KEY);
             toast.error(
               error?.response?.data?.message || "حدث خطأ في بدء الدفع",
             );
@@ -1198,14 +1323,15 @@ function StoreManagement() {
     cancelMutation.mutate(subscription.id, {
       onSuccess: () => {
         toast.success(
-          "تم إلغاء الاشتراك وحذف المتجر بنجاح. يمكنك استرجاعه خلال 30 يوم."
+          "تم إلغاء الاشتراك. يبقى المتجر يعمل حتى نهاية المدة المدفوعة.",
         );
         setShowCancelModal(false);
         setDeleteStoreName("");
-        // Redirect to dashboard after deletion
-        setTimeout(() => {
-          navigate("/dashboard");
-        }, 2000);
+        // Stay here and show the new state. It navigated away because it
+        // believed the store had been deleted; the store is still running, and
+        // the panel the merchant is standing in front of is where the end date
+        // and the renew button are.
+        void refetchSubscriptions();
       },
       onError: (error: any) => {
         toast.error("حدث خطأ في إلغاء الاشتراك");
@@ -1218,7 +1344,9 @@ function StoreManagement() {
     setPaymentProvider(null);
     const preferred =
       entitlements?.upgradeTo?.planId ||
-      storePlansData?.plans?.find(
+      // `.data`, not `.plans` — `/plan/store-plans` answers `{ currentPlan, data }`
+      // and the old spelling was silently undefined on every read.
+      storePlansData?.data?.find(
         (p) =>
           String(p.code || p.name || "")
             .toUpperCase()
@@ -1238,47 +1366,29 @@ function StoreManagement() {
       toast.error("تعذر تحديد المتجر");
       return;
     }
-    if (!paymentProvider) {
+    // Only when money is moving — a plan change the intro month covers opens no
+    // transaction, and its picker is hidden.
+    if (upgradeNeedsPayment && !paymentProvider) {
       toast.error("الرجاء اختيار طريقة الدفع");
       return;
     }
 
-    const catalogue = Array.isArray(plansData)
-      ? plansData
-      : (plansData as any)?.data ||
-        (plansData as any)?.plans ||
-        storePlansData?.plans ||
-        [];
-    const target = catalogue.find((p: any) => p.id === selectedPlanId);
-    const isFreeTarget =
-      target?.is_free === true || !(Number(target?.monthly_price) > 0);
-
-    // Free → free plan swap can stay a direct update; paid upgrades go through
-    // CHANGE_PLAN so the merchant is charged for PLUS.
-    if (isFreeTarget) {
-      updateSubscriptionMutation.mutate(
-        {
-          id: subscription.id,
-          data: { planId: selectedPlanId },
-        },
-        {
-          onSuccess: () => {
-            toast.success("تم ترقية الاشتراك بنجاح");
-            setShowUpgradeModal(false);
-            setSelectedPlanId(null);
-            setPaymentProvider(null);
-          },
-          onError: (error: any) => {
-            toast.error(
-              error?.response?.data?.message || "حدث خطأ في ترقية الاشتراك",
-            );
-            console.error("Error upgrading subscription:", error);
-          },
-        },
-      );
-      return;
-    }
-
+    /**
+     * Every plan change goes through CHANGE_PLAN, including one that costs
+     * nothing.
+     *
+     * There used to be a branch here for a zero-priced target that called
+     * `PUT /subscription/:id` — **a route that has never existed**. The server
+     * has `system/:id` (operator) and `change-plan/:planId` (store token); this
+     * page holds a user token and so can reach neither, and the call 404s. It
+     * was unreachable while the catalogue had no zero-priced plan, and an
+     * operator can create one from the admin dashboard, so it was a live 404
+     * waiting for that.
+     *
+     * CHANGE_PLAN handles it correctly now: a period that prices to nothing is
+     * written `PAID`, the plan is applied, and the `status === "PAID"` branch
+     * below takes it. One path, and the server decides whether money moves.
+     */
     sessionStorage.setItem(
       CHANGE_PLAN_RETURN_KEY,
       JSON.stringify({ storeId, planId: selectedPlanId }),
@@ -1290,13 +1400,34 @@ function StoreManagement() {
         planId: selectedPlanId,
         storeId,
         billingPeriod: "MONTHLY",
-        provider: paymentProvider,
+        provider: paymentProvider ?? undefined,
         returnBaseUrl: `${window.location.origin}/store/${storeId}/manage`,
       },
       {
         onSuccess: (data) => {
           const redirectUrl = data?.redirectUrl;
           const paymentId = data?.id;
+
+          /**
+           * Settled with no gateway page, and the plan has already changed:
+           * `fulfill` writes the new `planId` before this returns. Calling that
+           * a failure left the merchant on the old plan as far as they knew,
+           * while the store had moved to the new one.
+           */
+          if (data?.status === "PAID") {
+            sessionStorage.removeItem(CHANGE_PLAN_RETURN_KEY);
+            toast.success(
+              Number(data?.amount) > 0
+                ? "تم الدفع بنجاح وتمت ترقية الخطة"
+                : "تمت ترقية الخطة — لا مبلغ مستحق",
+            );
+            setShowUpgradeModal(false);
+            setSelectedPlanId(null);
+            setPaymentProvider(null);
+            void refetchSubscriptions();
+            return;
+          }
+
           if (!redirectUrl) {
             toast.error("تعذر بدء عملية الدفع");
             sessionStorage.removeItem(CHANGE_PLAN_RETURN_KEY);
@@ -2034,7 +2165,6 @@ function StoreManagement() {
                     resume: resumeMutation.isPending,
                     cancel: cancelMutation.isPending,
                     upgrade:
-                      updateSubscriptionMutation.isPending ||
                       initPaymentMutation.isPending,
                   }}
                 />
@@ -2146,6 +2276,10 @@ function StoreManagement() {
               id="renew-custom-months"
               type="number"
               min="1"
+              // The server's own ceiling (`InitPlatformPaymentDto`). Without it
+              // a merchant could type 36 and get an unreadable validation 400
+              // back from a field that had invited the number.
+              max="24"
               value={customDuration}
               onChange={(e) => {
                 setCustomDuration(e.target.value);
@@ -2158,18 +2292,42 @@ function StoreManagement() {
             />
           </div>
 
-          {subscription?.plan?.is_free !== true &&
-            Number(subscription?.plan?.monthly_price) > 0 && (
-              <div className="mt-5">
-                <PaymentProviderPicker
-                  value={paymentProvider}
-                  onChange={setPaymentProvider}
-                  disabled={
-                    renewMutation.isPending || initPaymentMutation.isPending
-                  }
-                />
+          {/* What that choice costs. The modal used to name no price at all,
+              and the amount is not derivable here: the intro ladder lives on
+              the subscription, not on the plan. */}
+          <div className="mt-5 rounded-xl border border-white/8 bg-white/[0.03] p-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-bold text-frost">
+                {renewQuote.isLoading ? "..." : quoteDue(renewQuote.data)}
+              </span>
+              <span className={ink.body}>المستحق الآن</span>
+            </div>
+            {quoteExplanation(renewQuote.data) && (
+              <p className={`mt-2 text-xs leading-5 ${ink.faint}`}>
+                {quoteExplanation(renewQuote.data)}
+              </p>
+            )}
+            {quoteNextCharge(renewQuote.data) && (
+              <div className="mt-2 flex items-center justify-between text-xs">
+                <span className={ink.faint}>
+                  {quoteNextCharge(renewQuote.data)}
+                </span>
+                <span className={ink.faint}>ينتهي الاشتراك في</span>
               </div>
             )}
+          </div>
+
+          {renewNeedsPayment && (
+            <div className="mt-5">
+              <PaymentProviderPicker
+                value={paymentProvider}
+                onChange={setPaymentProvider}
+                disabled={
+                  renewMutation.isPending || initPaymentMutation.isPending
+                }
+              />
+            </div>
+          )}
 
           <ModalFooter>
             <button
@@ -2228,7 +2386,7 @@ function StoreManagement() {
 
           <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
             {(() => {
-              const fromStore = storePlansData?.plans;
+              const fromStore = storePlansData?.data;
               const fromPublic = Array.isArray(plansData)
                 ? plansData
                 : (plansData as any)?.data || (plansData as any)?.plans || [];
@@ -2284,16 +2442,36 @@ function StoreManagement() {
             })()}
           </div>
 
-          <div className="mt-6">
-            <PaymentProviderPicker
-              value={paymentProvider}
-              onChange={setPaymentProvider}
-              disabled={
-                updateSubscriptionMutation.isPending ||
-                initPaymentMutation.isPending
-              }
-            />
-          </div>
+          {/* The cards above show each plan's catalogue price; this is what the
+              selected one costs *this* merchant today, which the ladder on their
+              subscription decides. */}
+          {selectedPlanId && (
+            <div className="mt-6 rounded-xl border border-white/8 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-bold text-frost">
+                  {upgradeQuote.isLoading ? "..." : quoteDue(upgradeQuote.data)}
+                </span>
+                <span className={ink.body}>المستحق الآن</span>
+              </div>
+              {quoteExplanation(upgradeQuote.data) && (
+                <p className={`mt-2 text-xs leading-5 ${ink.faint}`}>
+                  {quoteExplanation(upgradeQuote.data)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {upgradeNeedsPayment && (
+            <div className="mt-6">
+              <PaymentProviderPicker
+                value={paymentProvider}
+                onChange={setPaymentProvider}
+                disabled={
+                  initPaymentMutation.isPending
+                }
+              />
+            </div>
+          )}
 
           <ModalFooter>
             <button
@@ -2310,20 +2488,18 @@ function StoreManagement() {
               onClick={handleConfirmUpgrade}
               disabled={
                 !selectedPlanId ||
-                !paymentProvider ||
-                updateSubscriptionMutation.isPending ||
+                (upgradeNeedsPayment && !paymentProvider) ||
                 initPaymentMutation.isPending
               }
               className={btnPrimary}
             >
-              {updateSubscriptionMutation.isPending ||
-              initPaymentMutation.isPending ? (
+              {initPaymentMutation.isPending ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
                   جاري...
                 </>
-              ) : paymentProvider ? (
-                `ادفع عبر ${paymentProviderLabel(paymentProvider)}`
+              ) : upgradeNeedsPayment && paymentProvider ? (
+                `ادفع ${quoteDue(upgradeQuote.data)} عبر ${paymentProviderLabel(paymentProvider)}`
               ) : (
                 <>
                   <Rocket size={16} />
@@ -2338,7 +2514,7 @@ function StoreManagement() {
       {/* Cancel/Delete Store Modal */}
       {showCancelModal && (
         <Modal
-          title="إلغاء الاشتراك وحذف المتجر"
+          title="إلغاء الاشتراك"
           tone="danger"
           onClose={() => {
             setShowCancelModal(false);
@@ -2352,14 +2528,26 @@ function StoreManagement() {
                 className="mt-0.5 shrink-0 text-[#b62347] dark:text-[#ff8da3]"
               />
               <div>
+                {/* Four claims used to stand here and three of them were not
+                    true. `PUT /subscription/:id/cancel` sets the status to
+                    CANCELLED and does nothing else: the store is not deleted,
+                    there is no restore path anywhere in the platform, and no job
+                    purges anything after 30 days. A merchant typed their store
+                    name expecting a deletion and got a cancelled subscription
+                    with a live store still serving customers. */}
                 <p className="text-sm font-bold text-[#b62347] dark:text-[#ff8da3]">
-                  تحذير: هذا الإجراء سيؤدي إلى إلغاء الاشتراك وحذف المتجر
+                  تحذير: سيتم إلغاء اشتراك المتجر
                 </p>
                 <ul className={`mt-2 list-inside list-disc space-y-1 text-xs leading-6 ${ink.body}`}>
-                  <li>سيتم إلغاء الاشتراك الحالي</li>
-                  <li>سيتم حذف المتجر (حذف ناعم)</li>
-                  <li>يمكنك استرجاع المتجر خلال 30 يوم</li>
-                  <li>بعد 30 يوم سيتم الحذف النهائي</li>
+                  <li>سيتوقف التجديد ولن تتم محاسبتك مرة أخرى</li>
+                  <li>
+                    يبقى المتجر يعمل حتى{" "}
+                    {subscription?.end_at
+                      ? formatDate(subscription.end_at)
+                      : "نهاية المدة المدفوعة"}
+                  </li>
+                  <li>بعد ذلك ينتهي الاشتراك وتتوقف مزايا باقتك</li>
+                  <li>المتجر وبياناته لا تُحذف — الحذف إجراء منفصل</li>
                 </ul>
               </div>
             </div>
@@ -2385,8 +2573,9 @@ function StoreManagement() {
 
           <div className={`mt-5 rounded-2xl p-4 ${inset}`}>
             <p className={`text-sm leading-6 ${ink.body}`}>
-              <strong className={ink.heading}>ملاحظة:</strong> إذا كنت تريد
-              استرجاع المتجر خلال 30 يوم، يمكنك التواصل مع{" "}
+              <strong className={ink.heading}>ملاحظة:</strong> يمكنك إعادة
+              تفعيل الاشتراك في أي وقت بالدفع من جديد. لحذف المتجر وبياناته
+              نهائياً تواصل مع{" "}
               <a
                 href="mailto:support@mel.iq"
                 className="font-bold text-brand-indigo underline-offset-4 hover:underline dark:text-brand-primary"

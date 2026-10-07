@@ -188,8 +188,8 @@ function PricingSection() {
             className="text-prose-lg max-w-[1181px] text-center"
             style={{ "--reveal-delay": "100ms" } as React.CSSProperties}
           >
-            كل الباقات تشمل تجربة مجانية 14 يوماً بدون بطاقة ائتمانية ابدأ اليوم
-            وغيّر باقتك في أي وقت.
+            كل الباقات تبدأ بشهر مجاني ثم 6 أشهر بنصف السعر — ابدأ اليوم وغيّر
+            باقتك في أي وقت.
           </p>
         </div>
 

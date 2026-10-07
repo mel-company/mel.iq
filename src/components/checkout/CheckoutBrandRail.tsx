@@ -4,10 +4,17 @@ type CheckoutBrandRailProps = {
   stepTitle: string;
 };
 
+/**
+ * The offer, as the catalogue actually defines it: one free month, then six at
+ * half price (`MONTHLY_PROMO` in `plan-catalog.ts`). Eight places across this app
+ * advertised a 14-day trial that does not exist — including the FAQ published as
+ * JSON-LD, so it was indexed — and the half-price ladder, the larger half of the
+ * offer, was advertised nowhere.
+ */
 const TRUST = [
   {
-    title: "تجربة مجانية 14 يوماً",
-    detail: "بدون بطاقة ائتمانية — وألِغ في أي وقت",
+    title: "شهر أول مجاناً",
+    detail: "ثم 6 أشهر بنصف السعر — وألِغ في أي وقت",
   },
   {
     title: "دفع محلي",

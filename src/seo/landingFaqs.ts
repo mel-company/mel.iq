@@ -1,9 +1,17 @@
-/** Shared landing FAQ — used by FaqSection UI and FAQPage JSON-LD. */
+/**
+ * Shared landing FAQ — used by FaqSection UI and FAQPage JSON-LD.
+ *
+ * These answers are published as structured data, so a wrong one is indexed and
+ * quotable. Two were: a 14-day trial that does not exist (the offer is one free
+ * month, then six at half price — `MONTHLY_PROMO` in the server's
+ * `plan-catalog.ts`), and credit cards and bank transfers the platform cannot
+ * take. Only ZainCash and QiCard are implemented.
+ */
 export const LANDING_FAQS = [
   {
-    question: "هل هناك فترة تجريبية مجانية؟",
+    question: "هل هناك عرض للبداية؟",
     answer:
-      "جميع الباقات تشمل فترة تجريبية مجانية لمدة 14 يوماً. لا حاجة لبطاقة ائتمانية للبدء.",
+      "الشهر الأول مجاني، ثم 6 أشهر بنصف السعر، ثم السعر الكامل. العرض مرة واحدة لكل حساب وعلى الفوترة الشهرية.",
   },
   {
     question: "هل يمكنني تغيير الباقة لاحقاً؟",
@@ -13,7 +21,7 @@ export const LANDING_FAQS = [
   {
     question: "ما طرق الدفع المقبولة؟",
     answer:
-      "نقبل الدفع عبر زين كاش والبطاقات الائتمانية الرئيسية، والتحويلات المصرفية للباقات المؤسسية.",
+      "نقبل الدفع عبر زين كاش وكي كارد. تُعرض الطرق المتاحة فعلياً في صفحة الدفع.",
   },
   {
     question: "هل يمكنني الإلغاء في أي وقت؟",
