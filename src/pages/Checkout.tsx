@@ -792,6 +792,52 @@ function Checkout() {
         onSuccess: (data) => {
           const redirectUrl = data?.redirectUrl;
           const paymentId = data?.id;
+
+          /**
+           * A payment can arrive already settled, with no gateway page to go
+           * to, and this step used to call that a failure.
+           *
+           * The intro month is the normal case, not an edge: a first monthly
+           * period resolves to 0 IQD, so the server writes the row `PAID`
+           * without opening a transaction and returns it with no
+           * `redirectUrl`. Every new merchant on monthly billing came through
+           * here, was told «لم يتم استلام رابط الدفع», and stopped — step 5 was
+           * unreachable, so no store was ever created. The summary panel
+           * beside this button has always said «المستحق اليوم 0 د.ع»; it was
+           * the only part of the flow that agreed with the server.
+           *
+           * It also catches the other way a `PAID` row comes back: the buyer
+           * paid, returned in a fresh tab and pressed pay again, so
+           * `resolveOpenAttempts` hands back the attempt the gateway says was
+           * settled. Sending them to a payment page for money they have
+           * already paid is the wrong answer there too.
+           *
+           * `paymentId` is carried into `formData`, not just `paymentCompleted`:
+           * store creation sends it to `assertPaidInitialPayment`, and a paid
+           * plan without one is refused with "paymentId is required".
+           */
+          if (data?.status === "PAID") {
+            setProcessing(false);
+            setPaymentCompleted(true);
+            if (paymentId) {
+              setFormData((prev) => ({ ...prev, paymentId: String(paymentId) }));
+            }
+            /**
+             * Deliberately says nothing about *why* nothing is due. The promo
+             * is one free month and then six at half price, while the panel
+             * above still advertises a 14-day trial and dates the first charge
+             * accordingly — naming a duration here would just add a third
+             * answer. Fix the copy, then make this specific.
+             */
+            toast.success(
+              Number(data?.amount) > 0
+                ? "تم تأكيد الدفع"
+                : "لا حاجة للدفع الآن — تم تأكيد اشتراكك",
+            );
+            setCurrentStep(5);
+            return;
+          }
+
           if (!redirectUrl) {
             setProcessing(false);
             toast.error("لم يتم استلام رابط الدفع");

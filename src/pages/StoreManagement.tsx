@@ -1079,6 +1079,13 @@ function StoreManagement() {
       return;
     }
 
+    // Matches the server's cap, so the refusal is readable here instead of
+    // arriving as a validation error on a number this form asked for.
+    if (duration > 24) {
+      toast.error("أقصى مدة للتجديد 24 شهراً");
+      return;
+    }
+
     const planId = subscription.plan?.id || subscription.planId;
     const isFree =
       subscription.plan?.is_free === true ||
@@ -1106,14 +1113,52 @@ function StoreManagement() {
           storeId,
           provider: paymentProvider,
           durationMonths: duration,
-          billingPeriod: duration >= 12 ? "YEARLY" : "MONTHLY",
+          /**
+           * Only a whole number of years bills yearly.
+           *
+           * This was `duration >= 12`, and the yearly price is flat per
+           * payment — so 13 to 24 months all cost one year, and the box below
+           * this modal's presets lets the merchant type the number. The server
+           * now refuses the combination outright; sending the period that
+           * matches the months is what keeps every duration purchasable, with
+           * 13–23 billed monthly (dearer than a year, which is correct — they
+           * are not buying a year).
+           */
+          billingPeriod: duration % 12 === 0 ? "YEARLY" : "MONTHLY",
           returnBaseUrl: `${window.location.origin}/store/${storeId}/manage`,
         },
         {
           onSuccess: (data) => {
             const redirectUrl = data?.redirectUrl;
             const paymentId = data?.id;
+
+            /**
+             * Already settled, with no gateway page — and on this surface the
+             * term has **already been extended**.
+             *
+             * A renewal priced at 0 IQD (the subscription has not claimed its
+             * intro month) is written `PAID` and fulfilled server-side before
+             * this callback runs. Reporting «تعذر بدء عملية الدفع» told the
+             * merchant their renewal had failed on the one path where it had
+             * definitely succeeded, and left them pressing the button again.
+             */
+            if (data?.status === "PAID") {
+              sessionStorage.removeItem(RENEWAL_RETURN_KEY);
+              toast.success(
+                Number(data?.amount) > 0
+                  ? "تم الدفع بنجاح وتم تجديد الاشتراك"
+                  : "تم تجديد الاشتراك — لا مبلغ مستحق",
+              );
+              setShowRenewModal(false);
+              setSelectedDuration(1);
+              setCustomDuration("");
+              setPaymentProvider(null);
+              void refetchSubscriptions();
+              return;
+            }
+
             if (!redirectUrl) {
+              sessionStorage.removeItem(RENEWAL_RETURN_KEY);
               toast.error("تعذر بدء عملية الدفع");
               return;
             }
@@ -1123,6 +1168,7 @@ function StoreManagement() {
             window.location.href = redirectUrl;
           },
           onError: (error: any) => {
+            sessionStorage.removeItem(RENEWAL_RETURN_KEY);
             toast.error(
               error?.response?.data?.message || "حدث خطأ في بدء الدفع",
             );
@@ -1297,6 +1343,27 @@ function StoreManagement() {
         onSuccess: (data) => {
           const redirectUrl = data?.redirectUrl;
           const paymentId = data?.id;
+
+          /**
+           * Settled with no gateway page, and the plan has already changed:
+           * `fulfill` writes the new `planId` before this returns. Calling that
+           * a failure left the merchant on the old plan as far as they knew,
+           * while the store had moved to the new one.
+           */
+          if (data?.status === "PAID") {
+            sessionStorage.removeItem(CHANGE_PLAN_RETURN_KEY);
+            toast.success(
+              Number(data?.amount) > 0
+                ? "تم الدفع بنجاح وتمت ترقية الخطة"
+                : "تمت ترقية الخطة — لا مبلغ مستحق",
+            );
+            setShowUpgradeModal(false);
+            setSelectedPlanId(null);
+            setPaymentProvider(null);
+            void refetchSubscriptions();
+            return;
+          }
+
           if (!redirectUrl) {
             toast.error("تعذر بدء عملية الدفع");
             sessionStorage.removeItem(CHANGE_PLAN_RETURN_KEY);
@@ -2146,6 +2213,10 @@ function StoreManagement() {
               id="renew-custom-months"
               type="number"
               min="1"
+              // The server's own ceiling (`InitPlatformPaymentDto`). Without it
+              // a merchant could type 36 and get an unreadable validation 400
+              // back from a field that had invited the number.
+              max="24"
               value={customDuration}
               onChange={(e) => {
                 setCustomDuration(e.target.value);
