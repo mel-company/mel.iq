@@ -17,7 +17,92 @@ type PlanCardModel = {
   comingSoon?: boolean;
   /** Where the button goes, when it is not the default for the card. */
   href?: string;
+  /** The undiscounted price, struck through beside `price`. */
+  listPrice?: string;
+  /** One line stating the intro offer, under the price. */
+  offer?: string;
+  ctaLabel?: string;
 };
+
+/** The intro offer as the plans API reports it under `pricing.monthly.intro`. */
+type IntroOffer = {
+  enabled: boolean;
+  freeMonths: number;
+  discountMonths: number;
+  discountPercent: number;
+};
+
+/**
+ * Today's offer, for a plan row that does not carry one (no Basic row yet, or a
+ * server from before the offer moved onto the plan).
+ */
+const DEFAULT_INTRO: IntroOffer = {
+  enabled: true,
+  freeMonths: 1,
+  discountMonths: 6,
+  discountPercent: 50,
+};
+
+const BASIC_MONTHLY = 39_000;
+
+const formatIqd = (amount: number) => amount.toLocaleString("en-IQ");
+
+function monthsLabel(n: number) {
+  if (n === 1) return "شهر";
+  if (n === 2) return "شهرين";
+  if (n <= 10) return `${n} أشهر`;
+  return `${n} شهراً`;
+}
+
+function readIntro(row: any): IntroOffer {
+  const intro = row?.pricing?.monthly?.intro;
+  if (!intro || typeof intro !== "object") return DEFAULT_INTRO;
+  return {
+    enabled: intro.enabled !== false,
+    freeMonths: Number(intro.freeMonths) || 0,
+    discountMonths: Number(intro.discountMonths) || 0,
+    discountPercent: Number(intro.discountPercent ?? 50) || 0,
+  };
+}
+
+/**
+ * Basic's card with the offer applied: the discounted price beside the struck
+ * list price, a line saying how the offer runs, and "start free" when the first
+ * month costs nothing.
+ */
+function withIntroOffer(
+  plan: PlanCardModel,
+  monthly: number,
+  intro: IntroOffer,
+): PlanCardModel {
+  if (!intro.enabled) return plan;
+  const hasFree = intro.freeMonths > 0;
+  const hasDiscount = intro.discountMonths > 0 && intro.discountPercent > 0;
+  const discounted = Math.round((monthly * (100 - intro.discountPercent)) / 100);
+
+  const parts: string[] = [];
+  if (hasFree) {
+    parts.push(
+      intro.freeMonths === 1
+        ? "الشهر الأول مجاناً"
+        : `أول ${monthsLabel(intro.freeMonths)} مجاناً`,
+    );
+  }
+  if (hasDiscount) {
+    parts.push(
+      `خصم ${intro.discountPercent}% لمدة ${monthsLabel(intro.discountMonths)}`,
+    );
+  }
+
+  return {
+    ...plan,
+    ...(hasDiscount
+      ? { price: formatIqd(discounted), listPrice: formatIqd(monthly) }
+      : {}),
+    offer: parts.length ? `${parts.join("، ثم ")}.` : undefined,
+    ctaLabel: hasFree ? "ابدأ مجاناً" : undefined,
+  };
+}
 
 /**
  * Basic, the plan on sale. Stated here rather than read from `GET /plan` so
@@ -36,7 +121,7 @@ const BASIC_PLAN: PlanCardModel = {
     "ربط شركات الشحن",
     "تطبيق التاجر للجوال",
   ],
-  price: (39_000).toLocaleString("en-IQ"),
+  price: formatIqd(BASIC_MONTHLY),
   priceLabel: "/شهرياً",
   featured: true,
 };
@@ -99,7 +184,8 @@ function PlanCard({
   className?: string;
 }) {
   const href = plan.href ?? (plan.contactOnly ? "/contact" : "/checkout");
-  const ctaLabel = plan.contactOnly ? "تواصل معنا" : "ابدأ الآن";
+  const ctaLabel =
+    plan.ctaLabel ?? (plan.contactOnly ? "تواصل معنا" : "ابدأ الآن");
 
   return (
     <div
@@ -151,16 +237,28 @@ function PlanCard({
         {/* Pushed to the card's foot so the prices line up even though the
             blurbs and lists above them run to different heights. */}
         <div className="mt-auto flex flex-col items-end gap-12">
-          <p className="flex items-end gap-1 whitespace-nowrap">
-            <span className="text-4xl font-medium tracking-[-0.03em] text-frost lg:text-5xl lg:leading-[56px]">
-              {plan.price ? `${plan.price} د.ع` : plan.priceLabel}
-            </span>
-            {plan.price && (
-              <span className="text-base leading-6 text-[#73799b]">
-                {plan.priceLabel}
+          <div className="flex flex-col items-end gap-3">
+            {plan.listPrice && (
+              <span className="text-lg leading-6 text-[#73799b] line-through decoration-[#73799b]/70">
+                {plan.listPrice} د.ع
               </span>
             )}
-          </p>
+            <p className="flex items-end gap-1 whitespace-nowrap">
+              <span className="text-4xl font-medium tracking-[-0.03em] text-frost lg:text-5xl lg:leading-[56px]">
+                {plan.price ? `${plan.price} د.ع` : plan.priceLabel}
+              </span>
+              {plan.price && (
+                <span className="text-base leading-6 text-[#73799b]">
+                  {plan.priceLabel}
+                </span>
+              )}
+            </p>
+            {plan.offer && (
+              <p className="text-right text-sm leading-6 text-[#9c96e3]">
+                {plan.offer}
+              </p>
+            )}
+          </div>
 
           {plan.comingSoon ? (
             // Nothing to buy yet. The spacer keeps its price level with the
@@ -212,12 +310,27 @@ function PricingSection() {
       )
     : undefined;
 
-  const basic: PlanCardModel = basicRow
-    ? {
-        ...BASIC_PLAN,
-        href: `/checkout?planId=${encodeURIComponent(String(basicRow.id))}`,
-      }
-    : BASIC_PLAN;
+  const intro = basicRow ? readIntro(basicRow) : DEFAULT_INTRO;
+  // The row's price when there is one, so a price edited in the owner
+  // dashboard reaches the card too.
+  const monthly =
+    Number(basicRow?.monthly_price) > 0
+      ? Number(basicRow.monthly_price)
+      : BASIC_MONTHLY;
+  const basic: PlanCardModel = withIntroOffer(
+    {
+      ...BASIC_PLAN,
+      price: formatIqd(monthly),
+      ...(basicRow
+        ? {
+            href: `/checkout?planId=${encodeURIComponent(String(basicRow.id))}`,
+          }
+        : {}),
+    },
+    monthly,
+    intro,
+  );
+  const introLine = basic.offer;
   const [professional, enterprise] = UPCOMING_PLANS;
   // Stacked on phones, Basic, the plan on sale, comes first. On desktop it
   // takes the raised centre column, with Enterprise to its right (the first
@@ -248,8 +361,10 @@ function PricingSection() {
             className="text-prose-lg max-w-[1181px] text-center"
             style={{ "--reveal-delay": "100ms" } as React.CSSProperties}
           >
-            ابدأ بالباقة الأساسية: شهر مجاني ثم 6 أشهر بنصف السعر. الباقة
-            الاحترافية قادمة قريباً، وللمؤسسات تواصل معنا.
+            {introLine
+              ? `ابدأ بالباقة الأساسية: ${introLine.replace(/\.$/, "")}. `
+              : "ابدأ بالباقة الأساسية. "}
+            الباقة الاحترافية قادمة قريباً، وللمؤسسات تواصل معنا.
           </p>
         </div>
 
