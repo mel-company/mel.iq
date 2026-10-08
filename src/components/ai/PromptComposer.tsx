@@ -45,7 +45,10 @@ import SuccessModal from "./SuccessModal";
 import CreditsBadge from "./CreditsBadge";
 import BuyCreditsModal from "./BuyCreditsModal";
 import { PlanUpgradeGate } from "@/components/PlanUpgradeGate";
-import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
+import {
+  BASIC_PLAN_NAME,
+  parsePlanUpgradeRequired,
+} from "@/utils/planUpgrade";
 
 /**
  * The landing page's primary call to action: describe a store, get one.
@@ -1467,7 +1470,7 @@ export default function PromptComposer() {
           <PlanUpgradeGate
             feature="ai_editor"
             requiredPlanName={
-              credits.editor.requiredPlanName || "MEL PLUS"
+              credits.editor.requiredPlanName || BASIC_PLAN_NAME
             }
             manageHref="/dashboard"
           />

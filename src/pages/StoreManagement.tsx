@@ -40,7 +40,11 @@ import type {
   PlanFeatureKey,
 } from "@/api/endpoints/plan.endpoint";
 import { PlanUpgradeGate } from "@/components/PlanUpgradeGate";
-import { featureLabel, isFeatureLocked } from "@/utils/planUpgrade";
+import {
+  BASIC_PLAN_NAME,
+  featureLabel,
+  isFeatureLocked,
+} from "@/utils/planUpgrade";
 import {
   AlertCircle,
   ArrowRightIcon,
@@ -211,7 +215,7 @@ const isBasicPlan = (planName?: string): boolean => {
   if (!planName) return false;
   const plan = planName.toLowerCase();
   return (
-    plan.includes("أولى") || plan.includes("first") || plan.includes("basic")
+    plan.includes("أولى") || plan.includes("first")
   );
 };
 
@@ -730,7 +734,7 @@ const SubscriptionPanel = ({
             <PlanUpgradeGate
               key={feature}
               feature={feature}
-              requiredPlanName={upgradePlanName || "MEL PLUS"}
+              requiredPlanName={upgradePlanName || BASIC_PLAN_NAME}
               message={`${featureLabel(feature)} غير مشمول في خطتك الحالية.`}
               onUpgradeClick={onUpgrade}
               className="border-black/8 dark:border-white/10 [&_.text-frost]:text-[#0b1020] dark:[&_.text-frost]:text-frost [&_.text-muted]:text-[#5b6178] dark:[&_.text-muted]:text-muted [&_.text-dim]:text-[#8a90a8] dark:[&_.text-dim]:text-dim"
@@ -2151,7 +2155,7 @@ function StoreManagement() {
                   isPlanBasic={isPlanBasic}
                   lockedFeatures={entitlements?.locked}
                   upgradePlanName={
-                    entitlements?.upgradeTo?.planName || "MEL PLUS"
+                    entitlements?.upgradeTo?.planName || BASIC_PLAN_NAME
                   }
                   onRenew={handleRenew}
                   onPause={handlePause}
@@ -2380,7 +2384,7 @@ function StoreManagement() {
           }}
         >
           <p className={`text-sm ${ink.body}`}>
-            اختر الخطة التي تريد الترقية إليها. الترقية إلى MEL PLUS تُفعَّل بعد
+            اختر الخطة التي تريد الترقية إليها. الترقية إلى باقة {BASIC_PLAN_NAME} تُفعَّل بعد
             إتمام الدفع.
           </p>
 

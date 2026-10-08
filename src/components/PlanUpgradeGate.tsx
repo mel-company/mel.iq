@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Rocket } from "./icons";
 import {
+  BASIC_PLAN_NAME,
   featureLabel,
   type PlanUpgradeRequiredError,
 } from "@/utils/planUpgrade";
@@ -18,12 +19,12 @@ type PlanUpgradeGateProps = {
 };
 
 /**
- * Shown instead of a PLUS-only surface when `/plan/entitlements` lists the
+ * Shown instead of a Basic-only surface when `/plan/entitlements` lists the
  * feature in `locked`, or after a `PLAN_UPGRADE_REQUIRED` 403.
  */
 export function PlanUpgradeGate({
   feature,
-  requiredPlanName = "MEL PLUS",
+  requiredPlanName = BASIC_PLAN_NAME,
   message,
   manageHref,
   onUpgradeClick,
@@ -32,7 +33,7 @@ export function PlanUpgradeGate({
   const title = featureLabel(feature);
   const body =
     message ||
-    `${title} متاح في ${requiredPlanName} فقط. رقِّ خطتك لفتح هذه الميزة.`;
+    `${title} متاح في باقة ${requiredPlanName} فقط. رقِّ خطتك لفتح هذه الميزة.`;
 
   return (
     <div
@@ -83,7 +84,7 @@ export function upgradeGateFromError(
   return {
     feature: error.feature || error.upgrade?.reason || "ai_editor",
     requiredPlanName:
-      error.requiredPlanName || error.upgrade?.planName || "MEL PLUS",
+      error.requiredPlanName || error.upgrade?.planName || BASIC_PLAN_NAME,
     message: error.message,
   };
 }
