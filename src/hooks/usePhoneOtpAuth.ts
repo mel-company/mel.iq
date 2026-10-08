@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { authAPI } from "@/api/endpoints/auth.endpoints";
 import { useAuth } from "@/contexts/AuthContext";
-import { extractDevOtp, getApiErrorMessage, showDevOtpToast } from "@/utils/otp";
+import { getApiErrorMessage } from "@/utils/otp";
 import { iqPhoneError, toIqE164 } from "@/utils/phone";
 
 /**
@@ -30,13 +30,11 @@ export function usePhoneOtpAuth() {
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [devOtp, setDevOtp] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setStep("phone");
     setError("");
     setBusy(false);
-    setDevOtp(null);
   }, []);
 
   /**
@@ -56,11 +54,8 @@ export function usePhoneOtpAuth() {
 
       setBusy(true);
       try {
-        const data = await authAPI.login({ phone: e164 });
+        await authAPI.login({ phone: e164 });
         setPhone(e164);
-        const code = extractDevOtp(data);
-        setDevOtp(code);
-        showDevOtpToast(code);
         setStep("otp");
         return "sent";
       } catch (e) {
@@ -98,14 +93,11 @@ export function usePhoneOtpAuth() {
 
       setBusy(true);
       try {
-        const data = await authAPI.register({
+        await authAPI.register({
           phone,
           name: params.name.trim(),
           email: params.email.trim(),
         });
-        const code = extractDevOtp(data);
-        setDevOtp(code);
-        showDevOtpToast(code);
         setStep("otp");
       } catch (e) {
         setError(getApiErrorMessage(e, "تعذر إنشاء الحساب. حاول مرة أخرى."));
@@ -151,10 +143,7 @@ export function usePhoneOtpAuth() {
     setBusy(true);
     setError("");
     try {
-      const data = await authAPI.login({ phone });
-      const code = extractDevOtp(data);
-      setDevOtp(code);
-      showDevOtpToast(code);
+      await authAPI.login({ phone });
     } catch (e) {
       setError(getApiErrorMessage(e, "تعذر إعادة إرسال الرمز."));
     } finally {
@@ -167,7 +156,6 @@ export function usePhoneOtpAuth() {
     phone,
     error,
     busy,
-    devOtp,
     setStep,
     setError,
     requestCode,

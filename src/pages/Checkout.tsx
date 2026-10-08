@@ -710,7 +710,7 @@ function Checkout() {
             email: formData.email,
           },
           {
-            onSuccess: (data: { message?: string; codeOnlyOnDev?: number }) => {
+            onSuccess: (data: { message?: string }) => {
               if (data?.message) toast.success(data.message);
               proceedToOtpStep(phoneE164, data);
             },
