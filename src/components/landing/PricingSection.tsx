@@ -37,7 +37,7 @@ const BASIC_PLAN: PlanCardModel = {
     "تطبيق التاجر للجوال",
   ],
   price: (39_000).toLocaleString("en-IQ"),
-  priceLabel: "د.ع /شهرياً",
+  priceLabel: "/شهرياً",
   featured: true,
 };
 
@@ -92,9 +92,11 @@ function FeatureMarker() {
 function PlanCard({
   plan,
   delay = 0,
+  className = "",
 }: {
   plan: PlanCardModel;
   delay?: number;
+  className?: string;
 }) {
   const href = plan.href ?? (plan.contactOnly ? "/contact" : "/checkout");
   const ctaLabel = plan.contactOnly ? "تواصل معنا" : "ابدأ الآن";
@@ -103,17 +105,20 @@ function PlanCard({
     <div
       data-reveal
       style={{ "--reveal-delay": `${delay}ms` } as React.CSSProperties}
-      className={
+      className={`${className} ${
         plan.featured
-          ? // A gradient 1px frame: the wash is the element's own background
-            // and the near-black ground is inset a pixel over it.
-            "card-hover relative rounded-3xl bg-gradient-to-b from-[#463bbf] via-[#9c96e3] to-[#463bbf] p-px lg:-mt-6"
-          : "card-hover relative rounded-3xl border border-hairline hover:border-brand-secondary/30"
-      }
+          ? // A thick gradient frame: the wash is the element's own background
+            // and the near-black ground is inset over it. Taller than its
+            // neighbours, which sit level with its foot.
+            "card-hover relative flex flex-col rounded-3xl bg-gradient-to-b from-[#463bbf] via-[#9c96e3] to-[#463bbf] p-1 lg:min-h-[810px]"
+          : // The side cards' 1px frame runs dark at the edges and lilac at
+            // the middle.
+            "card-hover relative flex flex-col rounded-3xl bg-gradient-to-r from-[#1b1841] via-[#a68cf0] to-[#1b1841] p-px lg:min-h-[713px]"
+      }`}
     >
       <div
-        className={`flex h-full flex-col gap-12 rounded-3xl px-8 pb-10 pt-8 ${
-          plan.featured ? "bg-[#06051e]" : "bg-ink-panel"
+        className={`flex flex-1 flex-col gap-12 rounded-[20px] bg-[#06051e] px-8 pt-8 ${
+          plan.featured ? "pb-10" : "pb-8"
         }`}
       >
         <div className="flex flex-col gap-6 text-right">
@@ -123,7 +128,11 @@ function PlanCard({
           {plan.blurb ? (
             <p className="text-sm leading-7 text-[#cac9d1]">{plan.blurb}</p>
           ) : null}
-          <div className="h-px w-full bg-gradient-to-l from-[#0c0f26] via-[#3f48d9] to-[#0c0f26]" />
+          <div
+            className={`h-px w-full bg-gradient-to-l from-[#0c0f26] to-[#0c0f26] ${
+              plan.featured ? "via-[#3f48d9]" : "via-[#9262ad]"
+            }`}
+          />
         </div>
 
         {plan.features.length > 0 && (
@@ -139,15 +148,15 @@ function PlanCard({
           </ul>
         )}
 
-        {/* Pushed to the card's foot so the three prices line up even though
-            the blurbs above them wrap to different heights. */}
+        {/* Pushed to the card's foot so the prices line up even though the
+            blurbs and lists above them run to different heights. */}
         <div className="mt-auto flex flex-col items-end gap-12">
-          <p className="flex items-end gap-1">
-            <span className="text-4xl font-medium tracking-tight text-frost lg:text-5xl">
-              {plan.price ?? plan.priceLabel}
+          <p className="flex items-end gap-1 whitespace-nowrap">
+            <span className="text-4xl font-medium tracking-[-0.03em] text-frost lg:text-5xl lg:leading-[56px]">
+              {plan.price ? `${plan.price} د.ع` : plan.priceLabel}
             </span>
             {plan.price && (
-              <span className="text-base text-[#73799b]">
+              <span className="text-base leading-6 text-[#73799b]">
                 {plan.priceLabel}
               </span>
             )}
@@ -156,25 +165,25 @@ function PlanCard({
           {plan.comingSoon ? (
             // Nothing to buy yet. The spacer keeps its price level with the
             // cards beside it, whose buttons sit where this one would.
-            <span aria-hidden className="hidden h-[46px] lg:block" />
+            <span aria-hidden className="hidden h-[44px] lg:block" />
           ) : (
             <Link
               to={href}
               className={
                 plan.featured
-                  ? "relative inline-flex items-center gap-3 rounded-full bg-gradient-to-b from-[#343754]/60 via-[#aab1ec]/60 to-[#343754]/60 p-px shadow-[0_0_16px_rgba(52,92,232,0.6)] transition-shadow hover:shadow-[0_0_24px_rgba(52,92,232,0.85)]"
-                  : "relative inline-flex items-center gap-3 rounded-full bg-gradient-to-b from-[#4d4d4d]/25 via-white/25 to-transparent p-px transition-opacity hover:opacity-90"
+                  ? "relative inline-flex items-center rounded-full bg-gradient-to-b from-[#343754]/60 via-[#aab1ec]/60 to-[#343754]/60 p-px shadow-[0_0_16px_rgba(52,92,232,0.6)] transition-shadow hover:shadow-[0_0_24px_rgba(52,92,232,0.85)]"
+                  : "relative inline-flex items-center rounded-full bg-gradient-to-b from-[#4d4d4d] via-white to-transparent p-px shadow-[0_0_16px_rgba(57,115,233,0.25)] transition-opacity hover:opacity-90"
               }
             >
               <span
-                className={`flex items-center gap-3 rounded-full px-7 py-2.5 text-base text-frost ${
+                className={`flex items-center gap-[13px] rounded-full px-7 py-2.5 text-base leading-6 text-frost ${
                   plan.featured
-                    ? "bg-gradient-to-l from-brand-violet to-brand-indigo"
+                    ? "bg-gradient-to-l from-[#4f60f9] to-[#7569ff]"
                     : "bg-[#00031c]"
                 }`}
               >
                 {ctaLabel}
-                <ArrowUpLeft size={16} />
+                <ArrowUpLeft size={13} />
               </span>
             </Link>
           )}
@@ -203,14 +212,20 @@ function PricingSection() {
       )
     : undefined;
 
-  const ordered: PlanCardModel[] = [
-    basicRow
-      ? {
-          ...BASIC_PLAN,
-          href: `/checkout?planId=${encodeURIComponent(String(basicRow.id))}`,
-        }
-      : BASIC_PLAN,
-    ...UPCOMING_PLANS,
+  const basic: PlanCardModel = basicRow
+    ? {
+        ...BASIC_PLAN,
+        href: `/checkout?planId=${encodeURIComponent(String(basicRow.id))}`,
+      }
+    : BASIC_PLAN;
+  const [professional, enterprise] = UPCOMING_PLANS;
+  // Stacked on phones, Basic, the plan on sale, comes first. On desktop it
+  // takes the raised centre column, with Enterprise to its right (the first
+  // column in RTL) and Professional to its left.
+  const ordered: { plan: PlanCardModel; column: string }[] = [
+    { plan: basic, column: "lg:col-start-2" },
+    { plan: enterprise, column: "lg:col-start-1" },
+    { plan: professional, column: "lg:col-start-3" },
   ];
 
   return (
@@ -238,9 +253,14 @@ function PricingSection() {
           </p>
         </div>
 
-        <div className="grid w-full max-w-[1240px] items-stretch gap-6 lg:grid-cols-3">
-          {ordered.map((plan, i) => (
-            <PlanCard key={plan.id} plan={plan} delay={i * 120} />
+        <div className="grid w-full max-w-[1240px] gap-6 lg:grid-cols-3 lg:items-end lg:gap-3">
+          {ordered.map(({ plan, column }, i) => (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              delay={i * 120}
+              className={`${column} lg:row-start-1`}
+            />
           ))}
         </div>
       </div>
