@@ -15,6 +15,30 @@ type PlanCardModel = {
   contactOnly?: boolean;
   /** Announced, not on sale: no price and no way to buy it yet. */
   comingSoon?: boolean;
+  /** Where the button goes, when it is not the default for the card. */
+  href?: string;
+};
+
+/**
+ * Basic, the plan on sale. Stated here rather than read from `GET /plan` so
+ * the section always shows its three tiers, whatever plan rows a database
+ * holds; the API only supplies the id checkout should preselect.
+ */
+const BASIC_PLAN: PlanCardModel = {
+  id: "basic",
+  name: "أساسي",
+  blurb: "كل ما تحتاجه لتبدأ البيع: المحرر والذكاء الاصطناعي والشحن.",
+  features: [
+    "محرر المتجر",
+    "رصيد الذكاء الاصطناعي",
+    "منتجات غير محدودة",
+    "طلبات غير محدودة",
+    "ربط شركات الشحن",
+    "تطبيق التاجر للجوال",
+  ],
+  price: (39_000).toLocaleString("en-IQ"),
+  priceLabel: "د.ع /شهرياً",
+  featured: true,
 };
 
 /**
@@ -53,35 +77,6 @@ const UPCOMING_PLANS: PlanCardModel[] = [
   },
 ];
 
-function planFeatures(plan: any): string[] {
-  return (plan?.features || [])
-    .map((row: any) => row?.feature ?? row)
-    .filter((f: any) => f && f.enabled !== false)
-    .map((f: any) => String(f.name || "").trim())
-    .filter(Boolean);
-}
-
-function toCardModel(plan: any): PlanCardModel {
-  const monthly = Number(plan.monthly_price);
-  const hasPrice = Number.isFinite(monthly) && monthly > 0;
-  const contactOnly =
-    plan.contact_sales === true ||
-    String(plan.code || plan.name || "")
-      .toUpperCase()
-      .includes("ENTERPRISE");
-
-  return {
-    id: String(plan.id),
-    name: String(plan.name || plan.code || "خطة"),
-    blurb: String(plan.description || ""),
-    features: planFeatures(plan),
-    price: hasPrice && !contactOnly ? monthly.toLocaleString("en-IQ") : null,
-    priceLabel: contactOnly ? "اتصل بنا" : hasPrice ? "د.ع /شهرياً" : "مجاناً",
-    featured: Boolean(plan.most_popular),
-    contactOnly,
-  };
-}
-
 /** The bullet marker: a dark plate with a small brand dot centred on it. */
 function FeatureMarker() {
   return (
@@ -101,9 +96,7 @@ function PlanCard({
   plan: PlanCardModel;
   delay?: number;
 }) {
-  const href = plan.contactOnly
-    ? "/contact"
-    : `/checkout?planId=${encodeURIComponent(plan.id)}`;
+  const href = plan.href ?? (plan.contactOnly ? "/contact" : "/checkout");
   const ctaLabel = plan.contactOnly ? "تواصل معنا" : "ابدأ الآن";
 
   return (
@@ -191,46 +184,34 @@ function PlanCard({
   );
 }
 
-function PricingSkeleton() {
-  return (
-    <div className="grid w-full max-w-[1240px] items-stretch gap-6 lg:grid-cols-3">
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className="h-[420px] animate-pulse rounded-3xl border border-hairline bg-ink-panel/60"
-        />
-      ))}
-    </div>
-  );
-}
-
 /**
- * Landing pricing. The plans on sale (Basic) come live from `GET /plan`, so the
- * price and features stay in sync with Checkout; the announced tiers after it
- * follow from `UPCOMING_PLANS`.
+ * Landing pricing: Basic, then the announced Professional and Enterprise
+ * tiers. All three are always shown. `GET /plan` is read only for Basic's id
+ * (code PLUS), so its button opens checkout with the plan preselected.
  */
 function PricingSection() {
-  const { data, isLoading, isError, refetch, isFetching } = useFetchAllPlans();
+  const { data } = useFetchAllPlans();
 
-  const cards: PlanCardModel[] = (() => {
-    const raw = Array.isArray(data)
-      ? data
-      : (data as any)?.data || (data as any)?.plans || [];
-    if (!Array.isArray(raw)) return [];
-    return (
-      raw
-        .filter((plan: any) => plan && plan.enabled !== false)
-        // Basic is the one plan on sale (its code is still PLUS). Anything else
-        // the API lists — a retired tier, an operator-made row — is not shown,
-        // or the page grows past the three tiers it is designed around.
-        .filter((plan: any) => String(plan.code || "").toUpperCase() === "PLUS")
-        .slice(0, 1)
-        .map(toCardModel)
-    );
-  })();
+  const raw = Array.isArray(data)
+    ? data
+    : (data as any)?.data || (data as any)?.plans || [];
+  const basicRow = Array.isArray(raw)
+    ? raw.find(
+        (plan: any) =>
+          plan?.enabled !== false &&
+          String(plan?.code || "").toUpperCase() === "PLUS",
+      )
+    : undefined;
 
-  // Basic first (rightmost under RTL), then the announced tiers.
-  const ordered = cards.length > 0 ? [...cards, ...UPCOMING_PLANS] : [];
+  const ordered: PlanCardModel[] = [
+    basicRow
+      ? {
+          ...BASIC_PLAN,
+          href: `/checkout?planId=${encodeURIComponent(String(basicRow.id))}`,
+        }
+      : BASIC_PLAN,
+    ...UPCOMING_PLANS,
+  ];
 
   return (
     <section
@@ -257,33 +238,11 @@ function PricingSection() {
           </p>
         </div>
 
-        {isLoading ? (
-          <PricingSkeleton />
-        ) : isError || ordered.length === 0 ? (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <p className="text-sm text-muted">
-              {isError ? "تعذر تحميل الباقات." : "لا توجد باقات متاحة حالياً."}
-            </p>
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className="rounded-full border border-white/15 px-5 py-2 text-sm text-frost hover:bg-white/5 disabled:opacity-40"
-            >
-              {isFetching ? "جاري..." : "إعادة المحاولة"}
-            </button>
-          </div>
-        ) : (
-          <div
-            className={`grid w-full max-w-[1240px] items-stretch gap-6 ${
-              ordered.length >= 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"
-            }`}
-          >
-            {ordered.map((plan, i) => (
-              <PlanCard key={plan.id} plan={plan} delay={i * 120} />
-            ))}
-          </div>
-        )}
+        <div className="grid w-full max-w-[1240px] items-stretch gap-6 lg:grid-cols-3">
+          {ordered.map((plan, i) => (
+            <PlanCard key={plan.id} plan={plan} delay={i * 120} />
+          ))}
+        </div>
       </div>
     </section>
   );
