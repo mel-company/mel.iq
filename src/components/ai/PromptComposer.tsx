@@ -44,11 +44,7 @@ import type {
 import SuccessModal from "./SuccessModal";
 import CreditsBadge from "./CreditsBadge";
 import BuyCreditsModal from "./BuyCreditsModal";
-import { PlanUpgradeGate } from "@/components/PlanUpgradeGate";
-import {
-  BASIC_PLAN_NAME,
-  parsePlanUpgradeRequired,
-} from "@/utils/planUpgrade";
+import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
 
 /**
  * The landing page's primary call to action: describe a store, get one.
@@ -1465,17 +1461,6 @@ export default function PromptComposer() {
 
   return (
     <div className="w-full">
-      {credits?.editor?.upgradeRequired && (
-        <div className="mx-auto mb-4 w-full max-w-[791px]">
-          <PlanUpgradeGate
-            feature="ai_editor"
-            requiredPlanName={
-              credits.editor.requiredPlanName || BASIC_PLAN_NAME
-            }
-            manageHref="/dashboard"
-          />
-        </div>
-      )}
       <div className="mx-auto w-full max-w-[791px] rounded-[32px] border border-white/5 p-3 backdrop-blur-[50px] transition-colors focus-within:border-brand-primary/25">
         <div className="flex flex-col gap-3 rounded-3xl p-3 text-right">
           <textarea
