@@ -217,16 +217,20 @@ function PricingSection() {
       ? data
       : (data as any)?.data || (data as any)?.plans || [];
     if (!Array.isArray(raw)) return [];
-    return raw
-      .filter((plan: any) => plan && plan.enabled !== false)
-      .map(toCardModel);
+    return (
+      raw
+        .filter((plan: any) => plan && plan.enabled !== false)
+        // Basic is the one plan on sale (its code is still PLUS). Anything else
+        // the API lists — a retired tier, an operator-made row — is not shown,
+        // or the page grows past the three tiers it is designed around.
+        .filter((plan: any) => String(plan.code || "").toUpperCase() === "PLUS")
+        .slice(0, 1)
+        .map(toCardModel)
+    );
   })();
 
-  // Featured first (rightmost under RTL), then the announced tiers.
-  const onSale = [...cards].sort(
-    (a, b) => Number(b.featured) - Number(a.featured),
-  );
-  const ordered = onSale.length > 0 ? [...onSale, ...UPCOMING_PLANS] : [];
+  // Basic first (rightmost under RTL), then the announced tiers.
+  const ordered = cards.length > 0 ? [...cards, ...UPCOMING_PLANS] : [];
 
   return (
     <section
