@@ -68,10 +68,6 @@ export default function AuthModal({
   }, [open]);
 
   useEffect(() => {
-    if (auth.devOtp) setCode(auth.devOtp);
-  }, [auth.devOtp]);
-
-  useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     if (open) document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);

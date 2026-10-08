@@ -330,6 +330,12 @@ function Checkout() {
   const dueNow = quote === undefined ? Infinity : quote.amount;
   const promoExplanation = quoteExplanation(quote);
   const firstChargeDate = quoteNextCharge(quote);
+  /**
+   * Nothing to collect at signup: a free plan, or the intro month covers the
+   * first period. The server grants that month itself when the store is created
+   * without a `paymentId`, so no payment step and no card.
+   */
+  const noPaymentNeeded = isPlanFree || dueNow === 0;
 
   const goToTemplates = (nav: {
     websiteType: string;
@@ -373,17 +379,15 @@ function Checkout() {
       }
     }
 
-    if (location.state?.skipToStep === 3) {
-      const defaultPlan = plansData.find(
-        (plan: any) =>
-          // Basic, the plan on sale; its code is still PLUS.
-          String(plan.code || "").toUpperCase() === "PLUS",
-      );
-      if (defaultPlan) {
-        setFormData((prev) => ({ ...prev, plan: defaultPlan }));
-      }
+    // Basic, the plan on sale (its code is still PLUS), whichever way the
+    // merchant arrived: signup, the dashboard, or a link without a plan.
+    const defaultPlan = plansData.find(
+      (plan: any) => String(plan.code || "").toUpperCase() === "PLUS",
+    );
+    if (defaultPlan) {
+      setFormData((prev) => ({ ...prev, plan: defaultPlan }));
     }
-  }, [plansData, location.state?.skipToStep, searchParams, formData.plan]);
+  }, [plansData, searchParams, formData.plan]);
 
   // If user is logged in and on step 2, send OTP automatically
   useEffect(() => {
@@ -412,13 +416,55 @@ function Checkout() {
     }
   }, [user, currentStep, otpSent, sendOtpMutation, formData.phone]);
 
-  const steps = [
+  /**
+   * Arriving from the OTP step (or straight into step 3 from the dashboard)
+   * goes past the plan and payment steps on its own once the quote says
+   * nothing is due. Only that arrival, so "back" from a later step can still
+   * show the plan.
+   */
+  const [autoAdvance, setAutoAdvance] = useState(
+    location.state?.skipToStep === 3,
+  );
+  useEffect(() => {
+    if (!autoAdvance || currentStep !== 3) return;
+    if (!formData.plan?.id || !user) return;
+    if (!isPlanFree && quote === undefined) return;
+    setAutoAdvance(false);
+    if (noPaymentNeeded) {
+      setPaymentCompleted(true);
+      setCurrentStep(5);
+    } else {
+      setCurrentStep(4);
+    }
+  }, [
+    autoAdvance,
+    currentStep,
+    formData.plan,
+    user,
+    isPlanFree,
+    quote,
+    noPaymentNeeded,
+  ]);
+
+  /** Basic is picked for the merchant, so the plan step is not one of theirs. */
+  const planPicked = Boolean(formData.plan?.id);
+  const allSteps = [
     { number: 1, title: "المعلومات" },
     { number: 2, title: "التحقق" },
     { number: 3, title: "اختيار الخطة" },
     { number: 4, title: "الدفع" },
     { number: 5, title: "تخصيص المتجر" },
   ];
+  const steps = allSteps.filter(
+    (step) =>
+      (step.number !== 3 || !planPicked || currentStep === 3) &&
+      (step.number !== 4 || !noPaymentNeeded || currentStep === 4),
+  );
+  /** Position among the steps shown, for "الخطوة n من m". */
+  const stepPosition = Math.max(
+    1,
+    steps.filter((step) => step.number <= currentStep).length,
+  );
 
   const activeStepTitle =
     steps.find((s) => s.number === currentStep)?.title ?? steps[0].title;
@@ -664,7 +710,7 @@ function Checkout() {
             email: formData.email,
           },
           {
-            onSuccess: (data: { message?: string; codeOnlyOnDev?: number }) => {
+            onSuccess: (data: { message?: string }) => {
               if (data?.message) toast.success(data.message);
               proceedToOtpStep(phoneE164, data);
             },
@@ -738,6 +784,7 @@ function Checkout() {
               domain: formData.domain,
             });
             toast.success("تم التحقق بنجاح");
+            setAutoAdvance(true);
             setCurrentStep(3);
           },
           onError: (error) => {
@@ -943,7 +990,7 @@ function Checkout() {
 
     const isFree =
       formData.plan?.is_free || Number(formData.plan?.monthly_price) === 0;
-    if (!isFree && !formData.paymentId && !paymentCompleted) {
+    if (!isFree && !formData.paymentId && !paymentCompleted && dueNow !== 0) {
       toast.error("يجب إكمال الدفع قبل إنشاء المتجر");
       setCurrentStep(4);
       return;
@@ -1096,7 +1143,7 @@ function Checkout() {
       {/* Brand rail first → right under RTL; plans/form fill the left. */}
       <div className="flex w-full flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
         <CheckoutBrandRail
-          currentStep={currentStep}
+          currentStep={stepPosition}
           totalSteps={steps.length}
           stepTitle={activeStepTitle}
         />
@@ -1452,7 +1499,15 @@ function Checkout() {
           )}
 
           {/* Step 3: Plan Selection — open layout like the Mel mockup */}
-          {currentStep === 3 && (
+          {currentStep === 3 && autoAdvance && planPicked && (
+            // Basic is already picked; this shows only while the quote decides
+            // whether anything is due before the store step.
+            <p className="py-16 text-center text-sm text-[#9aa1bd]">
+              جاري تجهيز باقتك الأساسية…
+            </p>
+          )}
+
+          {currentStep === 3 && !(autoAdvance && planPicked) && (
             <div className="flex flex-col gap-8">
               <div className="flex flex-col gap-2">
                 <h2 className="text-[32px] font-extrabold leading-tight text-white sm:text-[36px]">
@@ -1931,7 +1986,7 @@ function Checkout() {
                 <StepFooter
                   submitLabel="متابعة"
                   disabled={!domainChecked || domainAvailable === false}
-                  onBack={() => setCurrentStep(isPlanFree ? 3 : 4)}
+                  onBack={() => setCurrentStep(noPaymentNeeded ? 3 : 4)}
                 />
               </form>
             </div>
