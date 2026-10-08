@@ -11,13 +11,19 @@ function CheckoutStepper({
   currentStep: number;
 }) {
   const active = steps.find((s) => s.number === currentStep);
+  // Steps can be skipped (no plan or payment step at signup), so the count is
+  // a position among the steps shown, not the step's number.
+  const position = Math.max(
+    1,
+    steps.filter((s) => s.number <= currentStep).length,
+  );
 
   return (
     <div className="w-full lg:hidden">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-base font-bold text-white">{active?.title}</h2>
         <p className="shrink-0 text-[13px] font-medium text-[#7b8cff]">
-          الخطوة {currentStep} من {steps.length}
+          الخطوة {position} من {steps.length}
         </p>
       </div>
       <div className="flex items-center gap-1.5" aria-hidden>
