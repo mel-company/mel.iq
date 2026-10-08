@@ -17,6 +17,12 @@ export type PlanUpgradeRequiredError = {
   };
 };
 
+/**
+ * The plan upgrades lead to, for when the server has not named it. Its code is
+ * still `PLUS`; only the name changed.
+ */
+export const BASIC_PLAN_NAME = "أساسي";
+
 const FEATURE_LABELS: Record<string, string> = {
   ai_editor: "محرر الذكاء الاصطناعي",
   team_users: "إضافة موظفين",

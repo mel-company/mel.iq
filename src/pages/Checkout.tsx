@@ -376,8 +376,8 @@ function Checkout() {
     if (location.state?.skipToStep === 3) {
       const defaultPlan = plansData.find(
         (plan: any) =>
-          String(plan.code || plan.name || "").toUpperCase() === "GO" ||
-          plan.name === "Go",
+          // Basic, the plan on sale; its code is still PLUS.
+          String(plan.code || "").toUpperCase() === "PLUS",
       );
       if (defaultPlan) {
         setFormData((prev) => ({ ...prev, plan: defaultPlan }));

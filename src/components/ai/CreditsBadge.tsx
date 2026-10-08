@@ -4,6 +4,7 @@ import { Rocket, Sparkles } from "@/components/icons";
 import { useCredits } from "@/api/wrappers/aiStoreGenerator.wrappers";
 import { useAuth } from "@/contexts/AuthContext";
 import BuyCreditsModal from "./BuyCreditsModal";
+import { BASIC_PLAN_NAME } from "@/utils/planUpgrade";
 
 /** Remaining AI credits. Renders nothing when signed out. */
 export default function CreditsBadge() {
@@ -21,7 +22,7 @@ export default function CreditsBadge() {
   const out = !unlimited && generations <= 0 && editor <= 0 && purchased <= 0;
 
   if (upgradeRequired) {
-    const planName = data.editor?.requiredPlanName || "MEL PLUS";
+    const planName = data.editor?.requiredPlanName || BASIC_PLAN_NAME;
     return (
       <Link
         to="/dashboard"

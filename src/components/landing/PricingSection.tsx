@@ -13,7 +13,45 @@ type PlanCardModel = {
   priceLabel: string;
   featured?: boolean;
   contactOnly?: boolean;
+  /** Announced, not on sale: no price and no way to buy it yet. */
+  comingSoon?: boolean;
 };
+
+/**
+ * The tiers after Basic. They have no plan rows — there is nothing to charge
+ * for yet — so they are described here rather than fetched.
+ */
+const UPCOMING_PLANS: PlanCardModel[] = [
+  {
+    id: "professional",
+    name: "احترافي",
+    blurb: "للمتاجر المتنامية التي تحتاج هوية وأدوات أوسع.",
+    features: [
+      "كل مميزات الأساسي",
+      "ربط نطاق مخصص (yourstore.com)",
+      "ربط تصاميم Figma",
+      "الدفع الإلكتروني",
+    ],
+    price: null,
+    priceLabel: "قريباً",
+    comingSoon: true,
+  },
+  {
+    id: "enterprise",
+    name: "مؤسسي",
+    blurb: "للمشاريع الكبيرة والسلاسل متعددة الفروع بمتطلبات متقدمة.",
+    features: [
+      "كل مميزات الاحترافي",
+      "كود مخصص",
+      "ربط عبر واجهة API",
+      "ربط أنظمة ERP",
+      "تكاملات مخصصة حسب الطلب",
+    ],
+    price: null,
+    priceLabel: "اتصل بنا",
+    contactOnly: true,
+  },
+];
 
 function planFeatures(plan: any): string[] {
   return (plan?.features || [])
@@ -56,10 +94,17 @@ function FeatureMarker() {
   );
 }
 
-function PlanCard({ plan, delay = 0 }: { plan: PlanCardModel; delay?: number }) {
+function PlanCard({
+  plan,
+  delay = 0,
+}: {
+  plan: PlanCardModel;
+  delay?: number;
+}) {
   const href = plan.contactOnly
     ? "/contact"
     : `/checkout?planId=${encodeURIComponent(plan.id)}`;
+  const ctaLabel = plan.contactOnly ? "تواصل معنا" : "ابدأ الآن";
 
   return (
     <div
@@ -79,7 +124,9 @@ function PlanCard({ plan, delay = 0 }: { plan: PlanCardModel; delay?: number }) 
         }`}
       >
         <div className="flex flex-col gap-6 text-right">
-          <h3 className="text-4xl font-bold text-frost lg:text-5xl">{plan.name}</h3>
+          <h3 className="text-4xl font-bold text-frost lg:text-5xl">
+            {plan.name}
+          </h3>
           {plan.blurb ? (
             <p className="text-sm leading-7 text-[#cac9d1]">{plan.blurb}</p>
           ) : null}
@@ -107,29 +154,37 @@ function PlanCard({ plan, delay = 0 }: { plan: PlanCardModel; delay?: number }) 
               {plan.price ?? plan.priceLabel}
             </span>
             {plan.price && (
-              <span className="text-base text-[#73799b]">{plan.priceLabel}</span>
+              <span className="text-base text-[#73799b]">
+                {plan.priceLabel}
+              </span>
             )}
           </p>
 
-          <Link
-            to={href}
-            className={
-              plan.featured
-                ? "relative inline-flex items-center gap-3 rounded-full bg-gradient-to-b from-[#343754]/60 via-[#aab1ec]/60 to-[#343754]/60 p-px shadow-[0_0_16px_rgba(52,92,232,0.6)] transition-shadow hover:shadow-[0_0_24px_rgba(52,92,232,0.85)]"
-                : "relative inline-flex items-center gap-3 rounded-full bg-gradient-to-b from-[#4d4d4d]/25 via-white/25 to-transparent p-px transition-opacity hover:opacity-90"
-            }
-          >
-            <span
-              className={`flex items-center gap-3 rounded-full px-7 py-2.5 text-base text-frost ${
+          {plan.comingSoon ? (
+            // Nothing to buy yet. The spacer keeps its price level with the
+            // cards beside it, whose buttons sit where this one would.
+            <span aria-hidden className="hidden h-[46px] lg:block" />
+          ) : (
+            <Link
+              to={href}
+              className={
                 plan.featured
-                  ? "bg-gradient-to-l from-brand-violet to-brand-indigo"
-                  : "bg-[#00031c]"
-              }`}
+                  ? "relative inline-flex items-center gap-3 rounded-full bg-gradient-to-b from-[#343754]/60 via-[#aab1ec]/60 to-[#343754]/60 p-px shadow-[0_0_16px_rgba(52,92,232,0.6)] transition-shadow hover:shadow-[0_0_24px_rgba(52,92,232,0.85)]"
+                  : "relative inline-flex items-center gap-3 rounded-full bg-gradient-to-b from-[#4d4d4d]/25 via-white/25 to-transparent p-px transition-opacity hover:opacity-90"
+              }
             >
-              {plan.contactOnly ? "تواصل معنا" : "ابدأ الآن"}
-              <ArrowUpLeft size={16} />
-            </span>
-          </Link>
+              <span
+                className={`flex items-center gap-3 rounded-full px-7 py-2.5 text-base text-frost ${
+                  plan.featured
+                    ? "bg-gradient-to-l from-brand-violet to-brand-indigo"
+                    : "bg-[#00031c]"
+                }`}
+              >
+                {ctaLabel}
+                <ArrowUpLeft size={16} />
+              </span>
+            </Link>
+          )}
         </div>
       </div>
     </div>
@@ -138,8 +193,8 @@ function PlanCard({ plan, delay = 0 }: { plan: PlanCardModel; delay?: number }) 
 
 function PricingSkeleton() {
   return (
-    <div className="grid w-full max-w-[1240px] items-stretch gap-6 lg:grid-cols-2">
-      {[0, 1].map((i) => (
+    <div className="grid w-full max-w-[1240px] items-stretch gap-6 lg:grid-cols-3">
+      {[0, 1, 2].map((i) => (
         <div
           key={i}
           className="h-[420px] animate-pulse rounded-3xl border border-hairline bg-ink-panel/60"
@@ -150,9 +205,9 @@ function PricingSkeleton() {
 }
 
 /**
- * Landing pricing — pulled live from `GET /plan` so GO / PLUS (and whatever
- * the catalogue ships next) stay in sync with Checkout instead of the old
- * hardcoded أساسي / احترافي / مؤسسي cards.
+ * Landing pricing. The plans on sale (Basic) come live from `GET /plan`, so the
+ * price and features stay in sync with Checkout; the announced tiers after it
+ * follow from `UPCOMING_PLANS`.
  */
 function PricingSection() {
   const { data, isLoading, isError, refetch, isFetching } = useFetchAllPlans();
@@ -167,12 +222,17 @@ function PricingSection() {
       .map(toCardModel);
   })();
 
-  // RTL catalogue: keep API order but put featured (PLUS) where the design
-  // emphasises it — middle/first visually under RTL grid when only two cards.
-  const ordered = [...cards].sort((a, b) => Number(b.featured) - Number(a.featured));
+  // Featured first (rightmost under RTL), then the announced tiers.
+  const onSale = [...cards].sort(
+    (a, b) => Number(b.featured) - Number(a.featured),
+  );
+  const ordered = onSale.length > 0 ? [...onSale, ...UPCOMING_PLANS] : [];
 
   return (
-    <section id="pricing" className="relative overflow-hidden px-4 py-20 sm:px-6 lg:py-24">
+    <section
+      id="pricing"
+      className="relative overflow-hidden px-4 py-20 sm:px-6 lg:py-24"
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute start-1/2 top-40 h-44 w-[338px] -translate-x-1/2 rounded-full bg-[#5834e9]/30 blur-[120px]"
@@ -188,8 +248,8 @@ function PricingSection() {
             className="text-prose-lg max-w-[1181px] text-center"
             style={{ "--reveal-delay": "100ms" } as React.CSSProperties}
           >
-            كل الباقات تبدأ بشهر مجاني ثم 6 أشهر بنصف السعر — ابدأ اليوم وغيّر
-            باقتك في أي وقت.
+            ابدأ بالباقة الأساسية: شهر مجاني ثم 6 أشهر بنصف السعر. الباقة
+            الاحترافية قادمة قريباً، وللمؤسسات تواصل معنا.
           </p>
         </div>
 
