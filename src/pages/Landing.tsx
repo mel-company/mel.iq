@@ -63,7 +63,7 @@ function Landing() {
           the smooth scroll the nav anchors rely on. */}
       <div className="overflow-x-clip">
         <HeroSection />
-        <PartnerStrip />
+        {/* <PartnerStrip /> */}
 
         <Suspense fallback={null}>
           {/* Only renders for merchants who already have stores. */}
@@ -73,10 +73,10 @@ function Landing() {
           <BenefitsSection />
           <PlatformSection />
           <FeaturesSection />
-          <ProductShowcase />
+          {/* <ProductShowcase /> */}
+          <AppDownloadSection />
           <PricingSection />
           <FaqSection />
-          <AppDownloadSection />
           <ContactSection />
         </Suspense>
 

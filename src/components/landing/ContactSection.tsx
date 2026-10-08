@@ -31,7 +31,7 @@ const CHANNELS = [
   {
     action: "اتصل الآن",
     title: "اتصل بنا",
-    detail: "+964 770 123 4567 — السبت إلى الخميس",
+    detail: "0771-0700-945 — السبت إلى الخميس",
     icon: Phone,
     tint: "bg-mint/10 text-mint",
   },
