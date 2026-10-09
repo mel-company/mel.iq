@@ -42,7 +42,6 @@ import type {
   PlannedStep,
 } from "@/api/endpoints/aiStoreGenerator.endpoints";
 import SuccessModal from "./SuccessModal";
-import CreditsBadge from "./CreditsBadge";
 import BuyCreditsModal from "./BuyCreditsModal";
 import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
 
@@ -1748,7 +1747,6 @@ export default function PromptComposer() {
                   e.target.value = "";
                 }}
               />
-              <CreditsBadge />
             </div>
 
             <button
