@@ -267,7 +267,7 @@ function Checkout() {
   });
 
   const [otpSent, setOtpSent] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(true);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   /**
    * Account-step fields the merchant has already left (or tried to submit), so
    * a half-typed number isn't scolded on its first keystroke.
@@ -503,6 +503,9 @@ function Checkout() {
   const emailError = EMAIL_RE.test(formData.email.trim())
     ? ""
     : "يرجى إدخال بريد إلكتروني صالح.";
+  const termsError = acceptedTerms
+    ? ""
+    : "يجب الموافقة على شروط الاستخدام وسياسة الخصوصية للمتابعة.";
 
   const markTouched = (field: string) =>
     setTouchedFields((prev) => ({ ...prev, [field]: true }));
@@ -699,10 +702,10 @@ function Checkout() {
       // If user is not logged in, register then send OTP (same flow as login)
       // Every field is checked here rather than at the API: the message lands
       // under the field that is wrong, and no OTP goes to a mistyped number.
-      setTouchedFields({ name: true, email: true, phone: true });
+      setTouchedFields({ name: true, email: true, phone: true, terms: true });
       const phoneE164 = toIqE164(formData.phone);
 
-      if (!nameError && !emailError && phoneE164) {
+      if (!nameError && !emailError && phoneE164 && acceptedTerms) {
         registerMutation(
           {
             phone: phoneE164,
@@ -1374,7 +1377,11 @@ function Checkout() {
                     </Field>
                   </div>
 
-                  <CheckBox checked={acceptedTerms} onChange={setAcceptedTerms}>
+                  <CheckBox
+                    checked={acceptedTerms}
+                    onChange={setAcceptedTerms}
+                    error={errorFor("terms", termsError)}
+                  >
                     أوافق على{" "}
                     <Link
                       to="/terms-of-use"
@@ -1396,7 +1403,6 @@ function Checkout() {
                   <StepFooter
                     submitLabel="متابعة"
                     busy={isRegistering || isLoggingIn || isSendingOtp}
-                    disabled={!acceptedTerms}
                   >
                     <p className="text-[13px] leading-5 text-muted">
                       لديك حساب؟{" "}

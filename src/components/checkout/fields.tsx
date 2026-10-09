@@ -144,28 +144,39 @@ export function PhoneInput({
 export function CheckBox({
   checked,
   onChange,
+  error,
   children,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
+  error?: string;
   children: ReactNode;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2.5">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="peer sr-only"
-      />
-      <span
-        aria-hidden
-        className="flex size-5 shrink-0 items-center justify-center rounded-md border border-field-line text-[11px] font-bold text-white peer-checked:border-transparent peer-checked:bg-[linear-gradient(135deg,#00b7ff_0%,#7d26f7_71%)] peer-focus-visible:ring-2 peer-focus-visible:ring-brand-primary/50"
-      >
-        {checked ? "✓" : ""}
-      </span>
-      <span className="text-[13px] leading-5 text-muted">{children}</span>
-    </label>
+    <div className="flex flex-col gap-2">
+      <label className="flex cursor-pointer items-center gap-2.5">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          aria-invalid={error ? true : undefined}
+          className="peer sr-only"
+        />
+        <span
+          aria-hidden
+          className={`flex size-5 shrink-0 items-center justify-center rounded-md ${error ? "border-[1.5px] border-[#ff5252]" : "border border-field-line"} text-[11px] font-bold text-white peer-checked:border-transparent peer-checked:bg-[linear-gradient(135deg,#00b7ff_0%,#7d26f7_71%)] peer-focus-visible:ring-2 peer-focus-visible:ring-brand-primary/50`}
+        >
+          {checked ? "✓" : ""}
+        </span>
+        <span className="text-[13px] leading-5 text-muted">{children}</span>
+      </label>
+      {error && (
+        <p className="flex items-center gap-1.5 text-xs leading-[18px] text-[#ff5252]">
+          <AlertCircle size={13} className="shrink-0" />
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
