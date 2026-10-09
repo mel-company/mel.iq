@@ -15,23 +15,21 @@ const PANEL =
 
 const CHANNELS = [
   {
-    action: "ابدأ المحادثة",
     title: "دردشة مباشرة",
     detail: "فريق الدعم متاح 24/7 بالعربية",
     icon: MessageCircle,
     tint: "bg-brand-primary/10 text-brand-primary",
   },
   {
-    action: "تصفح المقالات",
     title: "مركز المساعدة",
     detail: "أدلة وشروحات بالفيديو لكل ميزة",
     icon: BookOpen,
     tint: "bg-brand-secondary/10 text-brand-secondary",
   },
   {
-    action: "اتصل الآن",
     title: "اتصل بنا",
-    detail: "0771-0700-945 — السبت إلى الخميس",
+    detail: "0776-0707-740 — السبت إلى الخميس",
+    href: "tel:+9647760707740",
     icon: Phone,
     tint: "bg-mint/10 text-mint",
   },
@@ -290,31 +288,33 @@ function ContactSection() {
           </form>
 
           <div className="flex w-full flex-col gap-4 lg:w-[40%]">
-            {CHANNELS.map((channel, i) => (
-              <button
-                key={channel.title}
-                type="button"
-                data-reveal
-                className="card-hover flex items-center gap-4 rounded-[18px] p-5 text-right"
-                style={{
-                  backgroundImage: PANEL,
-                  "--reveal-delay": `${120 + i * 100}ms`,
-                } as React.CSSProperties}
-              >
-                <span
-                  className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${channel.tint}`}
+            {CHANNELS.map((channel, i) => {
+              // Only the phone card leads anywhere, so only it is a link; the
+              // others are plain cards rather than buttons that do nothing.
+              const Card = channel.href ? "a" : "div";
+              return (
+                <Card
+                  key={channel.title}
+                  href={channel.href}
+                  data-reveal
+                  className="card-hover flex items-center gap-4 rounded-[18px] p-5 text-right"
+                  style={{
+                    backgroundImage: PANEL,
+                    "--reveal-delay": `${120 + i * 100}ms`,
+                  } as React.CSSProperties}
                 >
-                  <channel.icon size={22} />
-                </span>
-                <span className="flex flex-1 flex-col gap-0.5 text-right">
-                  <span className="text-sm font-bold text-frost">{channel.title}</span>
-                  <span className="text-xs text-muted">{channel.detail}</span>
-                </span>
-                <span className="shrink-0 text-xs font-bold text-brand-primary">
-                  {channel.action}
-                </span>
-              </button>
-            ))}
+                  <span
+                    className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${channel.tint}`}
+                  >
+                    <channel.icon size={22} />
+                  </span>
+                  <span className="flex flex-1 flex-col gap-0.5 text-right">
+                    <span className="text-sm font-bold text-frost">{channel.title}</span>
+                    <span className="text-xs text-muted">{channel.detail}</span>
+                  </span>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </div>
