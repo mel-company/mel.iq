@@ -81,7 +81,7 @@ function HeroSection() {
             className="w-full"
             style={{ "--reveal-delay": "270ms" } as React.CSSProperties}
           >
-            {/* PromptComposer pulls AuthModal, GenerationProgress, and the AI
+            {/* PromptComposer pulls GenerationProgress, and the AI
                 API client — keep it off the critical path so TBT stays low. */}
             <Suspense fallback={<ComposerFallback />}>
               <PromptComposer />

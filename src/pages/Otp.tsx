@@ -8,6 +8,9 @@ import { getApiErrorMessage } from "@/utils/otp";
 import { formatIqPhone } from "@/utils/phone";
 import AuthShell from "@/components/auth/AuthShell";
 import OtpInputs from "@/components/auth/OtpInputs";
+import { storeAPI } from "@/api/endpoints/store.endpoints";
+import { normalizeApiResponse, type StoreLike } from "@/utils/storeUrls";
+import { FOCUS_PROMPT_STATE } from "@/utils/promptHandoff";
 
 /**
  * Digits in the code.
@@ -106,6 +109,25 @@ function OTPVerification() {
     return Boolean(token);
   };
 
+  /**
+   * The dashboard for an owner, the AI prompt for an account with no store
+   * yet. If the list cannot be read, the dashboard: it copes either way.
+   */
+  const goAfterLogin = async () => {
+    try {
+      const stores = normalizeApiResponse<StoreLike>(await storeAPI.fetchAll()).filter(
+        (store) => !store.is_deleted,
+      );
+      if (stores.length === 0) {
+        navigate("/", { replace: true, state: FOCUS_PROMPT_STATE });
+        return;
+      }
+    } catch {
+      /* fall through */
+    }
+    navigate("/dashboard", { replace: true });
+  };
+
   const submitOtp = (otpValue: string) => {
     if (isBusy || !phone) return;
     if (otpValue.length !== OTP_LENGTH) {
@@ -170,9 +192,10 @@ function OTPVerification() {
             return;
           }
 
-          // تسجيل دخول عادي بدون store → لوحة mel.iq
+          // تسجيل دخول عادي بدون store: من عنده متجر → لوحة mel.iq، ومن
+          // ما عنده متجر → وصف المتجر بالذكاء الاصطناعي (نفس نهاية التسجيل)
           toast.success("تم التحقق بنجاح");
-          navigate("/dashboard", { replace: true });
+          void goAfterLogin();
         },
         onError: (err) => {
           setError(

@@ -650,15 +650,26 @@ export default function GenerationProgress({
         ? 0
         : fillPercent(elapsed - segmentStart.current, seg.seconds),
   );
-  // Derived from the bars rather than from a second timer, so the number and
-  // the fills can never tell two different stories. A phase that overruns its
-  // budget stalls the countdown near its own residual instead of hitting zero
-  // while the run is still going.
+  // How much of the budget the bars say is spent. A phase that finished early
+  // pulls the countdown down with it.
   const consumed = SEGMENTS.reduce(
     (sum, seg, index) => sum + (seg.seconds * percents[index]) / 100,
     0,
   );
-  const remaining = Math.max(0, Math.ceil(TOTAL_SECONDS - consumed));
+  const byBars = TOTAL_SECONDS - consumed;
+  /**
+   * The countdown keeps moving while the run does.
+   *
+   * Read off the bars alone, a phase that overran its budget held the number
+   * almost still — the bar creeps toward full, so the countdown crept too,
+   * for minutes at a time — and a clock that stops while nobody has been
+   * asked anything reads as a hang. Counting down against the whole budget
+   * as well, and showing whichever is lower, keeps it ticking in step with
+   * real time; only a question or a confirmation stops it, through `paused`.
+   * A run that outlasts the whole budget falls through to the sentence below.
+   */
+  const byClock = TOTAL_SECONDS - elapsed;
+  const remaining = Math.max(0, Math.ceil(Math.min(byBars, byClock)));
   /**
    * Below this the clock stops being useful and starts being a liability.
    *

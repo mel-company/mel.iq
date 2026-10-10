@@ -7,19 +7,20 @@ import SectionEyebrow from "./SectionEyebrow";
  * three columns out left to right (24/7, +313, +78).
  */
 const STATS = [
+
   {
-    figure: "+78",
-    lead: "متجر",
-    mid: "وثق",
-    tail: "بالخدمات",
-    emphasis: "التي نقدمها",
+    figure: "+10",
+    lead: "تكاملات",
+    mid: "للدفع",
+    tail: "و",
+    emphasis: "الشحن",
   },
   {
-    figure: "+313",
-    lead: "عميل",
-    mid: "قام بشراء",
-    tail: "من",
-    emphasis: "المتاجر",
+    figure: "100%",
+    lead: "تحكم",
+    mid: "بتصميم",
+    tail: "وهوية",
+    emphasis: "متجرك",
   },
   {
     figure: "24/7",

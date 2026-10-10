@@ -24,7 +24,6 @@ import {
   type FailureCode,
   type GenerationEvent,
 } from "@/api/endpoints/aiStoreGenerator.endpoints";
-import AuthModal from "./AuthModal";
 import {
   type ActiveRun,
   clearActiveRun,
@@ -42,20 +41,21 @@ import type {
   PlannedStep,
 } from "@/api/endpoints/aiStoreGenerator.endpoints";
 import SuccessModal from "./SuccessModal";
-import CreditsBadge from "./CreditsBadge";
 import BuyCreditsModal from "./BuyCreditsModal";
-import { PlanUpgradeGate } from "@/components/PlanUpgradeGate";
 import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
+import { useLocation } from "react-router-dom";
+import { PROMPT_DRAFT_KEY, wantsPromptFocus } from "@/utils/promptHandoff";
+import SignupModal from "./SignupModal";
 
 /**
  * The landing page's primary call to action: describe a store, get one.
  *
- * The draft is mirrored to sessionStorage because signing in can involve an
- * OTP round trip, and losing a carefully typed prompt to a stray reload is the
+ * The draft is mirrored to sessionStorage because signing up involves an OTP
+ * round trip, and losing a carefully typed prompt to a stray reload is the
  * fastest way to lose the user.
  */
 
-const DRAFT_KEY = "ai-store-prompt-draft";
+const DRAFT_KEY = PROMPT_DRAFT_KEY;
 
 /** Mirrors PROMPT_MAX_LENGTH on the server, so the limit is visible while
  *  typing rather than arriving as a 400 after a submit. */
@@ -259,7 +259,7 @@ export default function PromptComposer() {
   const [brandKit, setBrandKit] = useState<File[]>([]);
   const [brandKitPreviews, setBrandKitPreviews] = useState<string[]>([]);
   const [figmaUrl, setFigmaUrl] = useState<string | null>(null);
-  const [authOpen, setAuthOpen] = useState(false);
+  const [signupOpen, setSignupOpen] = useState(false);
   // A stored handle means a build was already running when the page went
   // away; come back up straight into polling so the progress modal
   // reappears instead of the composer pretending nothing happened.
@@ -361,6 +361,20 @@ export default function PromptComposer() {
    * panel disclosed it; the disclosure came out with the defect.
    */
   const [stalled, setStalled] = useState(false);
+  /**
+   * Polling a run whose design is still being decided on the server.
+   *
+   * The design stream drops whenever a phone puts the browser in the
+   * background. The design carries on without it, so the modal keeps
+   * following it by polling — and keeps showing the design half, questions
+   * and all, rather than the build.
+   */
+  const [designResuming, setDesignResuming] = useState(false);
+  /** The questions on screen, readable from the polling effect. */
+  const questionsRef = useRef<DesignQuestion[]>([]);
+  questionsRef.current = questions;
+  const designResumingRef = useRef(false);
+  designResumingRef.current = designResuming;
   const [visitedQuestions, setVisitedQuestions] = useState<Set<string>>(
     () => new Set(),
   );
@@ -404,14 +418,14 @@ export default function PromptComposer() {
    *  where the merchant will start editing. */
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  // Survives the signup window without being a render dependency.
+  const pendingSubmit = useRef(false);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [voicePhase, setVoicePhase] = useState<
     "idle" | "recording" | "transcribing"
   >("idle");
-  // Survives the auth modal without being a render dependency.
-  const pendingSubmit = useRef(false);
   // The SSE callback closes over state from when the run started, so the step
   // plan is read through a ref rather than the stale `steps` value.
   const stepsRef = useRef<PlannedStep[]>([]);
@@ -431,6 +445,21 @@ export default function PromptComposer() {
   useEffect(() => {
     sessionStorage.setItem(DRAFT_KEY, prompt);
   }, [prompt]);
+
+  /**
+   * Arriving from signup (or the nav's «أنشئ متجرك») lands on the prompt
+   * itself, not the top of a long page: it is scrolled into view and focused,
+   * with the caret after any draft signup seeded.
+   */
+  const location = useLocation();
+  useEffect(() => {
+    if (!wantsPromptFocus(location.state)) return;
+    const input = promptInput.current;
+    if (!input) return;
+    input.scrollIntoView({ behavior: "smooth", block: "center" });
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, [location.key, location.state]);
 
   // Microphone capture belongs only to this composer. Tear down its tracks if
   // the page changes; an unmounted prompt must never leave the mic active.
@@ -529,6 +558,13 @@ export default function PromptComposer() {
           );
         }
 
+        if (data.designing) {
+          // Still deciding the design. Nothing to ask yet beyond what the
+          // merchant may already be answering, so keep following it.
+          setDesignResuming(true);
+          return;
+        }
+
         if (data.stalled) {
           // `RUNNING` with nothing behind it: the request that was driving the
           // build is gone and the row will never move on its own. Polling it
@@ -563,6 +599,23 @@ export default function PromptComposer() {
           setError(data.error || "فشل إنشاء المتجر.");
           clearActiveRun();
           setPhase("idle");
+        } else if (data.status === "PENDING" && designResumingRef.current) {
+          // The design this modal was following has landed. Pick the run up
+          // exactly where a stream that never dropped would have: the design
+          // is parked for the build, the questions the merchant may already be
+          // answering stay as they are, and the confirmation they may already
+          // have given still counts.
+          if (!questionsRef.current.length) {
+            const asked = answerable(data.questions);
+            setQuestions(asked);
+            setQuestionIndex(0);
+          }
+          setQuestionsReady(true);
+          if (data.storeName) setStoreName(data.storeName);
+          if (data.prompt) setPrompt(data.prompt);
+          setDesignResuming(false);
+          setPendingBuild({ id: generationId });
+          setPhase("designing");
         } else if (data.status === "PENDING") {
           // Not work in progress. The server marks a finished proposal
           // `PENDING` and leaves it there until a build is approved, so there
@@ -575,6 +628,9 @@ export default function PromptComposer() {
           setQuestionsReady(true);
           if (data.storeName) setStoreName(data.storeName);
           if (data.prompt) setPrompt(data.prompt);
+          // Approval is asked for afresh. A confirmation left over from before
+          // the page lost its stream disabled the button that gives it.
+          setBuildConfirmed(false);
           setEntries([
             {
               message: asked.length
@@ -603,9 +659,16 @@ export default function PromptComposer() {
 
     void tick();
     const interval = setInterval(() => void tick(), 5000);
+    // Coming back to the tab is when the merchant looks; answer then rather
+    // than up to five seconds later. Background tabs throttle the interval.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [phase, generationId, storeName]);
 
@@ -921,65 +984,103 @@ export default function PromptComposer() {
           storeName: string;
         } | null;
       } = { value: null };
+      /** The row this design lives on, known as soon as the server makes it. */
+      let jobId: string | null = null;
 
-      await aiStoreGeneratorAPI.proposeDesign(
-        {
-          prompt: prompt.trim(),
-          referenceImages,
-          figmaUrl: figmaUrl ?? undefined,
-          figmaToken: localStorage.getItem("figma_token") ?? undefined,
-        },
-        (event: GenerationEvent) => {
-          switch (event.type) {
-            case "plan":
-              stepsRef.current = event.steps;
-              setSteps(event.steps);
-              break;
-            case "status":
-              addStatus(event.message);
-              if (typeof event.index === "number") setActiveStep(event.index);
-              break;
-            case "activity":
-              addStatus(event.message);
-              break;
-            case "template":
-              if (event.reason) addStatus(event.reason);
-              break;
-            case "brand":
-              setStoreName(event.storeName);
-              break;
-            case "questions": {
-              setQuestions(answerable(event.questions));
-              setQuestionsReady(true);
-              addStatus("جهزنا أسئلة قصيرة لتخصيص تصميم متجرك");
-              // Deliberately unanswered. Pre-seeding the recommendations put a
-              // filled radio next to choices the merchant had never made, and
-              // shipped them to the server as `answers` — which the designer
-              // reads as "قرارات التاجر", outranking the description and the
-              // reference. Leaving this empty keeps the step optional without
-              // claiming an answer: the server falls back to `defaultAnswers`
-              // and weighs it as a recommendation instead of a decision.
-              setQuestionIndex(0);
-              break;
+      /**
+       * The stream dropped but the design carries on without it — most often
+       * because the phone put the browser in the background. Follow the row
+       * instead of reporting a failure for work that is still going.
+       */
+      const followDesign = () => {
+        if (!jobId) return false;
+        setGenerationId(jobId);
+        setDesignResuming(true);
+        addStatus("انقطع الاتصال بالخادم. جاري متابعة تصميم متجرك…");
+        setPhase("polling");
+        return true;
+      };
+
+      try {
+        await aiStoreGeneratorAPI.proposeDesign(
+          {
+            prompt: prompt.trim(),
+            referenceImages,
+            figmaUrl: figmaUrl ?? undefined,
+            figmaToken: localStorage.getItem("figma_token") ?? undefined,
+          },
+          (event: GenerationEvent) => {
+            switch (event.type) {
+              case "plan":
+                stepsRef.current = event.steps;
+                setSteps(event.steps);
+                break;
+              case "status":
+                addStatus(event.message);
+                if (typeof event.index === "number") setActiveStep(event.index);
+                break;
+              case "activity":
+                addStatus(event.message);
+                break;
+              case "template":
+                if (event.reason) addStatus(event.reason);
+                break;
+              case "brand":
+                setStoreName(event.storeName);
+                break;
+              case "questions": {
+                setQuestions(answerable(event.questions));
+                setQuestionsReady(true);
+                addStatus("جهزنا أسئلة قصيرة لتخصيص تصميم متجرك");
+                // Deliberately unanswered. Pre-seeding the recommendations put a
+                // filled radio next to choices the merchant had never made, and
+                // shipped them to the server as `answers` — which the designer
+                // reads as "قرارات التاجر", outranking the description and the
+                // reference. Leaving this empty keeps the step optional without
+                // claiming an answer: the server falls back to `defaultAnswers`
+                // and weighs it as a recommendation instead of a decision.
+                setQuestionIndex(0);
+                break;
+              }
+              case "job":
+                // Recorded now so a dropped stream, a reload or a closed tab
+                // can find this design again while it is still being decided.
+                jobId = event.id;
+                writeActiveRun({
+                  id: event.id,
+                  startedAt: Date.now(),
+                  prompt: prompt.trim(),
+                });
+                break;
+              case "proposal":
+                proposal.value = event;
+                designTerminalRef.current = true;
+                break;
+              case "error":
+                setError(event.message);
+                setErrorCode(event.code ?? null);
+                designTerminalRef.current = true;
+                // A design that failed is not something to come back to.
+                if (jobId) clearActiveRun();
+                break;
             }
-            case "proposal":
-              proposal.value = event;
-              designTerminalRef.current = true;
-              break;
-            case "error":
-              setError(event.message);
-              setErrorCode(event.code ?? null);
-              designTerminalRef.current = true;
-              break;
-          }
-        },
-        controller.signal,
-      );
+          },
+          controller.signal,
+        );
+      } catch (e) {
+        // A read that fails mid-stream ("network error") is a lost
+        // connection, not a failed design.
+        if (!controller.signal.aborted && !designTerminalRef.current && followDesign()) {
+          return;
+        }
+        throw e;
+      }
 
       if (controller.signal.aborted) return;
 
       const decided = proposal.value;
       if (!decided) {
+        if (!designTerminalRef.current && followDesign()) return;
         // If the stream ended without a proposal or an error, the connection
         // was dropped before the design phase finished. Surface that rather
         // than silently returning to the composer.
@@ -1057,6 +1158,8 @@ export default function PromptComposer() {
     stepsRef.current = [];
     setActiveStep(0);
     addStatus("جاري بناء المتجر...");
+    /** Whether the server answered at all, so a lost stream is a lost stream. */
+    let buildOpened = false;
 
     try {
       let result: {
@@ -1081,6 +1184,7 @@ export default function PromptComposer() {
           generationId: id,
         },
         (event: GenerationEvent) => {
+          buildOpened = true;
           switch (event.type) {
             case "job":
               setGenerationId(event.id);
@@ -1159,20 +1263,25 @@ export default function PromptComposer() {
       // If the stream ended without a terminal event, the connection was
       // likely dropped by a proxy/timeout before the server finished. Keep
       // the modal open and poll the job status instead of closing silently.
-      if (!buildTerminalRef.current && generationId) {
+      if (!buildTerminalRef.current) {
         addStatus("انقطع الاتصال بالخادم. جاري التحقق من حالة الإنشاء…");
+        setGenerationId(id);
         setPhase("polling");
         return;
       }
 
-      if (!buildTerminalRef.current) {
-        setError(
-          "انقطع الاتصال قبل إكمال الإنشاء. تحقق من الشبكة وحاول مرة أخرى.",
-        );
-      }
       setPhase("idle");
     } catch (e) {
       if (controller.signal.aborted) return;
+      // The build carries on without the stream, so a connection lost once
+      // it started — a phone backgrounding the browser, usually — is picked
+      // up by polling, not reported as a failure.
+      if (buildOpened && !buildTerminalRef.current) {
+        addStatus("انقطع الاتصال بالخادم. جاري التحقق من حالة الإنشاء…");
+        setGenerationId(id);
+        setPhase("polling");
+        return;
+      }
       const upgrade = parsePlanUpgradeRequired(e);
       setError(
         upgrade?.message ||
@@ -1241,9 +1350,13 @@ export default function PromptComposer() {
    * standing between them and the build for as long as they took to notice it.
    */
   useEffect(() => {
+    // A design resumed for approval is the exception: nothing has been
+    // charged yet, and confirming it for the merchant left the one button
+    // that starts the build disabled under "تم التأكيد".
+    if (phase === "awaiting") return;
     if (!questionsReady || buildConfirmed || questions.length) return;
     setBuildConfirmed(true);
-  }, [questionsReady, questions.length, buildConfirmed]);
+  }, [questionsReady, questions.length, buildConfirmed, phase]);
 
   /**
    * Starts the build once the design and the answers are both in.
@@ -1285,13 +1398,33 @@ export default function PromptComposer() {
       return;
     }
     if (!user) {
-      // Hold the request and resume it once the modal reports success.
+      // Signed out: the create-account form opens over the prompt, and the
+      // run starts once it reports success, so signing up never leaves the
+      // generation the merchant just asked for.
       pendingSubmit.current = true;
-      setAuthOpen(true);
+      setSignupOpen(true);
       return;
     }
     run();
   };
+
+  /**
+   * The run asked for before signing up, started once the account exists.
+   *
+   * From an effect rather than the signup callback, so it goes through
+   * `handleGenerate` as this render sees it: signed in, with the credit
+   * balance loaded. Called straight from the callback, `run` closed over the
+   * signed-out render, skipped the balance check, and a merchant with no
+   * credits got a server refusal instead of the top-up window.
+   */
+  useEffect(() => {
+    if (!pendingSubmit.current || signupOpen) return;
+    if (!user || creditsLoading || phase !== "idle") return;
+    pendingSubmit.current = false;
+    handleGenerate();
+    // handleGenerate is rebuilt every render; these are what gate it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, creditsLoading, phase, signupOpen]);
 
   const busy =
     phase === "uploading" ||
@@ -1313,6 +1446,7 @@ export default function PromptComposer() {
     setErrorCode(null);
     setRefunded(false);
     setStalled(false);
+    setDesignResuming(false);
     setResumed(null);
     setPhase("idle");
     setEntries([]);
@@ -1365,7 +1499,8 @@ export default function PromptComposer() {
   // Designing and reviewing are the design half; everything after the merchant
   // approves is the build.
   const mascotPhase: GenerationPhase =
-    phase === "generating" || phase === "polling" || phase === "done"
+    (phase === "generating" || phase === "polling" || phase === "done") &&
+    !designResuming
       ? "code"
       : "design";
 
@@ -1462,17 +1597,6 @@ export default function PromptComposer() {
 
   return (
     <div className="w-full">
-      {credits?.editor?.upgradeRequired && (
-        <div className="mx-auto mb-4 w-full max-w-[791px]">
-          <PlanUpgradeGate
-            feature="ai_editor"
-            requiredPlanName={
-              credits.editor.requiredPlanName || "MEL PLUS"
-            }
-            manageHref="/dashboard"
-          />
-        </div>
-      )}
       <div className="mx-auto w-full max-w-[791px] rounded-[32px] border border-white/5 p-3 backdrop-blur-[50px] transition-colors focus-within:border-brand-primary/25">
         <div className="flex flex-col gap-3 rounded-3xl p-3 text-right">
           <textarea
@@ -1660,7 +1784,6 @@ export default function PromptComposer() {
                   e.target.value = "";
                 }}
               />
-              <CreditsBadge />
             </div>
 
             <button
@@ -1707,19 +1830,15 @@ export default function PromptComposer() {
         ))}
       </div>
 
-      <AuthModal
-        open={authOpen}
+      <SignupModal
+        open={signupOpen}
         onClose={() => {
-          setAuthOpen(false);
+          setSignupOpen(false);
           pendingSubmit.current = false;
         }}
-        onAuthenticated={() => {
-          setAuthOpen(false);
-          if (pendingSubmit.current) {
-            pendingSubmit.current = false;
-            run();
-          }
-        }}
+        // The run itself is started by the pending-run effect next to
+        // handleGenerate: this callback was made while still signed out.
+        onAuthenticated={() => setSignupOpen(false)}
       />
 
       {/* Also mounted here, not only in the post-generation branch above.
