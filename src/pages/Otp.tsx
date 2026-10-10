@@ -8,10 +8,6 @@ import { getApiErrorMessage } from "@/utils/otp";
 import { formatIqPhone } from "@/utils/phone";
 import AuthShell from "@/components/auth/AuthShell";
 import OtpInputs from "@/components/auth/OtpInputs";
-import {
-  FOCUS_PROMPT_STATE,
-  hasPendingGeneration,
-} from "@/utils/promptHandoff";
 
 /**
  * Digits in the code.
@@ -174,13 +170,8 @@ function OTPVerification() {
             return;
           }
 
-          // تسجيل دخول عادي بدون store → لوحة mel.iq، إلا إذا ضغط «أنشئ
-          // متجري» قبل الدخول: نرجعه للوصف حتى يكمل الإنشاء
+          // تسجيل دخول عادي بدون store → لوحة mel.iq
           toast.success("تم التحقق بنجاح");
-          if (hasPendingGeneration()) {
-            navigate("/", { replace: true, state: FOCUS_PROMPT_STATE });
-            return;
-          }
           navigate("/dashboard", { replace: true });
         },
         onError: (err) => {

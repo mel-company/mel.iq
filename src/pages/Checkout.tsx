@@ -1,13 +1,7 @@
 /* eslint-disable no-unused-vars */
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate, useLocation, useSearchParams, Link } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import {
-  useRegister,
-  useVerify,
-  useSendOtp,
-  useLogin,
-} from "@/api/wrappers/auth.wrappers";
 import {
   useAddStore,
   useCheckStoreDomainAvailability,
@@ -31,54 +25,16 @@ import {
 } from "@/utils/subscription-quote";
 import { CHECKOUT_DRAFT_KEY, LAST_PAYMENT_ID_KEY } from "@/pages/CheckoutPaymentReturn";
 import { toast } from "sonner";
-import {
-  getApiErrorMessage,
-  isPhoneTakenError,
-} from "@/utils/otp";
 import { normalizeApiResponse } from "@/utils/storeUrls";
-import {
-  FOCUS_PROMPT_STATE,
-  hasPendingGeneration,
-  seedPromptDraft,
-} from "@/utils/promptHandoff";
-import {
-  formatIqPhone,
-  iqPhoneError,
-  toIqE164,
-  toLocalDigits,
-} from "@/utils/phone";
+import { FOCUS_PROMPT_STATE } from "@/utils/promptHandoff";
 import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
 import StoreProvisioningGate from "@/components/StoreProvisioningGate";
 import { Loader2, Upload, X } from "@/components/icons";
 import CheckoutStepper from "@/components/checkout/CheckoutStepper";
 import CheckoutShell from "@/components/checkout/CheckoutShell";
 import CheckoutBrandRail from "@/components/checkout/CheckoutBrandRail";
-import OtpInputs from "@/components/auth/OtpInputs";
-import {
-  CheckBox,
-  Field,
-  type FieldState,
-  PhoneInput,
-  SelectInput,
-  StepFooter,
-  TextInput,
-} from "@/components/checkout/fields";
-
-/**
- * Digits in the verification code.
- *
- * The frames draw six boxes; the server issues four
- * (`codes.service.ts`: `faker.number.int({ min: 1000, max: 9999 })`), and the
- * existing verify call here already checks for four.
- */
-const CHECKOUT_OTP_LENGTH = 4;
-
-/** Iraq's governorates, for the account step's picker. */
-const GOVERNORATES = [
-  "بغداد", "البصرة", "نينوى", "أربيل", "النجف", "كربلاء", "بابل", "ذي قار",
-  "الأنبار", "ديالى", "كركوك", "واسط", "صلاح الدين", "المثنى", "القادسية",
-  "ميسان", "دهوك", "السليمانية",
-];
+import SignupFlow from "@/components/auth/SignupFlow";
+import { Field, StepFooter, TextInput } from "@/components/checkout/fields";
 
 /**
  * The payment tiles the frame draws — how each one *looks*, not whether it
@@ -102,12 +58,6 @@ const PAYMENT_METHODS = [
   { id: "fib", title: "FIB", detail: "المصرف الأول", mark: "F", tint: "bg-brand-secondary/15 text-brand-secondary", provider: null },
 ];
 
-/** Business categories offered on the account step. */
-const BUSINESS_TYPES = [
-  "ملابس وأزياء", "إلكترونيات وهواتف", "مستحضرات تجميل وعطور", "أغذية ومشروبات",
-  "أثاث ومستلزمات منزل", "رياضة ولياقة", "كتب وقرطاسية", "صحة وأدوية", "أخرى",
-];
-
 /**
  * A plan's feature labels.
  *
@@ -123,35 +73,11 @@ function planFeatures(plan: any): string[] {
     .filter(Boolean);
 }
 
-/** Phone used for OTP (logged-in user object or checkout form), always IQ E.164 when possible. */
-function resolveOtpPhone(user: unknown, formPhone: string): string | null {
-  const u = user as {
-    phone?: string;
-    username?: string;
-    user?: { phone?: string };
-  } | null;
-
-  const candidates = [
-    formPhone,
-    u?.phone,
-    u?.user?.phone,
-    // AuthContext sometimes stores username as the phone after verify
-    u?.username,
-  ];
-
-  for (const raw of candidates) {
-    if (raw == null || String(raw).trim() === "") continue;
-    const normalized = toIqE164(String(raw));
-    if (normalized) return normalized;
-  }
-  return null;
-}
-
 function Checkout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { user, login, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   /**
    * Set only by the dashboard («create store») and the payment return, which
    * still walk the manual plan → payment → store steps. A plain visit to
@@ -182,12 +108,6 @@ function Checkout() {
 
   useEffect(() => {
     if (!user || storesLoading) return;
-    // Sent here by «أنشئ متجري»: back to the prompt, where the run they asked
-    // for resumes (into their store, if this number already had one).
-    if (!manualStoreSetup && hasPendingGeneration()) {
-      navigate("/", { replace: true, state: FOCUS_PROMPT_STATE });
-      return;
-    }
     if (existingStoreCount < 1) {
       // Already signed in with no store: there is no account to create, and
       // the store comes from the prompt.
@@ -206,10 +126,6 @@ function Checkout() {
   // User must select a plan before creating a store
   const initialStep = location.state?.skipToStep || 1;
   const [currentStep, setCurrentStep] = useState(initialStep);
-  const { mutate: registerMutation, isPending: isRegistering } = useRegister();
-  const { mutate: loginMutation, isPending: isLoggingIn } = useLogin();
-  const { mutate: sendOtpMutation, isPending: isSendingOtp } = useSendOtp();
-  const { mutate: verifyOtpMutation, isPending: isVerifyingOtp } = useVerify();
   const { mutate: addStoreMutation } = useAddStore();
   const { mutate: setCustomDomainMutation } = useSetCustomDomain();
   const { mutate: initPaymentMutation, isPending: isInitiatingPayment } =
@@ -292,22 +208,6 @@ function Checkout() {
     };
   });
 
-  const [otpSent, setOtpSent] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  /**
-   * Account-step fields the merchant has already left (or tried to submit), so
-   * a half-typed number isn't scolded on its first keystroke.
-   */
-  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
-  /**
-   * Set when register fails because the phone already belongs to an account —
-   * shown under the phone field so the merchant sees it, not only a toast.
-   */
-  const [phoneTakenError, setPhoneTakenError] = useState("");
-  /** The code went to an account that already existed (see below). */
-  const [existingAccount, setExistingAccount] = useState(false);
-  /** Drives the success pill the frame shows once the code checks out. */
-  const [otpVerified, setOtpVerified] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(
     () => Boolean(location.state?.paymentCompleted),
   );
@@ -483,58 +383,6 @@ function Checkout() {
   // and failed states.
   // Widened to cover the account step's two <select>s as well as its inputs —
   // they all just write their `name` into formData.
-  /**
-   * The account step's own checks.
-   *
-   * `/auth/register` is the first thing that ever looked at these, so a typo in
-   * the number came back as a server error — or worse, succeeded and sent the
-   * code to someone else's phone. They are validated here, in place, instead.
-   */
-  const EMAIL_RE = /^\S+@\S+\.\S+$/;
-  const accountPhone = user ? resolveOtpPhone(user, "") : null;
-  /**
-   * What the phone field shows: the digits as typed, so a leading 0 does not
-   * disappear under the cursor — unless the value is one this flow normalized
-   * (`proceedToOtpStep` stores E.164), which reads back as the local number.
-   */
-  const localPhone = /^(\+|964)/.test(formData.phone)
-    ? toLocalDigits(formData.phone)
-    : formData.phone;
-  const phoneError = phoneTakenError || iqPhoneError(formData.phone);
-  const nameError =
-    formData.name.trim().length >= 2 ? "" : "يرجى إدخال الاسم الكامل (حرفان على الأقل).";
-  const emailError = EMAIL_RE.test(formData.email.trim())
-    ? ""
-    : "يرجى إدخال بريد إلكتروني صالح.";
-  const termsError = acceptedTerms
-    ? ""
-    : "يجب الموافقة على شروط الاستخدام وسياسة الخصوصية للمتابعة.";
-
-  const markTouched = (field: string) =>
-    setTouchedFields((prev) => ({ ...prev, [field]: true }));
-
-  /** Leaving a field only counts as "touched" once something is in it. */
-  const blurHandler = (field: string, value: string) => () => {
-    if (value.trim()) markTouched(field);
-  };
-
-  /** An error is only shown once the field has been left or submitted. */
-  const errorFor = (field: string, message: string): string | undefined =>
-    message && touchedFields[field] ? message : undefined;
-
-  const stateFor = (field: string, message: string): FieldState =>
-    errorFor(field, message) ? "error" : message ? "default" : "valid";
-
-  const handlePhoneChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    setPhoneTakenError("");
-    setFormData((prev) => ({
-      ...prev,
-      phone: e.target.value.replace(/\D/g, ""),
-    }));
-  };
-
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
@@ -647,186 +495,6 @@ function Checkout() {
         },
       },
     );
-  };
-
-  const proceedToOtpStep = (phone: string, data?: unknown) => {
-    setFormData((prev) => ({
-      ...prev,
-      phone,
-      otp: "",
-    }));
-    setOtpSent(true);
-    setCurrentStep(2);
-  };
-
-  /**
-   * The number already has an account, so sign in to it instead.
-   *
-   * This used to stop signup and send the merchant to /login. Register writes
-   * the user before the code is checked, so that also caught anyone who went
-   * back from the code step and pressed continue again, or who left mid-signup
-   * and came back: they were told they had an account they never finished.
-   * Owning the phone is all an account needs, so the code goes out here and
-   * the flow carries on from the same step.
-   */
-  const continueWithExistingAccount = (phoneE164: string, registerError: unknown) => {
-    loginMutation(
-      { phone: phoneE164 },
-      {
-        onSuccess: () => {
-          toast.info("هذا الرقم لديه حساب مسبقاً — أرسلنا رمز الدخول إليه.");
-          setExistingAccount(true);
-          proceedToOtpStep(phoneE164);
-        },
-        onError: () => {
-          // A removed account, typically: the register message says so.
-          const message = getApiErrorMessage(
-            registerError,
-            "هذا الرقم لديه حساب مسبقاً. سجّل الدخول للمتابعة.",
-          );
-          setPhoneTakenError(message);
-          setTouchedFields((prev) => ({ ...prev, phone: true }));
-          toast.error(message);
-        },
-      },
-    );
-  };
-
-  const handleStep1Submit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    // If user is logged in, just proceed to OTP step
-    if (user) {
-      // Send OTP for logged in user
-      const phone = accountPhone || toIqE164(formData.phone);
-      if (phone) {
-        sendOtpMutation(
-          { phone },
-          {
-            onSuccess: (data) => {
-              proceedToOtpStep(phone, data);
-            },
-            onError: (error) => {
-              toast.error(
-                getApiErrorMessage(
-                  error,
-                  "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
-                ),
-              );
-              console.error("Error sending OTP:", error);
-            },
-          },
-        );
-      } else {
-        markTouched("phone");
-        toast.error(
-          "لم يُعثر على رقم هاتف صالح في حسابك. أدخل رقمك للمتابعة.",
-        );
-      }
-    } else {
-      // If user is not logged in, register then send OTP (same flow as login)
-      // Every field is checked here rather than at the API: the message lands
-      // under the field that is wrong, and no OTP goes to a mistyped number.
-      setTouchedFields({ name: true, email: true, phone: true, terms: true });
-      const phoneE164 = toIqE164(formData.phone);
-
-      if (!nameError && !emailError && phoneE164 && acceptedTerms) {
-        registerMutation(
-          {
-            phone: phoneE164,
-            name: formData.name,
-            email: formData.email,
-          },
-          {
-            onSuccess: (data: { message?: string }) => {
-              if (data?.message) toast.success(data.message);
-              proceedToOtpStep(phoneE164, data);
-            },
-            onError: (error) => {
-              // الرقم مسجّل مسبقاً → نرسل رمز الدخول ونكمل من نفس الخطوة
-              if (isPhoneTakenError(error)) {
-                continueWithExistingAccount(phoneE164, error);
-                return;
-              }
-              toast.error(
-                getApiErrorMessage(
-                  error,
-                  "حدث خطأ في التسجيل. الرجاء المحاولة مرة أخرى.",
-                ),
-              );
-              console.error("Error registering:", error);
-            },
-          },
-        );
-      } else {
-        toast.error("الرجاء تصحيح الحقول المعلَّمة بالأحمر قبل المتابعة.");
-      }
-    }
-  };
-
-  const handleOTPVerify = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (formData.otp && formData.otp.length === CHECKOUT_OTP_LENGTH) {
-      const phone = resolveOtpPhone(user, formData.phone);
-      if (!phone) {
-        toast.error("رقم الهاتف غير صالح. ارجع للخطوة السابقة وأعد المحاولة.");
-        return;
-      }
-      verifyOtpMutation(
-        {
-          phone,
-          code: formData.otp,
-        },
-        {
-          onSuccess: (result: {
-            token?: string;
-            accessToken?: string;
-            refreshToken?: string;
-            username?: string;
-          }) => {
-            setOtpVerified(true);
-            const token = result?.token || result?.accessToken;
-            const refreshToken = result?.refreshToken;
-            const username = result?.username || formData.name || phone;
-            if (token) {
-              window.localStorage.setItem("token", token);
-              if (refreshToken) {
-                window.localStorage.setItem("refreshToken", refreshToken);
-              }
-              window.localStorage.setItem(
-                "user",
-                JSON.stringify({ token, refreshToken, username, phone }),
-              );
-              login(token, username, refreshToken);
-            }
-
-            // Signup is done. Once the store list is in, the effect at the
-            // top sends the merchant on: to the AI prompt, which names and
-            // creates the store (so there is no store form here), or to the
-            // dashboard when this number already had one.
-            seedPromptDraft(formData.businessType, formData.governorate);
-            toast.success(
-              existingAccount
-                ? "تم تسجيل الدخول"
-                : hasPendingGeneration()
-                  ? "تم إنشاء حسابك! جاري إنشاء متجرك"
-                  : "تم إنشاء حسابك! صف متجرك وسننشئه لك الآن",
-            );
-          },
-          onError: (error) => {
-            toast.error(
-              getApiErrorMessage(
-                error,
-                "رمز OTP غير صحيح. الرجاء المحاولة مرة أخرى.",
-              ),
-            );
-            console.error("Error verifying OTP:", error);
-          },
-        },
-      );
-    } else {
-      toast.error("الرجاء إدخال رمز OTP صحيح (4 أرقام)");
-    }
   };
 
   const handlePlanSelection = () => {
@@ -1127,43 +795,6 @@ function Checkout() {
     }
   };
 
-  const resendOTP = () => {
-    const phone = resolveOtpPhone(user, formData.phone);
-    if (!phone) {
-      toast.error("رقم الهاتف غير صالح لإعادة الإرسال");
-      return;
-    }
-
-    // /auth/send-otp يحتاج JWT — قبل اكتمال verify نستخدم /auth/login
-    const hasToken =
-      typeof window !== "undefined" &&
-      Boolean(
-        window.localStorage.getItem("token") &&
-          window.localStorage.getItem("token") !== "undefined",
-      );
-
-    const onResendSuccess = (data: unknown) => {
-      setFormData((prev) => ({ ...prev, otp: "" }));
-      toast.success("تم إرسال رمز OTP جديد إلى رقمك");
-    };
-
-    const onResendError = (error: unknown) => {
-      toast.error(
-        getApiErrorMessage(
-          error,
-          "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
-        ),
-      );
-      console.error("Error resending OTP:", error);
-    };
-
-    if (hasToken) {
-      sendOtpMutation({ phone }, { onSuccess: onResendSuccess, onError: onResendError });
-    } else {
-      loginMutation({ phone }, { onSuccess: onResendSuccess, onError: onResendError });
-    }
-  };
-
   // Signed in and here for signup: the effect above is about to send them
   // on (prompt or dashboard), so there is no form to show in the meantime.
   if (authLoading || (user && !manualStoreSetup)) {
@@ -1213,255 +844,18 @@ function Checkout() {
 
           {/* Step content — open on the atmosphere (no nested chrome box). */}
           <div className="text-right">
-          {/* Step 1: User Info - Only for non-logged in users */}
-          {currentStep === 1 && !location.state?.skipToStep && (
+          {/* Steps 1–2: the shared signup form (the landing prompt's window
+              renders the same one). */}
+          {!manualStoreSetup && (
             <div className="rounded-[28px] border border-white/[0.07] bg-[#0a0d1c]/90 p-6 sm:p-9">
-            <div className="flex flex-col gap-[22px]">
-              <div className="flex flex-col gap-1.5">
-                <h2 className="text-[28px] font-extrabold leading-tight text-white sm:text-[32px]">
-                  أنشئ حسابك
-                </h2>
-                <p className="text-sm leading-6 text-[#9aa1bd]">
-                  شهر أول مجاناً ثم 6 أشهر بنصف السعر — وتقدر تلغي في أي وقت
-                </p>
-              </div>
-
-              <form
-                onSubmit={handleStep1Submit}
-                noValidate
-                className="flex flex-col gap-[22px]"
-              >
-                {/* Two per row on desktop; RTL puts the first field on the
-                    right, which is the order the frame reads in. */}
-                <div className="flex flex-col gap-5 sm:flex-row">
-                  <Field
-                    label="الاسم الكامل"
-                    htmlFor="name"
-                    error={errorFor("name", nameError)}
-                  >
-                    <TextInput
-                      id="name"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      onBlur={blurHandler("name", formData.name)}
-                      required
-                      autoComplete="name"
-                      placeholder="محمد علي يوسف"
-                      state={stateFor("name", nameError)}
-                    />
-                  </Field>
-                  <Field
-                    label="البريد الإلكتروني"
-                    htmlFor="email"
-                    error={errorFor("email", emailError)}
-                  >
-                    <TextInput
-                      id="email"
-                      name="email"
-                      type="email"
-                      dir="ltr"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      onBlur={blurHandler("email", formData.email)}
-                      required
-                      autoComplete="email"
-                      placeholder="you@store.iq"
-                      state={stateFor("email", emailError)}
-                    />
-                  </Field>
-                </div>
-
-                <div className="flex flex-col gap-5 sm:flex-row">
-                  <Field
-                    label="رقم الهاتف"
-                    htmlFor="phone"
-                    hint="سنرسل رمز التحقق إلى هذا الرقم"
-                    error={errorFor("phone", phoneError)}
-                  >
-                    <PhoneInput
-                      id="phone"
-                      name="phone"
-                      value={localPhone}
-                      onChange={handlePhoneChange}
-                      onBlur={blurHandler("phone", formData.phone)}
-                      required
-                      autoComplete="tel-national"
-                      placeholder="7XX XXX XXXX"
-                      state={stateFor("phone", phoneError)}
-                    />
-                  </Field>
-                  {/* No store name here: the AI prompt that follows names
-                      the store. */}
-                  <span className="hidden flex-1 sm:block" />
-                </div>
-
-                {/* These two are in the frame but the register endpoint takes
-                    only name / email / phone, so they are not persisted —
-                    hence optional. They do start the AI prompt off
-                    (`seedPromptDraft`) once the code checks out. */}
-                <div className="flex flex-col gap-5 sm:flex-row">
-                  <Field label="نوع النشاط التجاري" htmlFor="businessType">
-                    <SelectInput
-                      id="businessType"
-                      name="businessType"
-                      value={formData.businessType}
-                      onChange={handleInputChange}
-                      placeholder="اختر نوع النشاط"
-                    >
-                      {BUSINESS_TYPES.map((type) => (
-                        <option key={type} value={type} className="bg-ink-raised text-frost">
-                          {type}
-                        </option>
-                      ))}
-                    </SelectInput>
-                  </Field>
-                  <Field label="المحافظة" htmlFor="governorate">
-                    <SelectInput
-                      id="governorate"
-                      name="governorate"
-                      value={formData.governorate}
-                      onChange={handleInputChange}
-                      placeholder="اختر المحافظة"
-                    >
-                      {GOVERNORATES.map((name) => (
-                        <option key={name} value={name} className="bg-ink-raised text-frost">
-                          {name}
-                        </option>
-                      ))}
-                    </SelectInput>
-                  </Field>
-                </div>
-
-                <CheckBox
-                  checked={acceptedTerms}
-                  onChange={setAcceptedTerms}
-                  error={errorFor("terms", termsError)}
-                >
-                  أوافق على{" "}
-                  {/* New tab: on a phone the links fill most of this line,
-                      and a tap that navigated away lost the whole form. */}
-                  <Link
-                    to="/terms-of-use"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-bold text-brand-primary hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    شروط الاستخدام
-                  </Link>{" "}
-                  و{" "}
-                  <Link
-                    to="/privacy-policy"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-bold text-brand-primary hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    سياسة الخصوصية
-                  </Link>
-                </CheckBox>
-
-                <StepFooter
-                  submitLabel="متابعة"
-                  busy={isRegistering || isLoggingIn || isSendingOtp}
-                >
-                  <p className="text-[13px] leading-5 text-muted">
-                    لديك حساب؟{" "}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate("/login", {
-                          state: {
-                            phone: toLocalDigits(formData.phone),
-                          },
-                        })
-                      }
-                      className="font-bold text-brand-primary hover:underline"
-                    >
-                      تسجيل الدخول
-                    </button>
-                  </p>
-                </StepFooter>
-              </form>
-            </div>
-            </div>
-          )}
-
-          {/* Step 2: OTP Verification */}
-          {currentStep === 2 && (
-            <div className="rounded-[28px] border border-white/[0.07] bg-[#0a0d1c]/90 p-6 sm:p-9">
-            <div className="flex flex-col items-center gap-[22px] py-2 text-center">
-              <div className="flex flex-col items-center gap-1.5">
-                <h2 className="text-[28px] font-extrabold leading-tight text-white sm:text-[32px]">
-                  تحقق من رقمك
-                </h2>
-                <p className="flex flex-wrap items-center justify-center gap-1.5 text-sm leading-6 text-[#9aa1bd]">
-                  أرسلنا رمزاً من {CHECKOUT_OTP_LENGTH} أرقام إلى
-                  <span dir="ltr" className="font-semibold text-white">
-                    {formatIqPhone(formData.phone)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentStep(1)}
-                    className="text-[13px] font-bold text-[#7b8cff] hover:underline"
-                  >
-                    تعديل
-                  </button>
-                </p>
-              </div>
-
-              <form
-                onSubmit={handleOTPVerify}
-                className="flex w-full max-w-[444px] flex-col items-center gap-[22px]"
-              >
-                <OtpInputs
-                  value={formData.otp}
-                  length={CHECKOUT_OTP_LENGTH}
-                  disabled={isVerifyingOtp}
-                  autoFocus
-                  status={otpVerified ? "success" : "default"}
-                  onChange={(value) =>
-                    setFormData((prev) => ({ ...prev, otp: value }))
-                  }
-                />
-
-                <div className="flex w-full items-center justify-between text-[13px] leading-5">
-                  {/* The frame offers a voice fallback; there is no voice
-                      endpoint, so it keeps the frame's disabled tone. */}
-                  <span className="font-bold text-dim" title="غير متاح حالياً">
-                    اتصال صوتي
-                  </span>
-                  <span className="flex items-center gap-1.5 text-muted">
-                    لم يصلك الرمز؟
-                    <button
-                      type="button"
-                      onClick={resendOTP}
-                      disabled={isSendingOtp}
-                      className="font-bold text-brand-primary transition-opacity hover:opacity-80 disabled:opacity-40"
-                    >
-                      {isSendingOtp ? "جاري الإرسال…" : "إعادة الإرسال"}
-                    </button>
-                  </span>
-                </div>
-
-                {otpVerified && (
-                  <p className="flex items-center gap-2 rounded-full border border-mint/35 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
-                    <span aria-hidden>✓</span>
-                    تم التحقق بنجاح
-                  </p>
-                )}
-
-                <div className="w-full pt-4">
-                  <StepFooter
-                    submitLabel="متابعة"
-                    busy={isVerifyingOtp}
-                    disabled={formData.otp.length !== CHECKOUT_OTP_LENGTH}
-                    onBack={() => setCurrentStep(1)}
-                  />
-                </div>
-              </form>
-            </div>
+              <SignupFlow
+                onStepChange={(step) => setCurrentStep(step === "otp" ? 2 : 1)}
+                onLoginLink={(phone) => navigate("/login", { state: { phone } })}
+                createdMessage="تم إنشاء حسابك! صف متجرك وسننشئه لك الآن"
+                onAuthenticated={() => {
+                  /* the stores effect above routes them on */
+                }}
+              />
             </div>
           )}
 

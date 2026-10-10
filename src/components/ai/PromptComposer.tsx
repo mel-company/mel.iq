@@ -43,20 +43,16 @@ import type {
 import SuccessModal from "./SuccessModal";
 import BuyCreditsModal from "./BuyCreditsModal";
 import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
-import { useLocation, useNavigate } from "react-router-dom";
-import {
-  PROMPT_DRAFT_KEY,
-  markPendingGeneration,
-  takePendingGeneration,
-  wantsPromptFocus,
-} from "@/utils/promptHandoff";
+import { useLocation } from "react-router-dom";
+import { PROMPT_DRAFT_KEY, wantsPromptFocus } from "@/utils/promptHandoff";
+import SignupModal from "./SignupModal";
 
 /**
  * The landing page's primary call to action: describe a store, get one.
  *
- * The draft is mirrored to sessionStorage because signing up leaves this page
- * for the create-account page and its OTP round trip, and losing a carefully
- * typed prompt on the way is the fastest way to lose the user.
+ * The draft is mirrored to sessionStorage because signing up involves an OTP
+ * round trip, and losing a carefully typed prompt to a stray reload is the
+ * fastest way to lose the user.
  */
 
 const DRAFT_KEY = PROMPT_DRAFT_KEY;
@@ -263,6 +259,7 @@ export default function PromptComposer() {
   const [brandKit, setBrandKit] = useState<File[]>([]);
   const [brandKitPreviews, setBrandKitPreviews] = useState<string[]>([]);
   const [figmaUrl, setFigmaUrl] = useState<string | null>(null);
+  const [signupOpen, setSignupOpen] = useState(false);
   // A stored handle means a build was already running when the page went
   // away; come back up straight into polling so the progress modal
   // reappears instead of the composer pretending nothing happened.
@@ -421,6 +418,8 @@ export default function PromptComposer() {
    *  where the merchant will start editing. */
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  // Survives the signup window without being a render dependency.
+  const pendingSubmit = useRef(false);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -453,7 +452,6 @@ export default function PromptComposer() {
    * with the caret after any draft signup seeded.
    */
   const location = useLocation();
-  const navigate = useNavigate();
   useEffect(() => {
     if (!wantsPromptFocus(location.state)) return;
     const input = promptInput.current;
@@ -1400,26 +1398,15 @@ export default function PromptComposer() {
       return;
     }
     if (!user) {
-      // Signed out: the create-account page is the one signup flow. The
-      // prompt is already in its draft; the flag resumes this run once they
-      // come back signed in.
-      markPendingGeneration();
-      navigate("/checkout");
+      // Signed out: the create-account form opens over the prompt, and the
+      // run starts once it reports success, so signing up never leaves the
+      // generation the merchant just asked for.
+      pendingSubmit.current = true;
+      setSignupOpen(true);
       return;
     }
     run();
   };
-
-  /** The run asked for before signing up, started once they are back. */
-  useEffect(() => {
-    // Waits for the balance too, so a merchant with none is offered a top-up
-    // rather than a run the server refuses.
-    if (!user || creditsLoading || !credits || phase !== "idle") return;
-    if (!takePendingGeneration()) return;
-    handleGenerate();
-    // handleGenerate is rebuilt every render; the guard above is what matters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, creditsLoading, credits, phase]);
 
   const busy =
     phase === "uploading" ||
@@ -1825,6 +1812,20 @@ export default function PromptComposer() {
         ))}
       </div>
 
+      <SignupModal
+        open={signupOpen}
+        onClose={() => {
+          setSignupOpen(false);
+          pendingSubmit.current = false;
+        }}
+        onAuthenticated={() => {
+          setSignupOpen(false);
+          if (pendingSubmit.current) {
+            pendingSubmit.current = false;
+            run();
+          }
+        }}
+      />
 
       {/* Also mounted here, not only in the post-generation branch above.
           `setBuyOpen(true)` is reachable from this branch — the `?credits=1`
