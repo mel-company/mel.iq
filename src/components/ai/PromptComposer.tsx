@@ -24,7 +24,6 @@ import {
   type FailureCode,
   type GenerationEvent,
 } from "@/api/endpoints/aiStoreGenerator.endpoints";
-import AuthModal from "./AuthModal";
 import {
   type ActiveRun,
   clearActiveRun,
@@ -44,16 +43,19 @@ import type {
 import SuccessModal from "./SuccessModal";
 import BuyCreditsModal from "./BuyCreditsModal";
 import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
+import { useLocation } from "react-router-dom";
+import { PROMPT_DRAFT_KEY, wantsPromptFocus } from "@/utils/promptHandoff";
+import SignupModal from "./SignupModal";
 
 /**
  * The landing page's primary call to action: describe a store, get one.
  *
- * The draft is mirrored to sessionStorage because signing in can involve an
- * OTP round trip, and losing a carefully typed prompt to a stray reload is the
+ * The draft is mirrored to sessionStorage because signing up involves an OTP
+ * round trip, and losing a carefully typed prompt to a stray reload is the
  * fastest way to lose the user.
  */
 
-const DRAFT_KEY = "ai-store-prompt-draft";
+const DRAFT_KEY = PROMPT_DRAFT_KEY;
 
 /** Mirrors PROMPT_MAX_LENGTH on the server, so the limit is visible while
  *  typing rather than arriving as a 400 after a submit. */
@@ -257,7 +259,7 @@ export default function PromptComposer() {
   const [brandKit, setBrandKit] = useState<File[]>([]);
   const [brandKitPreviews, setBrandKitPreviews] = useState<string[]>([]);
   const [figmaUrl, setFigmaUrl] = useState<string | null>(null);
-  const [authOpen, setAuthOpen] = useState(false);
+  const [signupOpen, setSignupOpen] = useState(false);
   // A stored handle means a build was already running when the page went
   // away; come back up straight into polling so the progress modal
   // reappears instead of the composer pretending nothing happened.
@@ -416,14 +418,14 @@ export default function PromptComposer() {
    *  where the merchant will start editing. */
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  // Survives the signup window without being a render dependency.
+  const pendingSubmit = useRef(false);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [voicePhase, setVoicePhase] = useState<
     "idle" | "recording" | "transcribing"
   >("idle");
-  // Survives the auth modal without being a render dependency.
-  const pendingSubmit = useRef(false);
   // The SSE callback closes over state from when the run started, so the step
   // plan is read through a ref rather than the stale `steps` value.
   const stepsRef = useRef<PlannedStep[]>([]);
@@ -443,6 +445,21 @@ export default function PromptComposer() {
   useEffect(() => {
     sessionStorage.setItem(DRAFT_KEY, prompt);
   }, [prompt]);
+
+  /**
+   * Arriving from signup (or the nav's «أنشئ متجرك») lands on the prompt
+   * itself, not the top of a long page: it is scrolled into view and focused,
+   * with the caret after any draft signup seeded.
+   */
+  const location = useLocation();
+  useEffect(() => {
+    if (!wantsPromptFocus(location.state)) return;
+    const input = promptInput.current;
+    if (!input) return;
+    input.scrollIntoView({ behavior: "smooth", block: "center" });
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, [location.key, location.state]);
 
   // Microphone capture belongs only to this composer. Tear down its tracks if
   // the page changes; an unmounted prompt must never leave the mic active.
@@ -1381,13 +1398,33 @@ export default function PromptComposer() {
       return;
     }
     if (!user) {
-      // Hold the request and resume it once the modal reports success.
+      // Signed out: the create-account form opens over the prompt, and the
+      // run starts once it reports success, so signing up never leaves the
+      // generation the merchant just asked for.
       pendingSubmit.current = true;
-      setAuthOpen(true);
+      setSignupOpen(true);
       return;
     }
     run();
   };
+
+  /**
+   * The run asked for before signing up, started once the account exists.
+   *
+   * From an effect rather than the signup callback, so it goes through
+   * `handleGenerate` as this render sees it: signed in, with the credit
+   * balance loaded. Called straight from the callback, `run` closed over the
+   * signed-out render, skipped the balance check, and a merchant with no
+   * credits got a server refusal instead of the top-up window.
+   */
+  useEffect(() => {
+    if (!pendingSubmit.current || signupOpen) return;
+    if (!user || creditsLoading || phase !== "idle") return;
+    pendingSubmit.current = false;
+    handleGenerate();
+    // handleGenerate is rebuilt every render; these are what gate it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, creditsLoading, phase, signupOpen]);
 
   const busy =
     phase === "uploading" ||
@@ -1793,19 +1830,15 @@ export default function PromptComposer() {
         ))}
       </div>
 
-      <AuthModal
-        open={authOpen}
+      <SignupModal
+        open={signupOpen}
         onClose={() => {
-          setAuthOpen(false);
+          setSignupOpen(false);
           pendingSubmit.current = false;
         }}
-        onAuthenticated={() => {
-          setAuthOpen(false);
-          if (pendingSubmit.current) {
-            pendingSubmit.current = false;
-            run();
-          }
-        }}
+        // The run itself is started by the pending-run effect next to
+        // handleGenerate: this callback was made while still signed out.
+        onAuthenticated={() => setSignupOpen(false)}
       />
 
       {/* Also mounted here, not only in the post-generation branch above.

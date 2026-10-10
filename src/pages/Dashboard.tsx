@@ -38,6 +38,7 @@ import {
   StatusPill,
 } from "@/components/dashboard/chrome";
 import { ArrowRight } from "@hugeicons/core-free-icons";
+import { FOCUS_PROMPT_STATE } from "@/utils/promptHandoff";
 
 // Types
 interface Store {
@@ -554,14 +555,10 @@ function Dashboard() {
   const isLoading = meLoading || storesLoading || (!displayUser && !isError);
   const subscriptionsLoading = subscriptionQueries.some((q) => q.isLoading);
 
+  // Stores are made by the AI prompt now, the same place signup ends.
   const handleCreateNewStore = useCallback(() => {
-    navigate("/checkout", {
-      state: {
-        skipToStep: 3,
-        userInfo: { name: displayName },
-      },
-    });
-  }, [navigate, displayName]);
+    navigate("/", { state: FOCUS_PROMPT_STATE });
+  }, [navigate]);
 
   const handleLogout = useCallback(() => {
     // Hit the server first so the session cookie dies while credentials still
