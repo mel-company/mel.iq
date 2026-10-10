@@ -79,9 +79,10 @@ function Checkout() {
   const [searchParams] = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   /**
-   * Set only by the dashboard («create store») and the payment return, which
-   * still walk the manual plan → payment → store steps. A plain visit to
-   * /checkout is signup: account, code, then the AI prompt.
+   * Set only by the payment return, which still walks the manual payment →
+   * store steps for a paid checkout already under way. A plain visit to
+   * /checkout is signup: account, code, then the AI prompt. (The dashboard's
+   * «create store» goes to the AI prompt too.)
    */
   const manualStoreSetup = Boolean(location.state?.skipToStep);
 
