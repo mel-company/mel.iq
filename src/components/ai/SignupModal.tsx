@@ -58,7 +58,7 @@ export default function SignupModal({
           </button>
           <SignupFlow
             layout="modal"
-            createdMessage="تم إنشاء حسابك! جاري إنشاء متجرك"
+            createdMessage="تم إنشاء حسابك"
             onAuthenticated={onAuthenticated}
           />
         </div>

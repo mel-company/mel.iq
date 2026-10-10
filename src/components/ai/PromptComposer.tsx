@@ -1408,6 +1408,24 @@ export default function PromptComposer() {
     run();
   };
 
+  /**
+   * The run asked for before signing up, started once the account exists.
+   *
+   * From an effect rather than the signup callback, so it goes through
+   * `handleGenerate` as this render sees it: signed in, with the credit
+   * balance loaded. Called straight from the callback, `run` closed over the
+   * signed-out render, skipped the balance check, and a merchant with no
+   * credits got a server refusal instead of the top-up window.
+   */
+  useEffect(() => {
+    if (!pendingSubmit.current || signupOpen) return;
+    if (!user || creditsLoading || phase !== "idle") return;
+    pendingSubmit.current = false;
+    handleGenerate();
+    // handleGenerate is rebuilt every render; these are what gate it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, creditsLoading, phase, signupOpen]);
+
   const busy =
     phase === "uploading" ||
     phase === "designing" ||
@@ -1818,13 +1836,9 @@ export default function PromptComposer() {
           setSignupOpen(false);
           pendingSubmit.current = false;
         }}
-        onAuthenticated={() => {
-          setSignupOpen(false);
-          if (pendingSubmit.current) {
-            pendingSubmit.current = false;
-            run();
-          }
-        }}
+        // The run itself is started by the pending-run effect next to
+        // handleGenerate: this callback was made while still signed out.
+        onAuthenticated={() => setSignupOpen(false)}
       />
 
       {/* Also mounted here, not only in the post-generation branch above.

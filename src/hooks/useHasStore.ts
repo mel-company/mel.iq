@@ -12,18 +12,21 @@ import { normalizeApiResponse, type StoreLike } from "../utils/storeUrls";
  */
 export function useHasStore(): { hasStore: boolean; loading: boolean } {
   const { user } = useAuth();
-  const { data: storesData, isLoading } = useFetchStores(
+  const { data: storesData, isLoading, isError } = useFetchStores(
     undefined,
     Boolean(user),
   );
 
+  // When the list cannot be read, assume a store: the dashboard copes with
+  // either answer, while hiding it from an owner would strand them.
   const hasStore = useMemo(
     () =>
       Boolean(user) &&
-      normalizeApiResponse<StoreLike>(storesData).some(
-        (store) => !store.is_deleted,
-      ),
-    [user, storesData],
+      (isError ||
+        normalizeApiResponse<StoreLike>(storesData).some(
+          (store) => !store.is_deleted,
+        )),
+    [user, storesData, isError],
   );
 
   return { hasStore, loading: Boolean(user) && isLoading };
