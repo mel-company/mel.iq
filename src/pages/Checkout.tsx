@@ -36,6 +36,7 @@ import {
   isPhoneTakenError,
 } from "@/utils/otp";
 import { normalizeApiResponse } from "@/utils/storeUrls";
+import { FOCUS_PROMPT_STATE, seedPromptDraft } from "@/utils/promptHandoff";
 import {
   formatIqPhone,
   iqPhoneError,
@@ -146,7 +147,13 @@ function Checkout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { user, login } = useAuth();
+  const { user, login, loading: authLoading } = useAuth();
+  /**
+   * Set only by the dashboard («create store») and the payment return, which
+   * still walk the manual plan → payment → store steps. A plain visit to
+   * /checkout is signup: account, code, then the AI prompt.
+   */
+  const manualStoreSetup = Boolean(location.state?.skipToStep);
 
   // Fetch plans first
   const plans = useFetchAllPlans();
@@ -171,10 +178,19 @@ function Checkout() {
 
   useEffect(() => {
     if (!user || storesLoading) return;
-    if (existingStoreCount < 1) return;
-    toast.info("لديك متجر واحد مسبقاً. كل حساب يحق له متجر واحد فقط.");
+    if (existingStoreCount < 1) {
+      // Already signed in with no store: there is no account to create, and
+      // the store comes from the prompt.
+      if (!manualStoreSetup) {
+        navigate("/", { replace: true, state: FOCUS_PROMPT_STATE });
+      }
+      return;
+    }
+    if (manualStoreSetup) {
+      toast.info("لديك متجر واحد مسبقاً. كل حساب يحق له متجر واحد فقط.");
+    }
     navigate("/dashboard", { replace: true });
-  }, [user, storesLoading, existingStoreCount, navigate]);
+  }, [user, storesLoading, existingStoreCount, navigate, manualStoreSetup]);
 
   // Always start from step 1 (plan selection) unless skipToStep is provided
   // User must select a plan before creating a store
@@ -278,6 +294,8 @@ function Checkout() {
    * shown under the phone field so the merchant sees it, not only a toast.
    */
   const [phoneTakenError, setPhoneTakenError] = useState("");
+  /** The code went to an account that already existed (see below). */
+  const [existingAccount, setExistingAccount] = useState(false);
   /** Drives the success pill the frame shows once the code checks out. */
   const [otpVerified, setOtpVerified] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(
@@ -389,33 +407,6 @@ function Checkout() {
     }
   }, [plansData, searchParams, formData.plan]);
 
-  // If user is logged in and on step 2, send OTP automatically
-  useEffect(() => {
-    if (user && currentStep === 2 && !otpSent) {
-      const phone = resolveOtpPhone(user, formData.phone);
-      if (phone) {
-        sendOtpMutation(
-          { phone },
-          {
-            onSuccess: (data) => {
-              setFormData((prev) => ({ ...prev, phone }));
-              setOtpSent(true);
-            },
-            onError: (error) => {
-              console.error("Error sending OTP:", error);
-              toast.error(
-                getApiErrorMessage(
-                  error,
-                  "تعذر إرسال رمز التحقق. حاول مرة أخرى.",
-                ),
-              );
-            },
-          },
-        );
-      }
-    }
-  }, [user, currentStep, otpSent, sendOtpMutation, formData.phone]);
-
   /**
    * Arriving from the OTP step (or straight into step 3 from the dashboard)
    * goes past the plan and payment steps on its own once the quote says
@@ -455,10 +446,12 @@ function Checkout() {
     { number: 4, title: "الدفع" },
     { number: 5, title: "تخصيص المتجر" },
   ];
-  const steps = allSteps.filter(
-    (step) =>
-      (step.number !== 3 || !planPicked || currentStep === 3) &&
-      (step.number !== 4 || !noPaymentNeeded || currentStep === 4),
+  const steps = allSteps.filter((step) =>
+    manualStoreSetup
+      ? (step.number !== 3 || !planPicked || currentStep === 3) &&
+        (step.number !== 4 || !noPaymentNeeded || currentStep === 4)
+      : // Signup ends at the code; the store is built from the AI prompt.
+        step.number <= 2,
   );
   /** Position among the steps shown, for "الخطوة n من m". */
   const stepPosition = Math.max(
@@ -656,15 +649,37 @@ function Checkout() {
     setCurrentStep(2);
   };
 
-  const stopForExistingPhone = (phoneE164: string) => {
-    // الرقم مسجّل مسبقاً → نوقف إنشاء الحساب ونوجّهه لتسجيل الدخول
-    setPhoneTakenError("هذا الرقم لديه حساب مسبقاً. سجّل الدخول للمتابعة.");
-    setTouchedFields((prev) => ({ ...prev, phone: true }));
-    toast.error("هذا الرقم لديه حساب مسبقاً. سجّل الدخول بدل إنشاء حساب جديد.");
-    navigate("/login", {
-      replace: false,
-      state: { phone: toLocalDigits(phoneE164) },
-    });
+  /**
+   * The number already has an account, so sign in to it instead.
+   *
+   * This used to stop signup and send the merchant to /login. Register writes
+   * the user before the code is checked, so that also caught anyone who went
+   * back from the code step and pressed continue again, or who left mid-signup
+   * and came back: they were told they had an account they never finished.
+   * Owning the phone is all an account needs, so the code goes out here and
+   * the flow carries on from the same step.
+   */
+  const continueWithExistingAccount = (phoneE164: string, registerError: unknown) => {
+    loginMutation(
+      { phone: phoneE164 },
+      {
+        onSuccess: () => {
+          toast.info("هذا الرقم لديه حساب مسبقاً — أرسلنا رمز الدخول إليه.");
+          setExistingAccount(true);
+          proceedToOtpStep(phoneE164);
+        },
+        onError: () => {
+          // A removed account, typically: the register message says so.
+          const message = getApiErrorMessage(
+            registerError,
+            "هذا الرقم لديه حساب مسبقاً. سجّل الدخول للمتابعة.",
+          );
+          setPhoneTakenError(message);
+          setTouchedFields((prev) => ({ ...prev, phone: true }));
+          toast.error(message);
+        },
+      },
+    );
   };
 
   const handleStep1Submit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -718,9 +733,9 @@ function Checkout() {
               proceedToOtpStep(phoneE164, data);
             },
             onError: (error) => {
-              // الرقم صار بالداتابيس قبل ما تكمل verify → نوقف المسار ونبلّغه
+              // الرقم مسجّل مسبقاً → نرسل رمز الدخول ونكمل من نفس الخطوة
               if (isPhoneTakenError(error)) {
-                stopForExistingPhone(phoneE164);
+                continueWithExistingAccount(phoneE164, error);
                 return;
               }
               toast.error(
@@ -775,20 +790,16 @@ function Checkout() {
               login(token, username, refreshToken);
             }
 
-            const genUsername = `user_${Math.random().toString(36).substr(2, 9)}`;
-            const password = Math.random().toString(36).substr(2, 12);
-            const websiteUrl = `https://${formData.domain}.mel.iq/${genUsername}`;
-
-            setFormData({
-              ...formData,
-              username: genUsername,
-              password,
-              websiteUrl,
-              domain: formData.domain,
-            });
-            toast.success("تم التحقق بنجاح");
-            setAutoAdvance(true);
-            setCurrentStep(3);
+            // Signup is done. Once the store list is in, the effect at the
+            // top sends the merchant on: to the AI prompt, which names and
+            // creates the store (so there is no store form here), or to the
+            // dashboard when this number already had one.
+            seedPromptDraft(formData.businessType, formData.governorate);
+            toast.success(
+              existingAccount
+                ? "تم تسجيل الدخول"
+                : "تم إنشاء حسابك! صف متجرك وسننشئه لك الآن",
+            );
           },
           onError: (error) => {
             toast.error(
@@ -1141,6 +1152,18 @@ function Checkout() {
     }
   };
 
+  // Signed in and here for signup: the effect above is about to send them
+  // on (prompt or dashboard), so there is no form to show in the meantime.
+  if (authLoading || (user && !manualStoreSetup)) {
+    return (
+      <CheckoutShell>
+        <div className="flex min-h-[50vh] w-full items-center justify-center">
+          <Loader2 size={28} className="animate-spin text-white/60" />
+        </div>
+      </CheckoutShell>
+    );
+  }
+
   return (
     <CheckoutShell>
       {/* Brand rail first → right under RTL; plans/form fill the left. */}
@@ -1184,245 +1207,171 @@ function Checkout() {
             <div className="flex flex-col gap-[22px]">
               <div className="flex flex-col gap-1.5">
                 <h2 className="text-[28px] font-extrabold leading-tight text-white sm:text-[32px]">
-                  {user ? "المتابعة إلى التحقق" : "أنشئ حسابك"}
+                  أنشئ حسابك
                 </h2>
                 <p className="text-sm leading-6 text-[#9aa1bd]">
-                  {user
-                    ? "سنرسل رمز تحقق إلى رقمك المسجل للمتابعة"
-                    : "شهر أول مجاناً ثم 6 أشهر بنصف السعر — وتقدر تلغي في أي وقت"}
+                  شهر أول مجاناً ثم 6 أشهر بنصف السعر — وتقدر تلغي في أي وقت
                 </p>
               </div>
 
-              {user ? (
-                /* Signed in, so the only thing this step still needs is the
-                   number the code goes to — shown rather than assumed, and
-                   typed in when the account carries no usable one. */
-                <div className="flex flex-col gap-[22px]">
-                  <div className="flex flex-col gap-5 sm:flex-row">
-                    <Field
-                      label="رقم الهاتف"
-                      htmlFor="account-phone"
-                      hint={
-                        accountPhone ? "سنرسل رمز التحقق إلى هذا الرقم" : undefined
-                      }
-                      error={accountPhone ? undefined : errorFor("phone", phoneError)}
-                    >
-                      {accountPhone ? (
-                        <div
-                          id="account-phone"
-                          dir="ltr"
-                          className="flex h-[52px] w-full items-center rounded-[14px] border-[1.5px] border-mint bg-field px-4 text-sm text-frost"
-                        >
-                          {formatIqPhone(accountPhone)}
-                        </div>
-                      ) : (
-                        <PhoneInput
-                          id="account-phone"
-                          name="phone"
-                          value={localPhone}
-                          onChange={handlePhoneChange}
-                          onBlur={blurHandler("phone", formData.phone)}
-                          autoComplete="tel-national"
-                          placeholder="7XX XXX XXXX"
-                          state={stateFor("phone", phoneError)}
-                        />
-                      )}
-                    </Field>
-                    <span className="hidden flex-1 sm:block" />
-                  </div>
-
-                  <StepFooter
-                    submitLabel="المتابعة إلى التحقق"
-                    busy={isSendingOtp}
-                    onSubmit={() => {
-                      const phone = accountPhone || toIqE164(formData.phone);
-                      if (!phone) {
-                        markTouched("phone");
-                        toast.error(
-                          "لم يُعثر على رقم هاتف صالح في حسابك. أدخل رقمك للمتابعة.",
-                        );
-                        return;
-                      }
-                      sendOtpMutation(
-                        { phone },
-                        {
-                          onSuccess: () => {
-                            setFormData((prev) => ({ ...prev, phone, otp: "" }));
-                            setOtpSent(true);
-                            setCurrentStep(2);
-                          },
-                          onError: (error) => {
-                            toast.error(
-                              getApiErrorMessage(
-                                error,
-                                "حدث خطأ في إرسال رمز OTP. الرجاء المحاولة مرة أخرى.",
-                              ),
-                            );
-                          },
-                        },
-                      );
-                    }}
-                  />
+              <form
+                onSubmit={handleStep1Submit}
+                noValidate
+                className="flex flex-col gap-[22px]"
+              >
+                {/* Two per row on desktop; RTL puts the first field on the
+                    right, which is the order the frame reads in. */}
+                <div className="flex flex-col gap-5 sm:flex-row">
+                  <Field
+                    label="الاسم الكامل"
+                    htmlFor="name"
+                    error={errorFor("name", nameError)}
+                  >
+                    <TextInput
+                      id="name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      onBlur={blurHandler("name", formData.name)}
+                      required
+                      autoComplete="name"
+                      placeholder="محمد علي يوسف"
+                      state={stateFor("name", nameError)}
+                    />
+                  </Field>
+                  <Field
+                    label="البريد الإلكتروني"
+                    htmlFor="email"
+                    error={errorFor("email", emailError)}
+                  >
+                    <TextInput
+                      id="email"
+                      name="email"
+                      type="email"
+                      dir="ltr"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      onBlur={blurHandler("email", formData.email)}
+                      required
+                      autoComplete="email"
+                      placeholder="you@store.iq"
+                      state={stateFor("email", emailError)}
+                    />
+                  </Field>
                 </div>
-              ) : (
-                <form
-                  onSubmit={handleStep1Submit}
-                  noValidate
-                  className="flex flex-col gap-[22px]"
+
+                <div className="flex flex-col gap-5 sm:flex-row">
+                  <Field
+                    label="رقم الهاتف"
+                    htmlFor="phone"
+                    hint="سنرسل رمز التحقق إلى هذا الرقم"
+                    error={errorFor("phone", phoneError)}
+                  >
+                    <PhoneInput
+                      id="phone"
+                      name="phone"
+                      value={localPhone}
+                      onChange={handlePhoneChange}
+                      onBlur={blurHandler("phone", formData.phone)}
+                      required
+                      autoComplete="tel-national"
+                      placeholder="7XX XXX XXXX"
+                      state={stateFor("phone", phoneError)}
+                    />
+                  </Field>
+                  {/* No store name here: the AI prompt that follows names
+                      the store. */}
+                  <span className="hidden flex-1 sm:block" />
+                </div>
+
+                {/* These two are in the frame but the register endpoint takes
+                    only name / email / phone, so they are not persisted —
+                    hence optional. They do start the AI prompt off
+                    (`seedPromptDraft`) once the code checks out. */}
+                <div className="flex flex-col gap-5 sm:flex-row">
+                  <Field label="نوع النشاط التجاري" htmlFor="businessType">
+                    <SelectInput
+                      id="businessType"
+                      name="businessType"
+                      value={formData.businessType}
+                      onChange={handleInputChange}
+                      placeholder="اختر نوع النشاط"
+                    >
+                      {BUSINESS_TYPES.map((type) => (
+                        <option key={type} value={type} className="bg-ink-raised text-frost">
+                          {type}
+                        </option>
+                      ))}
+                    </SelectInput>
+                  </Field>
+                  <Field label="المحافظة" htmlFor="governorate">
+                    <SelectInput
+                      id="governorate"
+                      name="governorate"
+                      value={formData.governorate}
+                      onChange={handleInputChange}
+                      placeholder="اختر المحافظة"
+                    >
+                      {GOVERNORATES.map((name) => (
+                        <option key={name} value={name} className="bg-ink-raised text-frost">
+                          {name}
+                        </option>
+                      ))}
+                    </SelectInput>
+                  </Field>
+                </div>
+
+                <CheckBox
+                  checked={acceptedTerms}
+                  onChange={setAcceptedTerms}
+                  error={errorFor("terms", termsError)}
                 >
-                  {/* Two per row on desktop; RTL puts the first field on the
-                      right, which is the order the frame reads in. */}
-                  <div className="flex flex-col gap-5 sm:flex-row">
-                    <Field
-                      label="الاسم الكامل"
-                      htmlFor="name"
-                      error={errorFor("name", nameError)}
-                    >
-                      <TextInput
-                        id="name"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleInputChange}
-                        onBlur={blurHandler("name", formData.name)}
-                        required
-                        autoComplete="name"
-                        placeholder="محمد علي يوسف"
-                        state={stateFor("name", nameError)}
-                      />
-                    </Field>
-                    <Field
-                      label="البريد الإلكتروني"
-                      htmlFor="email"
-                      error={errorFor("email", emailError)}
-                    >
-                      <TextInput
-                        id="email"
-                        name="email"
-                        type="email"
-                        dir="ltr"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        onBlur={blurHandler("email", formData.email)}
-                        required
-                        autoComplete="email"
-                        placeholder="you@store.iq"
-                        state={stateFor("email", emailError)}
-                      />
-                    </Field>
-                  </div>
-
-                  <div className="flex flex-col gap-5 sm:flex-row">
-                    <Field
-                      label="رقم الهاتف"
-                      htmlFor="phone"
-                      hint="سنرسل رمز التحقق إلى هذا الرقم"
-                      error={errorFor("phone", phoneError)}
-                    >
-                      <PhoneInput
-                        id="phone"
-                        name="phone"
-                        value={localPhone}
-                        onChange={handlePhoneChange}
-                        onBlur={blurHandler("phone", formData.phone)}
-                        required
-                        autoComplete="tel-national"
-                        placeholder="7XX XXX XXXX"
-                        state={stateFor("phone", phoneError)}
-                      />
-                    </Field>
-                    <Field label="اسم المتجر" htmlFor="storeName">
-                      <TextInput
-                        id="storeName"
-                        name="storeName"
-                        value={formData.storeName}
-                        onChange={handleInputChange}
-                        placeholder="مثال: متجر البركة"
-                      />
-                    </Field>
-                  </div>
-
-                  {/* These two are in the frame but the register endpoint takes
-                      only name / email / phone, so they are collected and not
-                      yet persisted — hence optional rather than required. */}
-                  <div className="flex flex-col gap-5 sm:flex-row">
-                    <Field label="نوع النشاط التجاري" htmlFor="businessType">
-                      <SelectInput
-                        id="businessType"
-                        name="businessType"
-                        value={formData.businessType}
-                        onChange={handleInputChange}
-                        placeholder="اختر نوع النشاط"
-                      >
-                        {BUSINESS_TYPES.map((type) => (
-                          <option key={type} value={type} className="bg-ink-raised text-frost">
-                            {type}
-                          </option>
-                        ))}
-                      </SelectInput>
-                    </Field>
-                    <Field label="المحافظة" htmlFor="governorate">
-                      <SelectInput
-                        id="governorate"
-                        name="governorate"
-                        value={formData.governorate}
-                        onChange={handleInputChange}
-                        placeholder="اختر المحافظة"
-                      >
-                        {GOVERNORATES.map((name) => (
-                          <option key={name} value={name} className="bg-ink-raised text-frost">
-                            {name}
-                          </option>
-                        ))}
-                      </SelectInput>
-                    </Field>
-                  </div>
-
-                  <CheckBox
-                    checked={acceptedTerms}
-                    onChange={setAcceptedTerms}
-                    error={errorFor("terms", termsError)}
+                  أوافق على{" "}
+                  {/* New tab: on a phone the links fill most of this line,
+                      and a tap that navigated away lost the whole form. */}
+                  <Link
+                    to="/terms-of-use"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold text-brand-primary hover:underline"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    أوافق على{" "}
-                    <Link
-                      to="/terms-of-use"
-                      className="font-bold text-brand-primary hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      شروط الاستخدام
-                    </Link>{" "}
-                    و{" "}
-                    <Link
-                      to="/privacy-policy"
-                      className="font-bold text-brand-primary hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      سياسة الخصوصية
-                    </Link>
-                  </CheckBox>
-
-                  <StepFooter
-                    submitLabel="متابعة"
-                    busy={isRegistering || isLoggingIn || isSendingOtp}
+                    شروط الاستخدام
+                  </Link>{" "}
+                  و{" "}
+                  <Link
+                    to="/privacy-policy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold text-brand-primary hover:underline"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <p className="text-[13px] leading-5 text-muted">
-                      لديك حساب؟{" "}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate("/login", {
-                            state: {
-                              phone: toLocalDigits(formData.phone),
-                            },
-                          })
-                        }
-                        className="font-bold text-brand-primary hover:underline"
-                      >
-                        تسجيل الدخول
-                      </button>
-                    </p>
-                  </StepFooter>
-                </form>
-              )}
+                    سياسة الخصوصية
+                  </Link>
+                </CheckBox>
+
+                <StepFooter
+                  submitLabel="متابعة"
+                  busy={isRegistering || isLoggingIn || isSendingOtp}
+                >
+                  <p className="text-[13px] leading-5 text-muted">
+                    لديك حساب؟{" "}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate("/login", {
+                          state: {
+                            phone: toLocalDigits(formData.phone),
+                          },
+                        })
+                      }
+                      className="font-bold text-brand-primary hover:underline"
+                    >
+                      تسجيل الدخول
+                    </button>
+                  </p>
+                </StepFooter>
+              </form>
             </div>
             </div>
           )}

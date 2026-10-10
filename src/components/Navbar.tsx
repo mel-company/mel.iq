@@ -3,6 +3,8 @@ import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useStorefrontUrl } from "../hooks/useStorefrontUrl";
+import { useHasStore } from "../hooks/useHasStore";
+import { FOCUS_PROMPT_STATE } from "../utils/promptHandoff";
 
 function Navbar() {
   const location = useLocation();
@@ -11,6 +13,12 @@ function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const storefrontUrl = useStorefrontUrl();
+  // A store-less account has nothing on the dashboard yet; send it to the
+  // prompt that creates the store instead.
+  const { hasStore } = useHasStore();
+  const accountLink = hasStore
+    ? { to: "/dashboard", state: undefined, label: "لوحة التحكم" }
+    : { to: "/", state: FOCUS_PROMPT_STATE, label: "أنشئ متجرك" };
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -85,10 +93,11 @@ function Navbar() {
             <div className="hidden md:block">
               {user ? (
                 <Link
-                  to="/dashboard"
+                  to={accountLink.to}
+                  state={accountLink.state}
                   className="px-4 py-2 bg-black dark:bg-white text-white dark:text-black rounded-lg text-sm font-medium transition-colors hover:bg-gray-800 dark:hover:bg-gray-200"
                 >
-                  لوحة التحكم
+                  {accountLink.label}
                 </Link>
               ) : (
                 <Link
@@ -228,11 +237,12 @@ function Navbar() {
                 )}
                 {user ? (
                   <Link
-                    to="/dashboard"
+                    to={accountLink.to}
+                    state={accountLink.state}
                     onClick={() => setMobileMenuOpen(false)}
                     className="block w-full text-center px-4 py-3 bg-black dark:bg-white text-white dark:text-black rounded-lg text-base font-medium transition-colors hover:bg-gray-800 dark:hover:bg-gray-200"
                   >
-                    لوحة التحكم
+                    {accountLink.label}
                   </Link>
                 ) : (
                   <Link

@@ -44,6 +44,8 @@ import type {
 import SuccessModal from "./SuccessModal";
 import BuyCreditsModal from "./BuyCreditsModal";
 import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
+import { useLocation } from "react-router-dom";
+import { PROMPT_DRAFT_KEY, wantsPromptFocus } from "@/utils/promptHandoff";
 
 /**
  * The landing page's primary call to action: describe a store, get one.
@@ -53,7 +55,7 @@ import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
  * fastest way to lose the user.
  */
 
-const DRAFT_KEY = "ai-store-prompt-draft";
+const DRAFT_KEY = PROMPT_DRAFT_KEY;
 
 /** Mirrors PROMPT_MAX_LENGTH on the server, so the limit is visible while
  *  typing rather than arriving as a 400 after a submit. */
@@ -443,6 +445,21 @@ export default function PromptComposer() {
   useEffect(() => {
     sessionStorage.setItem(DRAFT_KEY, prompt);
   }, [prompt]);
+
+  /**
+   * Arriving from signup (or the nav's «أنشئ متجرك») lands on the prompt
+   * itself, not the top of a long page: it is scrolled into view and focused,
+   * with the caret after any draft signup seeded.
+   */
+  const location = useLocation();
+  useEffect(() => {
+    if (!wantsPromptFocus(location.state)) return;
+    const input = promptInput.current;
+    if (!input) return;
+    input.scrollIntoView({ behavior: "smooth", block: "center" });
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, [location.key, location.state]);
 
   // Microphone capture belongs only to this composer. Tear down its tracks if
   // the page changes; an unmounted prompt must never leave the mic active.

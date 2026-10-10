@@ -1,8 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ExternalLink, LayoutDashboard, Menu, X } from "./icons";
+import { ExternalLink, LayoutDashboard, Menu, Sparkle, X } from "./icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useStorefrontUrl } from "../hooks/useStorefrontUrl";
+import { useHasStore } from "../hooks/useHasStore";
+import { FOCUS_PROMPT_STATE } from "../utils/promptHandoff";
 import { useScrollReveal } from "../hooks/useScrollReveal";
 import SiteFooter from "./landing/SiteFooter";
 
@@ -35,8 +37,9 @@ function navItemHref(item: NavItem): string {
 function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
   const { user, loading } = useAuth();
   const storefrontUrl = useStorefrontUrl();
+  const { hasStore, loading: storesLoading } = useHasStore();
 
-  if (loading) {
+  if (loading || storesLoading) {
     return <div className="h-15 w-[187px] animate-pulse rounded-[18px] bg-white/5" />;
   }
 
@@ -56,14 +59,28 @@ function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
             زيارة متجري
           </a>
         )}
-        <Link
-          to="/dashboard"
-          onClick={onNavigate}
-          className="flex h-15 w-full items-center justify-center gap-2 rounded-[18px] border border-white/15 bg-[linear-gradient(90deg,#4f60f9_0%,#7569ff_100%)] px-4 text-base font-bold text-white transition-opacity hover:opacity-90 sm:w-[187px]"
-        >
-          <LayoutDashboard size={16} />
-          لوحة التحكم
-        </Link>
+        {/* No store yet means an empty dashboard, so the slot points at the
+            prompt that creates one instead. */}
+        {hasStore ? (
+          <Link
+            to="/dashboard"
+            onClick={onNavigate}
+            className="flex h-15 w-full items-center justify-center gap-2 rounded-[18px] border border-white/15 bg-[linear-gradient(90deg,#4f60f9_0%,#7569ff_100%)] px-4 text-base font-bold text-white transition-opacity hover:opacity-90 sm:w-[187px]"
+          >
+            <LayoutDashboard size={16} />
+            لوحة التحكم
+          </Link>
+        ) : (
+          <Link
+            to="/"
+            state={FOCUS_PROMPT_STATE}
+            onClick={onNavigate}
+            className="flex h-15 w-full items-center justify-center gap-2 rounded-[18px] border border-white/15 bg-[linear-gradient(90deg,#4f60f9_0%,#7569ff_100%)] px-4 text-base font-bold text-white transition-opacity hover:opacity-90 sm:w-[187px]"
+          >
+            <Sparkle size={16} />
+            أنشئ متجرك
+          </Link>
+        )}
       </>
     );
   }
