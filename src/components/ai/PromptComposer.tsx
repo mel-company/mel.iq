@@ -24,7 +24,6 @@ import {
   type FailureCode,
   type GenerationEvent,
 } from "@/api/endpoints/aiStoreGenerator.endpoints";
-import AuthModal from "./AuthModal";
 import {
   type ActiveRun,
   clearActiveRun,
@@ -44,15 +43,20 @@ import type {
 import SuccessModal from "./SuccessModal";
 import BuyCreditsModal from "./BuyCreditsModal";
 import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
-import { useLocation } from "react-router-dom";
-import { PROMPT_DRAFT_KEY, wantsPromptFocus } from "@/utils/promptHandoff";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  PROMPT_DRAFT_KEY,
+  markPendingGeneration,
+  takePendingGeneration,
+  wantsPromptFocus,
+} from "@/utils/promptHandoff";
 
 /**
  * The landing page's primary call to action: describe a store, get one.
  *
- * The draft is mirrored to sessionStorage because signing in can involve an
- * OTP round trip, and losing a carefully typed prompt to a stray reload is the
- * fastest way to lose the user.
+ * The draft is mirrored to sessionStorage because signing up leaves this page
+ * for the create-account page and its OTP round trip, and losing a carefully
+ * typed prompt on the way is the fastest way to lose the user.
  */
 
 const DRAFT_KEY = PROMPT_DRAFT_KEY;
@@ -259,7 +263,6 @@ export default function PromptComposer() {
   const [brandKit, setBrandKit] = useState<File[]>([]);
   const [brandKitPreviews, setBrandKitPreviews] = useState<string[]>([]);
   const [figmaUrl, setFigmaUrl] = useState<string | null>(null);
-  const [authOpen, setAuthOpen] = useState(false);
   // A stored handle means a build was already running when the page went
   // away; come back up straight into polling so the progress modal
   // reappears instead of the composer pretending nothing happened.
@@ -424,8 +427,6 @@ export default function PromptComposer() {
   const [voicePhase, setVoicePhase] = useState<
     "idle" | "recording" | "transcribing"
   >("idle");
-  // Survives the auth modal without being a render dependency.
-  const pendingSubmit = useRef(false);
   // The SSE callback closes over state from when the run started, so the step
   // plan is read through a ref rather than the stale `steps` value.
   const stepsRef = useRef<PlannedStep[]>([]);
@@ -452,6 +453,7 @@ export default function PromptComposer() {
    * with the caret after any draft signup seeded.
    */
   const location = useLocation();
+  const navigate = useNavigate();
   useEffect(() => {
     if (!wantsPromptFocus(location.state)) return;
     const input = promptInput.current;
@@ -1398,13 +1400,26 @@ export default function PromptComposer() {
       return;
     }
     if (!user) {
-      // Hold the request and resume it once the modal reports success.
-      pendingSubmit.current = true;
-      setAuthOpen(true);
+      // Signed out: the create-account page is the one signup flow. The
+      // prompt is already in its draft; the flag resumes this run once they
+      // come back signed in.
+      markPendingGeneration();
+      navigate("/checkout");
       return;
     }
     run();
   };
+
+  /** The run asked for before signing up, started once they are back. */
+  useEffect(() => {
+    // Waits for the balance too, so a merchant with none is offered a top-up
+    // rather than a run the server refuses.
+    if (!user || creditsLoading || !credits || phase !== "idle") return;
+    if (!takePendingGeneration()) return;
+    handleGenerate();
+    // handleGenerate is rebuilt every render; the guard above is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, creditsLoading, credits, phase]);
 
   const busy =
     phase === "uploading" ||
@@ -1810,20 +1825,6 @@ export default function PromptComposer() {
         ))}
       </div>
 
-      <AuthModal
-        open={authOpen}
-        onClose={() => {
-          setAuthOpen(false);
-          pendingSubmit.current = false;
-        }}
-        onAuthenticated={() => {
-          setAuthOpen(false);
-          if (pendingSubmit.current) {
-            pendingSubmit.current = false;
-            run();
-          }
-        }}
-      />
 
       {/* Also mounted here, not only in the post-generation branch above.
           `setBuyOpen(true)` is reachable from this branch — the `?credits=1`

@@ -36,7 +36,11 @@ import {
   isPhoneTakenError,
 } from "@/utils/otp";
 import { normalizeApiResponse } from "@/utils/storeUrls";
-import { FOCUS_PROMPT_STATE, seedPromptDraft } from "@/utils/promptHandoff";
+import {
+  FOCUS_PROMPT_STATE,
+  hasPendingGeneration,
+  seedPromptDraft,
+} from "@/utils/promptHandoff";
 import {
   formatIqPhone,
   iqPhoneError,
@@ -178,6 +182,12 @@ function Checkout() {
 
   useEffect(() => {
     if (!user || storesLoading) return;
+    // Sent here by «أنشئ متجري»: back to the prompt, where the run they asked
+    // for resumes (into their store, if this number already had one).
+    if (!manualStoreSetup && hasPendingGeneration()) {
+      navigate("/", { replace: true, state: FOCUS_PROMPT_STATE });
+      return;
+    }
     if (existingStoreCount < 1) {
       // Already signed in with no store: there is no account to create, and
       // the store comes from the prompt.
@@ -798,7 +808,9 @@ function Checkout() {
             toast.success(
               existingAccount
                 ? "تم تسجيل الدخول"
-                : "تم إنشاء حسابك! صف متجرك وسننشئه لك الآن",
+                : hasPendingGeneration()
+                  ? "تم إنشاء حسابك! جاري إنشاء متجرك"
+                  : "تم إنشاء حسابك! صف متجرك وسننشئه لك الآن",
             );
           },
           onError: (error) => {
