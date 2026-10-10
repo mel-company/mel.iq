@@ -168,7 +168,7 @@ function ContactSection() {
             className="text-prose-lg max-w-[1181px] text-center"
             style={{ "--reveal-delay": "100ms" } as React.CSSProperties}
           >
-            فريقنا في بغداد جاهز للإجابة عن أسئلتك ومساعدتك في إطلاق متجرك عادةً
+            فريقنا جاهز للإجابة عن أسئلتك ومساعدتك في إطلاق متجرك عادةً
             نرّد خلال أقل من ساعة.
           </p>
         </div>
