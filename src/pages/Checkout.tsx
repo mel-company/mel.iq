@@ -418,7 +418,7 @@ function Checkout() {
 
   const activeStepTitle =
     currentStep === 6
-      ? "تم إنشاء متجرك"
+      ? "تم إنشاء حسابك"
       : (steps.find((s) => s.number === currentStep)?.title ?? steps[0].title);
 
 
@@ -1268,7 +1268,7 @@ function Checkout() {
                     <label
                       htmlFor="domain"
                       dir="ltr"
-                      className={`flex h-[52px] w-full cursor-text items-center rounded-[14px] bg-field px-4 text-sm transition-colors ${
+                      className={`flex h-[52px] w-full cursor-text items-center gap-1 rounded-[14px] bg-field px-4 text-sm transition-colors ${
                         domainChecked && domainAvailable
                           ? "border-[1.5px] border-mint"
                           : domainChecked && domainAvailable === false
@@ -1276,43 +1276,32 @@ function Checkout() {
                             : "border border-field-line focus-within:border-[1.5px] focus-within:border-brand-primary"
                       }`}
                     >
-                      {/* Sized by an invisible copy of its text, so `.mel.iq`
-                          sits right after the link as it is typed. */}
-                      <span className="inline-grid min-w-0">
-                        <span
-                          aria-hidden
-                          className="invisible col-start-1 row-start-1 overflow-hidden whitespace-pre"
-                        >
-                          {formData.domain || "albaraka"}
-                        </span>
-                        <input
-                          id="domain"
-                          name="domain"
-                          dir="ltr"
-                          value={formData.domain}
-                          onChange={handleDomainChange}
-                          onBlur={() => {
-                            if (!domainChecked && formData.domain) void checkSubdomain();
-                          }}
-                          autoComplete="off"
-                          autoCapitalize="none"
-                          spellCheck={false}
-                          placeholder="albaraka"
-                          size={1}
-                          className="col-start-1 row-start-1 w-full min-w-0 bg-transparent text-left text-frost placeholder:text-dim focus:outline-none"
-                        />
-                      </span>
-                      <span className="shrink-0 font-semibold text-muted">
-                        .mel.iq
-                      </span>
+                      <input
+                        id="domain"
+                        name="domain"
+                        dir="ltr"
+                        value={formData.domain}
+                        onChange={handleDomainChange}
+                        onBlur={() => {
+                          if (!domainChecked && formData.domain) void checkSubdomain();
+                        }}
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        placeholder="albaraka"
+                        className="min-w-0 flex-1 bg-transparent text-left text-frost placeholder:text-dim focus:outline-none"
+                      />
                       {isCheckingDomain ? (
-                        <Loader2 size={14} className="ml-auto shrink-0 animate-spin text-muted" />
+                        <Loader2 size={14} className="shrink-0 animate-spin text-muted" />
                       ) : (
                         domainChecked &&
                         domainAvailable && (
-                          <span dir="rtl" className="ml-auto shrink-0 pl-2 text-xs font-bold text-mint">✓ متاح</span>
+                          <span dir="rtl" className="shrink-0 px-2 text-xs font-bold text-mint">✓ متاح</span>
                         )
                       )}
+                      <span className="shrink-0 font-semibold text-muted">
+                        .mel.iq
+                      </span>
                     </label>
                   </Field>
                 </div>

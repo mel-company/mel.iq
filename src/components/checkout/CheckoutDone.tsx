@@ -74,7 +74,7 @@ function CheckoutDone({
         </span>
         <div className="flex flex-col gap-1.5">
           <h2 className="text-[26px] font-extrabold leading-tight text-white sm:text-[30px]">
-            تم إنشاء متجرك
+            تم إنشاء حسابك
           </h2>
           <p className="text-sm leading-6 text-[#9aa1bd]">
             باقي خطوة وحدة: صمّم واجهة متجرك
