@@ -42,6 +42,7 @@ import type {
 } from "@/api/endpoints/aiStoreGenerator.endpoints";
 import SuccessModal from "./SuccessModal";
 import BuyCreditsModal from "./BuyCreditsModal";
+import UnlimitedCreditsBadge from "./UnlimitedCreditsBadge";
 import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -1813,6 +1814,8 @@ export default function PromptComposer() {
           </div>
         </div>
       </div>
+
+      {credits?.unlimited && <UnlimitedCreditsBadge daily={credits.daily} />}
 
       {/* Starter prompts. The design shows four chips under the composer; they
           fill the box rather than submit, because the merchant still wants to

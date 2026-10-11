@@ -26,6 +26,7 @@ import {
   GlobeIcon as HiGlobe,
   Image01Icon as HiImage,
   ImagePlusIcon as HiImagePlus,
+  InfinityIcon as HiInfinity,
   InstagramIcon as HiInstagram,
   LayoutDashboardIcon as HiLayoutDashboard,
   LayoutGridIcon as HiLayoutGrid,
@@ -134,6 +135,7 @@ export const Send = icon(HiSend, "Send");
 export const Settings = icon(HiSettings, "Settings");
 export const Share2 = icon(HiShare, "Share2");
 export const ShieldCheck = icon(HiShieldCheck, "ShieldCheck");
+export const InfinityIcon = icon(HiInfinity, "InfinityIcon");
 export const Sparkle = icon(HiSparkle, "Sparkle");
 export const Sparkles = icon(HiSparkles, "Sparkles");
 /** The stop-recording glyph; filled by a `fill="currentColor"` at its site. */
