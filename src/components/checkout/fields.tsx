@@ -39,7 +39,7 @@ export function Field({
   className?: string;
 }) {
   return (
-    <div className={`flex min-w-px flex-1 flex-col gap-2 text-right ${className}`}>
+    <div className={`flex min-w-px flex-1 flex-col gap-2 text-right mt-8 lg:mt-16 ${className}`}>
       <label htmlFor={htmlFor} className="text-[13px] font-semibold leading-5 text-muted">
         {label}
       </label>
@@ -95,9 +95,8 @@ export function SelectInput({
     <div className={`relative flex h-[52px] w-full items-center rounded-[14px] bg-field ${borderFor(state)}`}>
       <select
         {...props}
-        className={`h-full w-full cursor-pointer appearance-none bg-transparent pe-4 ps-10 text-right text-sm text-frost focus:outline-none ${
-          props.value ? "" : "text-dim"
-        } ${className}`}
+        className={`h-full w-full cursor-pointer appearance-none bg-transparent pe-4 ps-10 text-right text-sm text-frost focus:outline-none ${props.value ? "" : "text-dim"
+          } ${className}`}
       >
         {placeholder && (
           <option value="" disabled className="bg-ink-raised text-dim">

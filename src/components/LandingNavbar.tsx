@@ -290,7 +290,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
         }}
       />
       <LandingNavbar />
-      <main className="relative pt-24 lg:pt-28">{children}</main>
+      <main className="relative">{children}</main>
       <SiteFooter />
     </div>
   );

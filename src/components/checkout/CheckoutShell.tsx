@@ -20,7 +20,7 @@ function HomeLink() {
  */
 function CheckoutShell({ children }: { children: ReactNode }) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#060814] font-setar text-white">
+    <div className="relative min-h-screen overflow-hidden bg-[#060814] font-setar text-white mt-8 lg:mt-16">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.35]"

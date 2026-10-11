@@ -19,7 +19,7 @@ function CheckoutStepper({
   );
 
   return (
-    <div className="w-full">
+    <div className="w-full mt-8 lg:mt-16">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-base font-bold text-white">{active?.title}</h2>
         <p className="shrink-0 text-[13px] font-medium text-[#7b8cff]">
@@ -30,11 +30,10 @@ function CheckoutStepper({
         {steps.map((step) => (
           <span
             key={step.number}
-            className={`h-1.5 min-w-px flex-1 rounded-full transition-colors ${
-              step.number <= currentStep
+            className={`h-1.5 min-w-px flex-1 rounded-full transition-colors ${step.number <= currentStep
                 ? "bg-gradient-to-l from-[#4f60f9] to-[#00bfff]"
                 : "bg-white/10"
-            }`}
+              }`}
           />
         ))}
       </div>
