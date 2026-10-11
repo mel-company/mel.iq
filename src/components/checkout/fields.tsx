@@ -39,7 +39,7 @@ export function Field({
   className?: string;
 }) {
   return (
-    <div className={`flex min-w-px flex-1 flex-col gap-2 text-right mt-8 lg:mt-16 ${className}`}>
+    <div className={`flex min-w-px flex-1 flex-col gap-2 text-right ${className}`}>
       <label htmlFor={htmlFor} className="text-[13px] font-semibold leading-5 text-muted">
         {label}
       </label>
