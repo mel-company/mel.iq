@@ -51,8 +51,8 @@ function CheckoutBrandRail({
             />
           </span>
           <div className="flex flex-col items-start text-right">
-            <span dir="ltr" className="text-[24px] font-extrabold leading-none tracking-tight text-white">
-              mel.iq
+            <span className="text-[24px] font-extrabold leading-none text-white">
+              منصة ميل
             </span>
             <span className="mt-1 text-[13px] text-[#8b92b0]">نظام إدارة المتاجر</span>
           </div>

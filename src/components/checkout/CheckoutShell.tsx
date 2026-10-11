@@ -50,9 +50,7 @@ function CheckoutShell({ children }: { children: ReactNode }) {
       <div className="relative z-10 flex items-center justify-between gap-3 px-4 pt-5 sm:px-6 lg:hidden">
         <HomeLink />
         <span className="flex items-center gap-2.5">
-          <span dir="ltr" className="text-lg font-extrabold text-white">
-            mel.iq
-          </span>
+          <span className="text-lg font-extrabold text-white">منصة ميل</span>
           <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(233.96deg,#b657ff_23.8%,#00bfff_76.3%)]">
             <img
               src="/images/landing/mel-mark.svg"

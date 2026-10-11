@@ -886,9 +886,20 @@ function Checkout() {
                   </button>
                 </div>
               ) : (
-                <div className="grid items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                // One plan on sale: it takes the whole width and lays its
+                // features and price side by side instead of a thin column.
+                <div
+                  className={`grid items-stretch gap-5 ${
+                    plansData.length === 1
+                      ? ""
+                      : plansData.length === 2
+                        ? "sm:grid-cols-2"
+                        : "sm:grid-cols-2 lg:grid-cols-3"
+                  }`}
+                >
                   {plansData.map((plan: any) => {
                     const selected = formData.plan?.id === plan.id;
+                    const wide = plansData.length === 1;
                     const monthly = Number(plan.monthly_price ?? 0);
                     const isFree =
                       Boolean(plan.is_free) || monthly === 0;
@@ -914,7 +925,12 @@ function Checkout() {
                             : "border-white/[0.08] bg-[#0a0d1c]/95 hover:border-[#4f60f9]/35"
                         }`}
                       >
-                        <div className="flex h-full flex-col gap-6 px-6 pb-7 pt-7">
+                        <div
+                          className={`flex h-full flex-col gap-6 px-6 pb-7 pt-7 ${
+                            wide ? "sm:flex-row sm:items-stretch sm:gap-10 sm:px-9 sm:py-9" : ""
+                          }`}
+                        >
+                          <div className={`flex flex-col gap-6 ${wide ? "sm:flex-1" : ""}`}>
                           <div className="flex flex-col gap-3">
                             <div className="flex items-start justify-between gap-2">
                               {isFree && (
@@ -950,7 +966,15 @@ function Checkout() {
                               </li>
                             ))}
                           </ul>
+                          </div>
 
+                          <div
+                            className={`mt-auto flex flex-col ${
+                              wide
+                                ? "sm:mt-0 sm:w-[46%] sm:shrink-0 sm:justify-center sm:border-s sm:border-white/[0.08] sm:ps-10"
+                                : ""
+                            }`}
+                          >
                           {isFree || !price ? (
                             <p className="mt-auto flex items-end justify-end gap-1 pt-2">
                               {isFree ? (
@@ -996,7 +1020,7 @@ function Checkout() {
                               </p>
                               <p className="flex items-center gap-2 rounded-xl border border-mint/25 bg-mint/10 px-3 py-2 text-[12px] font-bold text-mint">
                                 <span aria-hidden>✓</span>
-                                بدون بطاقة دفع — ما نطلب أي بيانات دفع هسه
+                                ما تحتاج بطاقة دفع
                               </p>
                             </div>
                           ) : (
@@ -1007,6 +1031,7 @@ function Checkout() {
                               <span className="pb-1 text-sm text-[#73799b]">د.ع /شهرياً</span>
                             </p>
                           )}
+                          </div>
                         </div>
                       </button>
                     );
@@ -1240,8 +1265,10 @@ function Checkout() {
                     {/* The `.mel.iq` suffix is fixed chrome, not typed — the
                         field holds only the subdomain the merchant picks. It
                         is checked when the field loses focus. */}
-                    <div
-                      className={`flex h-[52px] w-full items-center gap-2.5 rounded-[14px] bg-field px-4 text-sm transition-colors ${
+                    <label
+                      htmlFor="domain"
+                      dir="ltr"
+                      className={`flex h-[52px] w-full cursor-text items-center rounded-[14px] bg-field px-4 text-sm transition-colors ${
                         domainChecked && domainAvailable
                           ? "border-[1.5px] border-mint"
                           : domainChecked && domainAvailable === false
@@ -1249,33 +1276,44 @@ function Checkout() {
                             : "border border-field-line focus-within:border-[1.5px] focus-within:border-brand-primary"
                       }`}
                     >
+                      {/* Sized by an invisible copy of its text, so `.mel.iq`
+                          sits right after the link as it is typed. */}
+                      <span className="inline-grid min-w-0">
+                        <span
+                          aria-hidden
+                          className="invisible col-start-1 row-start-1 overflow-hidden whitespace-pre"
+                        >
+                          {formData.domain || "albaraka"}
+                        </span>
+                        <input
+                          id="domain"
+                          name="domain"
+                          dir="ltr"
+                          value={formData.domain}
+                          onChange={handleDomainChange}
+                          onBlur={() => {
+                            if (!domainChecked && formData.domain) void checkSubdomain();
+                          }}
+                          autoComplete="off"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          placeholder="albaraka"
+                          size={1}
+                          className="col-start-1 row-start-1 w-full min-w-0 bg-transparent text-left text-frost placeholder:text-dim focus:outline-none"
+                        />
+                      </span>
+                      <span className="shrink-0 font-semibold text-muted">
+                        .mel.iq
+                      </span>
                       {isCheckingDomain ? (
-                        <Loader2 size={14} className="shrink-0 animate-spin text-muted" />
+                        <Loader2 size={14} className="ml-auto shrink-0 animate-spin text-muted" />
                       ) : (
                         domainChecked &&
                         domainAvailable && (
-                          <span className="shrink-0 text-xs font-bold text-mint">✓ متاح</span>
+                          <span dir="rtl" className="ml-auto shrink-0 pl-2 text-xs font-bold text-mint">✓ متاح</span>
                         )
                       )}
-                      <input
-                        id="domain"
-                        name="domain"
-                        dir="ltr"
-                        value={formData.domain}
-                        onChange={handleDomainChange}
-                        onBlur={() => {
-                          if (!domainChecked && formData.domain) void checkSubdomain();
-                        }}
-                        autoComplete="off"
-                        autoCapitalize="none"
-                        spellCheck={false}
-                        placeholder="albaraka"
-                        className="min-w-0 flex-1 bg-transparent text-left text-frost placeholder:text-dim focus:outline-none"
-                      />
-                      <span dir="ltr" className="shrink-0 font-semibold text-muted">
-                        .mel.iq
-                      </span>
-                    </div>
+                    </label>
                   </Field>
                 </div>
 
