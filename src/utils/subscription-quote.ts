@@ -22,7 +22,7 @@ function formatCurrency(value: number | null | undefined, fallback = "—"): str
 /** What is due now. */
 export function quoteDue(quote: SubscriptionQuote | undefined): string {
   if (!quote) return "—";
-  return quote.amount > 0 ? formatCurrency(quote.amount) : "مجاناً";
+  return quote.amount > 0 ? formatCurrency(quote.amount) : "ببلاش";
 }
 
 const monthsLabel = (n: number) => (n === 1 ? "شهر" : `${n} أشهر`);
@@ -40,7 +40,7 @@ export function quoteExplanation(
     quote.breakdown;
 
   const parts: string[] = [];
-  if (freeMonths > 0) parts.push(`${monthsLabel(freeMonths)} مجاناً`);
+  if (freeMonths > 0) parts.push(`${monthsLabel(freeMonths)} ببلاش`);
   if (discountMonths > 0) {
     parts.push(
       `${monthsLabel(discountMonths)} بخصم ${quote.promo.discountPercent}% ` +

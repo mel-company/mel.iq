@@ -892,7 +892,9 @@ function Checkout() {
                   اختر خطتك
                 </h2>
                 <p className="text-[15px] leading-6 text-[#9aa1bd]">
-                  لن يُخصم أي مبلغ اليوم — تبدأ الفوترة بعد انتهاء التجربة المجانية
+                  {noPaymentNeeded
+                    ? "هذي الباقة ببلاش اليوم — ما راح ينخصم أي مبلغ هسه"
+                    : "لن يُخصم أي مبلغ اليوم — تبدأ الفوترة بعد انتهاء التجربة المجانية"}
                 </p>
               </div>
 
@@ -922,9 +924,13 @@ function Checkout() {
                 <div className="grid items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   {plansData.map((plan: any) => {
                     const selected = formData.plan?.id === plan.id;
-                    const price = plan.monthly_price
-                      ? Number(plan.monthly_price).toLocaleString("en-IQ")
-                      : null;
+                    const monthly = Number(plan.monthly_price ?? 0);
+                    const isFree =
+                      Boolean(plan.is_free) || monthly === 0;
+                    const price =
+                      !isFree && monthly > 0
+                        ? monthly.toLocaleString("en-IQ")
+                        : null;
                     return (
                       <button
                         key={plan.id}
@@ -940,6 +946,11 @@ function Checkout() {
                         <div className="flex h-full flex-col gap-6 px-6 pb-7 pt-7">
                           <div className="flex flex-col gap-3">
                             <div className="flex items-start justify-between gap-2">
+                              {isFree && (
+                                <span className="rounded-full bg-mint/15 px-2.5 py-0.5 text-[11px] font-bold text-mint">
+                                  ببلاش
+                                </span>
+                              )}
                               {selected && (
                                 <span className="rounded-full bg-[#4f60f9]/20 px-2.5 py-0.5 text-[11px] font-bold text-[#9eb0ff]">
                                   مختارة
@@ -970,7 +981,11 @@ function Checkout() {
                           </ul>
 
                           <p className="mt-auto flex items-end justify-end gap-1 pt-2">
-                            {price ? (
+                            {isFree ? (
+                              <span className="text-[34px] font-medium tracking-tight text-mint">
+                                ببلاش
+                              </span>
+                            ) : price ? (
                               <>
                                 <span className="text-[34px] font-medium tracking-tight text-white">
                                   {price}
@@ -989,7 +1004,7 @@ function Checkout() {
               )}
 
               <StepFooter
-                submitLabel="متابعة"
+                submitLabel={noPaymentNeeded ? "متابعة — ببلاش" : "متابعة"}
                 disabled={!formData.plan}
                 onSubmit={handlePlanSelection}
                 // After OTP the account exists — don't reopen the info form.
@@ -1149,8 +1164,8 @@ function Checkout() {
                 submitLabel={
                   paymentCompleted
                     ? "تم الدفع بنجاح"
-                    : isPlanFree
-                      ? "متابعة مجاناً"
+                    : noPaymentNeeded
+                      ? "متابعة — ببلاش"
                       : "متابعة"
                 }
                 busy={isInitiatingPayment || processing}
