@@ -2,7 +2,6 @@ import { useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { usePlatformPaymentStatus } from "@/api/wrappers/platform-payment.wrapper";
-import { FOCUS_PROMPT_STATE } from "@/utils/promptHandoff";
 
 const CHECKOUT_DRAFT_KEY = "mel_checkout_draft";
 const RENEWAL_RETURN_KEY = "mel_renewal_return";
@@ -90,12 +89,6 @@ export default function CheckoutPaymentReturn() {
     if (isRenewal && renewalStoreId) {
       sessionStorage.removeItem(RENEWAL_RETURN_KEY);
       navigate(`/store/${renewalStoreId}/manage`, { replace: true });
-      return;
-    }
-    // Signup from the landing prompt (or /checkout) builds the store with AI.
-    if (draft?.aiSignup) {
-      sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
-      navigate("/", { replace: true, state: FOCUS_PROMPT_STATE });
       return;
     }
     navigate("/checkout", {

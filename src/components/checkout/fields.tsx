@@ -77,6 +77,9 @@ export function TextInput({
  * Native rather than a custom listbox: it gets the platform's own picker on a
  * phone, keyboard support and form semantics for free, and none of that is
  * worth reimplementing for a styling difference.
+ *
+ * The select fills the whole control (padding lives on it, not the wrapper)
+ * so a tap anywhere — text, empty space, or the chevron — opens the list.
  */
 export function SelectInput({
   state = "default",
@@ -89,10 +92,10 @@ export function SelectInput({
   placeholder?: string;
 }) {
   return (
-    <div className={`${CONTROL} relative ${borderFor(state)}`}>
+    <div className={`relative flex h-[52px] w-full items-center rounded-[14px] bg-field ${borderFor(state)}`}>
       <select
         {...props}
-        className={`min-w-0 flex-1 appearance-none bg-transparent text-right text-frost focus:outline-none ${
+        className={`h-full w-full cursor-pointer appearance-none bg-transparent pe-4 ps-10 text-right text-sm text-frost focus:outline-none ${
           props.value ? "" : "text-dim"
         } ${className}`}
       >
@@ -103,9 +106,12 @@ export function SelectInput({
         )}
         {children}
       </select>
-      {/* The chevron sits at the field's end — its left edge, under RTL —
-          which is where the frame draws it. */}
-      <ChevronDown size={16} className="pointer-events-none shrink-0 text-muted" />
+      {/* Decorative only — the select sits underneath across the full field. */}
+      <ChevronDown
+        size={16}
+        className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-muted"
+        aria-hidden
+      />
     </div>
   );
 }

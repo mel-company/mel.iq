@@ -42,6 +42,15 @@ export function consumePromptPending(): boolean {
   }
 }
 
+/** Drop a pending generation — checkout will create the store itself. */
+export function clearPromptPending() {
+  try {
+    sessionStorage.removeItem(PROMPT_PENDING_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Starts the prompt from what signup already asked, so the box is not blank.
  *

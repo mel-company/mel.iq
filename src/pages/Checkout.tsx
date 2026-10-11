@@ -26,7 +26,7 @@ import {
 import { CHECKOUT_DRAFT_KEY, LAST_PAYMENT_ID_KEY } from "@/pages/CheckoutPaymentReturn";
 import { toast } from "sonner";
 import { normalizeApiResponse } from "@/utils/storeUrls";
-import { FOCUS_PROMPT_STATE } from "@/utils/promptHandoff";
+import { FOCUS_PROMPT_STATE, clearPromptPending } from "@/utils/promptHandoff";
 import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
 import StoreProvisioningGate from "@/components/StoreProvisioningGate";
 import { Loader2, Upload, X } from "@/components/icons";
@@ -81,15 +81,15 @@ function Checkout() {
   /**
    * Set only by the payment return, which still walks the manual payment →
    * store steps for a paid checkout already under way. A plain visit to
-   * /checkout is signup: account, code, plan (and payment when due), then
-   * the AI prompt. (The dashboard's «create store» goes to the AI prompt too.)
+   * /checkout is the full signup wizard: account → code → plan → payment
+   * (when due) → store/domain.
    */
   const manualStoreSetup = Boolean(location.state?.skipToStep);
   /**
-   * After OTP the merchant stays here to pick a plan instead of bouncing
-   * straight to the prompt. Cleared when plan/payment finishes and we leave.
+   * After OTP the merchant stays in this wizard (plan → domain) instead of
+   * bouncing to the landing prompt. Cleared when they leave checkout.
    */
-  const [awaitingPlan, setAwaitingPlan] = useState(false);
+  const [signupInProgress, setSignupInProgress] = useState(false);
 
   // Fetch plans first
   const plans = useFetchAllPlans();
@@ -121,8 +121,8 @@ function Checkout() {
       navigate("/dashboard", { replace: true });
       return;
     }
-    // Mid signup: OTP just succeeded — stay for plan (and payment when due).
-    if (awaitingPlan || manualStoreSetup) return;
+    // Mid signup after OTP — stay for plan, payment, and domain.
+    if (signupInProgress || manualStoreSetup) return;
     // Already signed in with no store (navbar / deep link): build from the prompt.
     navigate("/", { replace: true, state: FOCUS_PROMPT_STATE });
   }, [
@@ -131,14 +131,8 @@ function Checkout() {
     existingStoreCount,
     navigate,
     manualStoreSetup,
-    awaitingPlan,
+    signupInProgress,
   ]);
-
-  /** Signup (not the old manual store wizard) ends at the AI prompt. */
-  const finishSignupToPrompt = () => {
-    setAwaitingPlan(false);
-    navigate("/", { replace: true, state: FOCUS_PROMPT_STATE });
-  };
 
   // Always start from step 1 (plan selection) unless skipToStep is provided
   // User must select a plan before creating a store
@@ -351,10 +345,6 @@ function Checkout() {
     setAutoAdvance(false);
     if (noPaymentNeeded) {
       setPaymentCompleted(true);
-      if (!manualStoreSetup) {
-        finishSignupToPrompt();
-        return;
-      }
       setCurrentStep(5);
     } else {
       setCurrentStep(4);
@@ -367,7 +357,6 @@ function Checkout() {
     isPlanFree,
     quote,
     noPaymentNeeded,
-    manualStoreSetup,
   ]);
 
   /** Basic is picked for the merchant, so the plan step is not one of theirs. */
@@ -379,13 +368,12 @@ function Checkout() {
     { number: 4, title: "الدفع" },
     { number: 5, title: "تخصيص المتجر" },
   ];
-  const steps = allSteps.filter((step) =>
-    manualStoreSetup
-      ? (step.number !== 3 || !planPicked || currentStep === 3) &&
-        (step.number !== 4 || !noPaymentNeeded || currentStep === 4)
-      : // Signup: account → code → plan → payment (when due) → AI prompt.
-        step.number <= 3 ||
-        (step.number === 4 && (!noPaymentNeeded || currentStep === 4)),
+  // Full wizard always — including domain. Payment is the only step that
+  // drops out when nothing is due (free plan / intro month).
+  const steps = allSteps.filter(
+    (step) =>
+      (step.number !== 3 || !planPicked || currentStep === 3 || signupInProgress) &&
+      (step.number !== 4 || !noPaymentNeeded || currentStep === 4),
   );
   /** Position among the steps shown, for "الخطوة n من m". */
   const stepPosition = Math.max(
@@ -528,16 +516,12 @@ function Checkout() {
       return;
     }
 
-    // Free plans never hit the payment gateway — skip step 4 entirely.
+    // Free / nothing due today: skip the gateway, go straight to domain.
     const free =
       Boolean(formData.plan.is_free) ||
       Number(formData.plan.monthly_price ?? 0) === 0;
     if (free || noPaymentNeeded) {
       setPaymentCompleted(true);
-      if (!manualStoreSetup) {
-        finishSignupToPrompt();
-        return;
-      }
       setCurrentStep(5);
       return;
     }
@@ -558,10 +542,6 @@ function Checkout() {
     // Free plans skip the payment gateway
     if (formData.plan?.is_free || Number(formData.plan?.monthly_price) === 0) {
       setPaymentCompleted(true);
-      if (!manualStoreSetup) {
-        finishSignupToPrompt();
-        return;
-      }
       setCurrentStep(5);
       return;
     }
@@ -595,9 +575,6 @@ function Checkout() {
         domain: formData.domain,
         domainType: formData.domainType,
         websiteType: formData.websiteType,
-        // Payment return reads this: signup builds the store from the AI
-        // prompt, not the old manual store step.
-        aiSignup: !manualStoreSetup,
       }),
     );
 
@@ -658,10 +635,6 @@ function Checkout() {
                   ? `لا حاجة للدفع الآن — ${promoExplanation}`
                   : "لا حاجة للدفع الآن — تم تأكيد اشتراكك",
             );
-            if (!manualStoreSetup) {
-              finishSignupToPrompt();
-              return;
-            }
             setCurrentStep(5);
             return;
           }
@@ -834,9 +807,10 @@ function Checkout() {
     }
   };
 
-  // Signed in and here for signup: the effect above is about to send them
-  // on (prompt or dashboard), so there is no form to show in the meantime.
-  if (authLoading || (user && !manualStoreSetup)) {
+  // Already signed in and not mid-wizard: the effect above is about to send
+  // them on (prompt or dashboard). After OTP, `signupInProgress` keeps the
+  // plan → domain steps on screen instead of this spinner forever.
+  if (authLoading || (user && !manualStoreSetup && !signupInProgress)) {
     return (
       <CheckoutShell>
         <div className="flex min-h-[50vh] w-full items-center justify-center">
@@ -890,9 +864,12 @@ function Checkout() {
               <SignupFlow
                 onStepChange={(step) => setCurrentStep(step === "otp" ? 2 : 1)}
                 onLoginLink={(phone) => navigate("/login", { state: { phone } })}
-                createdMessage="تم إنشاء حسابك — اختر باقتك للمتابعة"
+                createdMessage="تم إنشاء حسابك — اختر باقتك ثم حدد دومين متجرك"
                 onAuthenticated={() => {
-                  setAwaitingPlan(true);
+                  // Full wizard owns store creation (plan + domain) — don't
+                  // auto-start the landing prompt after this.
+                  clearPromptPending();
+                  setSignupInProgress(true);
                   setCurrentStep(3);
                 }}
               />
@@ -1016,7 +993,7 @@ function Checkout() {
                 disabled={!formData.plan}
                 onSubmit={handlePlanSelection}
                 // After OTP the account exists — don't reopen the info form.
-                onBack={awaitingPlan ? undefined : () => setCurrentStep(2)}
+                onBack={signupInProgress ? undefined : () => setCurrentStep(2)}
               />
             </div>
           )}
