@@ -1389,6 +1389,8 @@ function Checkout() {
               <CheckoutDone
                 slug={createdStore.slug}
                 storeName={createdStore.name}
+                planName={formData.plan?.name}
+                planNote={noPaymentNeeded ? "الشهر الأول ببلاش" : undefined}
                 onHome={() => navigate("/", { replace: true, state: FOCUS_PROMPT_STATE })}
               />
             </div>
