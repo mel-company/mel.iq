@@ -93,7 +93,7 @@ function OtpInputs({
       render={({ slots }) => (
         // The code itself reads left-to-right even on an RTL page — a number
         // is not mirrored — so the row opts out of the page's direction.
-        <div dir="ltr" className="flex w-full items-center justify-end gap-2 sm:gap-3">
+        <div dir="ltr" className="flex w-full items-center justify-center gap-2 sm:gap-3">
           {slots.map((slot, i) => (
             <Slot key={i} slot={slot} status={status} />
           ))}

@@ -2,6 +2,18 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRightIcon } from "../icons";
 
+function HomeLink() {
+  return (
+    <Link
+      to="/"
+      className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[#9aa1bd] transition-colors hover:bg-white/10 hover:text-white"
+    >
+      <ArrowRightIcon size={16} />
+      الرئيسية
+    </Link>
+  );
+}
+
 /**
  * Checkout ground matching the Mel mockup: deep navy, soft violet bloom,
  * no heavy nested chrome — content floats on the atmosphere.
@@ -34,15 +46,32 @@ function CheckoutShell({ children }: { children: ReactNode }) {
         className="pointer-events-none absolute -bottom-32 start-0 size-[480px] rounded-full bg-[#4f60f9]/15 blur-[130px]"
       />
 
-      <Link
-        to="/"
-        className="absolute top-5 start-5 z-10 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-[#9aa1bd] transition-colors hover:bg-white/10 hover:text-white sm:top-8 sm:start-8"
-      >
-        <ArrowRightIcon size={16} />
-        الرئيسية
-      </Link>
+      {/* Phone: the home link and the logo share one row at the top. */}
+      <div className="relative z-10 flex items-center justify-between gap-3 px-4 pt-5 sm:px-6 lg:hidden">
+        <HomeLink />
+        <span className="flex items-center gap-2.5">
+          <span dir="ltr" className="text-lg font-extrabold text-white">
+            mel.iq
+          </span>
+          <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(233.96deg,#b657ff_23.8%,#00bfff_76.3%)]">
+            <img
+              src="/images/landing/mel-mark.svg"
+              alt=""
+              aria-hidden
+              width={40}
+              height={40}
+              className="size-10"
+            />
+          </span>
+        </span>
+      </div>
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-[1280px] items-start justify-center px-4 py-16 sm:px-6 lg:items-center lg:py-14">
+      {/* Desktop: the brand rail carries the logo, so the link floats alone. */}
+      <div className="absolute top-8 start-8 z-10 hidden lg:block">
+        <HomeLink />
+      </div>
+
+      <div className="relative mx-auto flex w-full max-w-[1280px] lg:min-h-screen items-start justify-center px-4 pb-16 pt-6 sm:px-6 lg:items-center lg:py-14">
         {children}
       </div>
     </div>

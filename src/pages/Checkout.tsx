@@ -1,17 +1,11 @@
 /* eslint-disable no-unused-vars */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
   useAddStore,
-  useCheckStoreDomainAvailability,
   useFetchStores,
 } from "@/api/wrappers/store.wrappers";
-import { useDynadotSearch } from "@/api/wrappers/dynadot.wrappers";
-import DomainPriceBreakdown from "@/components/DomainPriceBreakdown";
-import type { DynadotSearchResult } from "@/api/endpoints/dynadot.endpoints";
-import { useSetCustomDomain } from "@/api/wrappers/domain.wrappers";
-import { extractPlatformSlug } from "@/hooks/useDomainCheck";
 import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 import {
   useBillingProviders,
@@ -26,15 +20,31 @@ import {
 import { CHECKOUT_DRAFT_KEY, LAST_PAYMENT_ID_KEY } from "@/pages/CheckoutPaymentReturn";
 import { toast } from "sonner";
 import { normalizeApiResponse } from "@/utils/storeUrls";
-import { FOCUS_PROMPT_STATE, clearPromptPending } from "@/utils/promptHandoff";
-import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
-import StoreProvisioningGate from "@/components/StoreProvisioningGate";
+import {
+  FOCUS_PROMPT_STATE,
+  hasPromptPending,
+  seedPromptDraft,
+} from "@/utils/promptHandoff";
+import { BUSINESS_TYPES, GOVERNORATES } from "@/utils/businessProfile";
+import {
+  cleanSubdomainInput,
+  isValidSubdomain,
+  subdomainCandidates,
+} from "@/utils/subdomainSuggest";
+import { storeAPI } from "@/api/endpoints/store.endpoints";
 import { Loader2, Upload, X } from "@/components/icons";
 import CheckoutStepper from "@/components/checkout/CheckoutStepper";
 import CheckoutShell from "@/components/checkout/CheckoutShell";
 import CheckoutBrandRail from "@/components/checkout/CheckoutBrandRail";
+import CheckoutDone from "@/components/checkout/CheckoutDone";
 import SignupFlow from "@/components/auth/SignupFlow";
-import { Field, StepFooter, TextInput } from "@/components/checkout/fields";
+import {
+  BackIconButton,
+  Field,
+  SelectInput,
+  StepFooter,
+  TextInput,
+} from "@/components/checkout/fields";
 
 /**
  * The payment tiles the frame draws — how each one *looks*, not whether it
@@ -73,6 +83,41 @@ function planFeatures(plan: any): string[] {
     .filter(Boolean);
 }
 
+/**
+ * The plan's intro offer (free months, then a discount), from the catalogue's
+ * `pricing` block or, on older payloads, the plan's promo columns. `null` when
+ * the plan runs no offer.
+ */
+function planIntro(plan: any): {
+  freeMonths: number;
+  discountMonths: number;
+  discountPercent: number;
+  discountPrice: number;
+} | null {
+  const monthly = Number(plan?.monthly_price ?? 0);
+  const fromPricing = plan?.pricing?.monthly?.intro;
+  const intro = fromPricing
+    ? {
+        enabled: Boolean(fromPricing.enabled),
+        freeMonths: Number(fromPricing.freeMonths ?? 0),
+        discountMonths: Number(fromPricing.discountMonths ?? 0),
+        discountPercent: Number(fromPricing.discountPercent ?? 0),
+        discountPrice: Number(fromPricing.discountPrice ?? 0),
+      }
+    : {
+        enabled: Boolean(plan?.promo_enabled),
+        freeMonths: Number(plan?.promo_free_months ?? 0),
+        discountMonths: Number(plan?.promo_discount_months ?? 0),
+        discountPercent: Number(plan?.promo_discount_percent ?? 0),
+        discountPrice: Math.round(
+          monthly * (1 - Number(plan?.promo_discount_percent ?? 0) / 100),
+        ),
+      };
+  if (!intro.enabled || intro.freeMonths <= 0 || monthly <= 0) return null;
+  const { enabled: _enabled, ...rest } = intro;
+  return rest;
+}
+
 function Checkout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -90,6 +135,11 @@ function Checkout() {
    * bouncing to the landing prompt. Cleared when they leave checkout.
    */
   const [signupInProgress, setSignupInProgress] = useState(false);
+  /** Set once the store exists: the wizard shows its finish screen. */
+  const [createdStore, setCreatedStore] = useState<{
+    slug: string;
+    name: string;
+  } | null>(null);
 
   // Fetch plans first
   const plans = useFetchAllPlans();
@@ -114,6 +164,8 @@ function Checkout() {
 
   useEffect(() => {
     if (!user || storesLoading) return;
+    // Their store was just made here; the finish screen owns what is next.
+    if (createdStore) return;
     if (existingStoreCount >= 1) {
       if (manualStoreSetup) {
         toast.info("لديك متجر واحد مسبقاً. كل حساب يحق له متجر واحد فقط.");
@@ -132,6 +184,7 @@ function Checkout() {
     navigate,
     manualStoreSetup,
     signupInProgress,
+    createdStore,
   ]);
 
   // Always start from step 1 (plan selection) unless skipToStep is provided
@@ -139,7 +192,6 @@ function Checkout() {
   const initialStep = location.state?.skipToStep || 1;
   const [currentStep, setCurrentStep] = useState(initialStep);
   const { mutate: addStoreMutation } = useAddStore();
-  const { mutate: setCustomDomainMutation } = useSetCustomDomain();
   const { mutate: initPaymentMutation, isPending: isInitiatingPayment } =
     useInitPlatformPayment();
   const { data: billingProviders } = useBillingProviders();
@@ -171,18 +223,6 @@ function Checkout() {
       })),
     [billingProviders],
   );
-  const {
-    timedOut: provisioningTimedOut,
-    lastStatus: provisioningStatus,
-    error: provisioningError,
-    waitUntilReady,
-    reset: resetProvisioning,
-  } = useWaitForDashboardReady();
-  const [pendingTemplatesNav, setPendingTemplatesNav] = useState<{
-    websiteType: string;
-    domain: string;
-    url: string;
-  } | null>(null);
 
   // Initialize formData with user info if available - using lazy initialization
   const [formData, setFormData] = useState(() => {
@@ -227,7 +267,10 @@ function Checkout() {
   const [domainChecked, setDomainChecked] = useState(false);
   const [domainAvailable, setDomainAvailable] = useState<boolean | null>(null);
   const [isCheckingDomain, setIsCheckingDomain] = useState(false);
-  const [dynadotResult, setDynadotResult] = useState<DynadotSearchResult | null>(
+  const [domainError, setDomainError] = useState("");
+  const [creatingStore, setCreatingStore] = useState(false);
+  /** Who just signed up, for the link suggestion on the store step. */
+  const [account, setAccount] = useState<{ email: string; phone: string } | null>(
     null,
   );
 
@@ -277,28 +320,20 @@ function Checkout() {
    */
   const noPaymentNeeded = isPlanFree || dueNow === 0;
 
-  const goToTemplates = (nav: {
-    websiteType: string;
-    domain: string;
-    url: string;
-  }) => {
-    resetProvisioning();
-    setPendingTemplatesNav(null);
-    navigate("/templates", { state: nav });
-  };
-
-  const finishAfterProvisioning = async (nav: {
-    websiteType: string;
-    domain: string;
-    url: string;
-  }) => {
-    setPendingTemplatesNav(nav);
-    const result = await waitUntilReady(nav.domain);
-    if (result.status === "ready" || result.status === "cancelled") {
-      if (result.status === "ready") goToTemplates(nav);
+  /**
+   * The store exists. A merchant who pressed «أنشئ متجري» before signing up
+   * goes straight home, where the prompt they typed starts generating into
+   * this store; everyone else gets the finish screen.
+   */
+  const finishStoreSetup = (slug: string, name: string) => {
+    sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
+    seedPromptDraft(formData.businessType, formData.governorate);
+    setCreatedStore({ slug, name });
+    if (hasPromptPending()) {
+      navigate("/", { replace: true, state: FOCUS_PROMPT_STATE });
       return;
     }
-    // timeout: gate stays open with retry / continue buttons
+    setCurrentStep(6);
   };
 
   // Preselect from ?planId= (landing pricing CTA) or from skipToStep defaults.
@@ -382,10 +417,10 @@ function Checkout() {
   );
 
   const activeStepTitle =
-    steps.find((s) => s.number === currentStep)?.title ?? steps[0].title;
+    currentStep === 6
+      ? "تم إنشاء متجرك"
+      : (steps.find((s) => s.number === currentStep)?.title ?? steps[0].title);
 
-  const checkDomainAvailabilityMutation = useCheckStoreDomainAvailability();
-  const dynadotSearchMutation = useDynadotSearch();
 
   // The plans query is deliberately NOT gated on here. It used to short-circuit
   // the whole component to a bare "Loading..." / "Error:" div, which blanked
@@ -398,116 +433,116 @@ function Checkout() {
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    // Reset domain check when domain changes
-    if (e.target.name === "domain" || e.target.name === "domainType") {
-      setDomainChecked(false);
-      setDomainAvailable(null);
-      setDynadotResult(null);
-    }
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handlePlanSelect = (plan: any) => {
     setFormData({ ...formData, plan });
   };
 
-  const handleCheckDomainAvailability = () => {
-    if (!formData.domain) {
-      toast.error("الرجاء إدخال الدومين أولاً");
-      return;
+  /** Bumped on every edit, so an older answer cannot land on a newer link. */
+  const domainCheckSeq = useRef(0);
+  /** Once the merchant types a link, the suggestion leaves it alone. */
+  const domainEditedRef = useRef(false);
+  const suggestedLinkRef = useRef(false);
+
+  /** Whether `slug` is free; `null` when the server could not be asked. */
+  const subdomainIsFree = async (slug: string): Promise<boolean | null> => {
+    try {
+      const data = await storeAPI.checkDomainAvailability({
+        domain: slug,
+        domainType: "subdomain",
+      });
+      return Boolean(data?.isAvailable ?? data?.data?.isAvailable ?? false);
+    } catch {
+      return null;
     }
-
-    setIsCheckingDomain(true);
-    setDomainChecked(false);
-    setDynadotResult(null);
-
-    if (formData.domainType === "custom") {
-      const domain = formData.domain.trim().toLowerCase();
-      dynadotSearchMutation.mutate(
-        { domain },
-        {
-          onSuccess: (results) => {
-            setIsCheckingDomain(false);
-            setDomainChecked(true);
-
-            const result =
-              results.find((r) => r.domain === domain) ?? results[0] ?? null;
-            setDynadotResult(result);
-
-            if (!result) {
-              setDomainAvailable(false);
-              toast.error("لم يتم العثور على نتيجة للدومين.");
-              return;
-            }
-
-            if (!result.supported) {
-              setDomainAvailable(false);
-              toast.error(
-                result.error ||
-                  "هذا النوع من الدومينات غير مدعوم للتسجيل (مثل .iq). جرّب دوميناً مثل example.com",
-              );
-              return;
-            }
-
-            if (result.available) {
-              setDomainAvailable(true);
-              toast.success("الدومين متاح للتسجيل!");
-            } else {
-              setDomainAvailable(false);
-              toast.error(
-                result.premium
-                  ? "الدومين متاح كـ premium — التسجيل لاحقاً."
-                  : "الدومين غير متاح. الرجاء اختيار دومين آخر.",
-              );
-            }
-          },
-          onError: (error: any) => {
-            setIsCheckingDomain(false);
-            setDomainChecked(false);
-            console.error("Error searching domain via Dynadot:", error);
-            const errorMessage =
-              error?.response?.data?.message ||
-              error?.message ||
-              "حدث خطأ في البحث عن الدومين";
-            toast.error(errorMessage);
-          },
-        },
-      );
-      return;
-    }
-
-    checkDomainAvailabilityMutation.mutate(
-      {
-        domain: formData.domain,
-        domainType: formData.domainType,
-      },
-      {
-        onSuccess: (data: any) => {
-          setIsCheckingDomain(false);
-          setDomainChecked(true);
-          const available =
-            data?.isAvailable ?? data?.data?.isAvailable ?? false;
-          setDomainAvailable(available);
-
-          if (available) {
-            toast.success("الدومين متاح! يمكنك المتابعة.");
-          } else {
-            toast.error("الدومين غير متاح. الرجاء اختيار دومين آخر.");
-          }
-        },
-        onError: (error: any) => {
-          setIsCheckingDomain(false);
-          setDomainChecked(false);
-          console.error("Error checking domain:", error);
-          const errorMessage =
-            error?.response?.data?.message ||
-            error?.message ||
-            "حدث خطأ في التحقق من الدومين";
-          toast.error(errorMessage);
-        },
-      },
-    );
   };
+
+  /**
+   * Checks the link as typed. Runs when the field loses focus and again on
+   * submit if it never finished, so there is no separate button to press.
+   */
+  const checkSubdomain = async (slug: string = formData.domain): Promise<boolean> => {
+    if (!slug) {
+      setDomainChecked(false);
+      setDomainAvailable(null);
+      return false;
+    }
+    if (!isValidSubdomain(slug)) {
+      setDomainChecked(true);
+      setDomainAvailable(false);
+      setDomainError("يبدأ بحرف إنجليزي، ثم حروف وأرقام و - فقط (3 أحرف على الأقل)");
+      return false;
+    }
+    const seq = ++domainCheckSeq.current;
+    setIsCheckingDomain(true);
+    const free = await subdomainIsFree(slug);
+    if (seq !== domainCheckSeq.current) return Boolean(free);
+    setIsCheckingDomain(false);
+    if (free === null) {
+      setDomainChecked(false);
+      setDomainAvailable(null);
+      toast.error("تعذر التحقق من الرابط. حاول مرة أخرى.");
+      return false;
+    }
+    setDomainChecked(true);
+    setDomainAvailable(free);
+    setDomainError(free ? "" : "هذا الرابط محجوز، جرّب رابطاً آخر");
+    return free;
+  };
+
+  const handleDomainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    domainEditedRef.current = true;
+    domainCheckSeq.current += 1;
+    setIsCheckingDomain(false);
+    setDomainChecked(false);
+    setDomainAvailable(null);
+    setDomainError("");
+    const domain = cleanSubdomainInput(e.target.value);
+    setFormData((prev) => ({ ...prev, domain, domainType: "subdomain" }));
+  };
+
+  /**
+   * Opens the store step on a link that is already free: from the store
+   * name, the email, or the phone, checked one by one until one is.
+   */
+  useEffect(() => {
+    if (currentStep !== 5 || suggestedLinkRef.current || formData.domain) return;
+    suggestedLinkRef.current = true;
+    let cancelled = false;
+    const candidates = subdomainCandidates({
+      storeName: formData.storeName,
+      email: account?.email || formData.email,
+      phone: account?.phone || formData.phone,
+    });
+    void (async () => {
+      const seq = ++domainCheckSeq.current;
+      setIsCheckingDomain(true);
+      for (const candidate of candidates) {
+        const free = await subdomainIsFree(candidate);
+        if (cancelled || domainEditedRef.current || seq !== domainCheckSeq.current) {
+          return;
+        }
+        if (free === null) break;
+        if (free) {
+          setFormData((prev) => ({ ...prev, domain: candidate, domainType: "subdomain" }));
+          setDomainChecked(true);
+          setDomainAvailable(true);
+          setDomainError("");
+          break;
+        }
+      }
+      if (!cancelled && seq === domainCheckSeq.current) setIsCheckingDomain(false);
+    })();
+    return () => {
+      cancelled = true;
+      if (!domainEditedRef.current) suggestedLinkRef.current = false;
+    };
+    // Only on arriving at the step; the fields it reads are a starting point.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]);
 
   const handlePlanSelection = () => {
     // Check if plan is selected
@@ -660,32 +695,38 @@ function Checkout() {
     );
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Create preview URL for display
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({
-          ...formData,
-          logo: reader.result as string,
-          logoFile: file,
-        });
-      };
-      reader.readAsDataURL(file);
+  const readLogoFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("الرجاء اختيار صورة (PNG / SVG / WebP).");
+      return;
     }
+    // Create preview URL for display
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData((prev) => ({
+        ...prev,
+        logo: reader.result as string,
+        logoFile: file,
+      }));
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleWebsiteCustomization = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) readLogoFile(file);
+    e.target.value = "";
+  };
+
+  const handleWebsiteCustomization = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (creatingStore) return;
 
     if (existingStoreCount >= 1) {
       toast.info("لديك متجر واحد مسبقاً. كل حساب يحق له متجر واحد فقط.");
       navigate("/dashboard", { replace: true });
       return;
     }
-
-    const data = new FormData();
 
     // Check if plan is selected - required before creating store
     if (!formData.plan || !formData.plan.id) {
@@ -702,109 +743,52 @@ function Checkout() {
       return;
     }
 
-    // Check if domain is available before proceeding
-    if (!domainChecked) {
-      toast.error("الرجاء التحقق من توفر الدومين أولاً");
+    if (!user) {
+      toast.error("سجّل الدخول أولاً لإنشاء متجرك.");
+      navigate("/login");
       return;
     }
 
-    if (domainAvailable === false || domainAvailable === null) {
-      toast.error("الدومين غير متاح. الرجاء اختيار دومين آخر والتحقق منه.");
+    const slug = formData.domain;
+    const free =
+      domainChecked && domainAvailable === true ? true : await checkSubdomain(slug);
+    if (!free) {
+      toast.error(slug ? "اختر رابطاً متاحاً لمتجرك." : "الرجاء إدخال رابط المتجر.");
       return;
     }
 
-    if (formData.logo) {
-      data.append("logo", formData.logo);
+    const name = formData.storeName.trim() || slug;
+    const storeFormData = new FormData();
+    storeFormData.append("name", name);
+    storeFormData.append(
+      "type",
+      formData.websiteType === "store" ? "ECOMMERCE" : "RESTAURANT",
+    );
+    storeFormData.append("domain", slug);
+    if (formData.governorate) {
+      storeFormData.append("location", formData.governorate);
+    }
+    if (formData.logoFile) {
+      storeFormData.append("logo", formData.logoFile);
+    }
+    storeFormData.append("createdAt", new Date().toISOString());
+    storeFormData.append(
+      "planId",
+      formData.plan.uuid || formData.plan.planId || formData.plan.id,
+    );
+    if (formData.paymentId) {
+      storeFormData.append("paymentId", formData.paymentId);
     }
 
-    if (formData.websiteType && formData.domain) {
-      const platformSlug = extractPlatformSlug(
-        formData.domain,
-        formData.domainType === "custom" ? "custom" : "subdomain",
-      );
-      const customDomain =
-        formData.domainType === "custom"
-          ? formData.domain.trim().toLowerCase()
-          : null;
-
-      const finalUrl =
-        formData.domainType === "subdomain"
-          ? `https://${platformSlug}.mel.iq`
-          : `https://${customDomain}`;
-
-      const updatedFormData = {
-        ...formData,
-        websiteUrl: finalUrl,
-      };
-
-      setFormData(updatedFormData);
-
-      const finishStoreSetup = () => {
-        sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
-        void finishAfterProvisioning({
-          websiteType: formData.websiteType,
-          domain: platformSlug,
-          url: platformSlug,
-        });
-      };
-
-      // Save store to user account if logged in
-      if (user) {
-        const storeFormData = new FormData();
-        storeFormData.append(
-          "name",
-          formData.storeName || platformSlug || formData.domain,
-        );
-        storeFormData.append(
-          "type",
-          formData.websiteType === "store" ? "ECOMMERCE" : "RESTAURANT",
-        );
-        storeFormData.append("domain", platformSlug);
-        if (formData.logoFile) {
-          storeFormData.append("logo", formData.logoFile);
-        }
-        storeFormData.append("createdAt", new Date().toISOString());
-        storeFormData.append(
-          "planId",
-          formData.plan.uuid || formData.plan.planId || formData.plan.id,
-        );
-        if (formData.paymentId) {
-          storeFormData.append("paymentId", formData.paymentId);
-        }
-
-        addStoreMutation(storeFormData, {
-          onSuccess: () => {
-            if (customDomain) {
-              setCustomDomainMutation(
-                { domain: customDomain },
-                {
-                  onSuccess: finishStoreSetup,
-                  onError: (error) => {
-                    console.error("Error setting custom domain:", error);
-                    toast.error(
-                      "تم إنشاء المتجر لكن فشل ربط الدومين المخصص. يمكنك ربطه من الإدارة.",
-                    );
-                    finishStoreSetup();
-                  },
-                },
-              );
-              return;
-            }
-            finishStoreSetup();
-          },
-          onError: (error) => {
-            console.error("Error creating store:", error);
-            toast.error("حدث خطأ في إنشاء المتجر. الرجاء المحاولة مرة أخرى.");
-          },
-        });
-      } else {
-        void finishAfterProvisioning({
-          websiteType: formData.websiteType,
-          domain: platformSlug,
-          url: platformSlug,
-        });
-      }
-    }
+    setCreatingStore(true);
+    addStoreMutation(storeFormData, {
+      onSuccess: () => finishStoreSetup(slug, name),
+      onError: (error) => {
+        console.error("Error creating store:", error);
+        setCreatingStore(false);
+        toast.error("حدث خطأ في إنشاء المتجر. الرجاء المحاولة مرة أخرى.");
+      },
+    });
   };
 
   // Already signed in and not mid-wizard: the effect above is about to send
@@ -831,27 +815,7 @@ function Checkout() {
         />
 
         <div className="flex min-w-0 flex-1 flex-col gap-6">
-          {/* Mobile brand strip */}
-          <div className="flex items-center justify-end gap-3 lg:hidden">
-            <div className="flex flex-col text-right">
-              <span dir="ltr" className="text-lg font-extrabold text-white">
-                mel.iq
-              </span>
-              <span className="text-xs text-[#8b92b0]">نظام إدارة المتاجر</span>
-            </div>
-            <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(233.96deg,#b657ff_23.8%,#00bfff_76.3%)]">
-              <img
-                src="/images/landing/mel-mark.svg"
-                alt=""
-                aria-hidden
-                width={48}
-                height={48}
-                className="size-12"
-              />
-            </span>
-          </div>
-
-          {!location.state?.skipToStep && (
+          {!location.state?.skipToStep && currentStep !== 6 && (
             <CheckoutStepper steps={steps} currentStep={currentStep} />
           )}
 
@@ -865,10 +829,11 @@ function Checkout() {
                 onStepChange={(step) => setCurrentStep(step === "otp" ? 2 : 1)}
                 onLoginLink={(phone) => navigate("/login", { state: { phone } })}
                 createdMessage="تم إنشاء حسابك — اختر باقتك ثم حدد دومين متجرك"
-                onAuthenticated={() => {
-                  // Full wizard owns store creation (plan + domain) — don't
-                  // auto-start the landing prompt after this.
-                  clearPromptPending();
+                onAuthenticated={({ email, phone }) => {
+                  // The wizard carries on to plan and store. A prompt typed
+                  // before signing up stays pending: once the store exists,
+                  // home starts generating it into that store.
+                  setAccount({ email, phone });
                   setSignupInProgress(true);
                   setCurrentStep(3);
                 }}
@@ -931,6 +896,12 @@ function Checkout() {
                       !isFree && monthly > 0
                         ? monthly.toLocaleString("en-IQ")
                         : null;
+                    // A buyer whose quote says they owe money has spent the
+                    // intro on an earlier store: show them list price.
+                    const intro =
+                      selected && quote && quote.amount > 0
+                        ? null
+                        : planIntro(plan);
                     return (
                       <button
                         key={plan.id}
@@ -980,22 +951,62 @@ function Checkout() {
                             ))}
                           </ul>
 
-                          <p className="mt-auto flex items-end justify-end gap-1 pt-2">
-                            {isFree ? (
-                              <span className="text-[34px] font-medium tracking-tight text-mint">
-                                ببلاش
-                              </span>
-                            ) : price ? (
-                              <>
-                                <span className="text-[34px] font-medium tracking-tight text-white">
-                                  {price}
+                          {isFree || !price ? (
+                            <p className="mt-auto flex items-end justify-end gap-1 pt-2">
+                              {isFree ? (
+                                <span className="text-[34px] font-medium tracking-tight text-mint">
+                                  ببلاش
                                 </span>
-                                <span className="pb-1 text-sm text-[#73799b]">د.ع /شهرياً</span>
-                              </>
-                            ) : (
-                              <span className="text-[28px] font-medium text-white">اتصل بنا</span>
-                            )}
-                          </p>
+                              ) : (
+                                <span className="text-[28px] font-medium text-white">اتصل بنا</span>
+                              )}
+                            </p>
+                          ) : intro ? (
+                            // The offer as it will be charged: free month(s),
+                            // then the discounted months, then list price.
+                            <div className="mt-auto flex flex-col gap-3 pt-2">
+                              <p className="flex items-end gap-2">
+                                <span className="text-[34px] font-medium leading-none tracking-tight text-mint">
+                                  ببلاش
+                                </span>
+                                <span className="pb-0.5 text-sm text-[#a8aec8]">
+                                  {intro.freeMonths === 1
+                                    ? "الشهر الأول"
+                                    : `أول ${intro.freeMonths} أشهر`}
+                                </span>
+                              </p>
+                              {intro.discountMonths > 0 && (
+                                <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                  <span className="text-[22px] font-medium text-white">
+                                    {intro.discountPrice.toLocaleString("en-US")}
+                                  </span>
+                                  <span className="text-sm text-[#a8aec8]">
+                                    د.ع /شهرياً لمدة {intro.discountMonths} أشهر
+                                  </span>
+                                  <span className="text-sm text-[#73799b] line-through">
+                                    {price}
+                                  </span>
+                                  <span className="rounded-full bg-[#4f60f9]/20 px-2 py-0.5 text-[11px] font-bold text-[#9eb0ff]">
+                                    خصم <bdi dir="ltr">{intro.discountPercent}%</bdi>
+                                  </span>
+                                </p>
+                              )}
+                              <p className="text-[12px] text-[#73799b]">
+                                بعدها {price} د.ع شهرياً
+                              </p>
+                              <p className="flex items-center gap-2 rounded-xl border border-mint/25 bg-mint/10 px-3 py-2 text-[12px] font-bold text-mint">
+                                <span aria-hidden>✓</span>
+                                بدون بطاقة دفع — ما نطلب أي بيانات دفع هسه
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="mt-auto flex items-end justify-end gap-1 pt-2">
+                              <span className="text-[34px] font-medium tracking-tight text-white">
+                                {price}
+                              </span>
+                              <span className="pb-1 text-sm text-[#73799b]">د.ع /شهرياً</span>
+                            </p>
+                          )}
                         </div>
                       </button>
                     );
@@ -1189,17 +1200,21 @@ function Checkout() {
           {currentStep === 5 && (
             <div className="rounded-[28px] border border-white/[0.07] bg-[#0a0d1c]/90 p-6 sm:p-9">
             <div className="flex flex-col gap-[22px]">
-              <div className="flex flex-col gap-1.5">
-                <h2 className="text-[28px] font-extrabold leading-tight text-white sm:text-[32px]">
-                  خصّص متجرك
-                </h2>
-                <p className="text-sm leading-6 text-[#9aa1bd]">
-                  آخر خطوة — يمكنك تغيير كل هذا لاحقاً من الإعدادات
-                </p>
+              <div className="flex items-start gap-3">
+                <BackIconButton onClick={() => setCurrentStep(noPaymentNeeded ? 3 : 4)} />
+                <div className="flex flex-col gap-1.5">
+                  <h2 className="text-[28px] font-extrabold leading-tight text-white sm:text-[32px]">
+                    خصّص متجرك
+                  </h2>
+                  <p className="text-sm leading-6 text-[#9aa1bd]">
+                    آخر خطوة — يمكنك تغيير كل هذا لاحقاً من الإعدادات
+                  </p>
+                </div>
               </div>
 
               <form
                 onSubmit={handleWebsiteCustomization}
+                noValidate
                 className="flex flex-col gap-[22px]"
               >
                 <div className="flex flex-col gap-5 sm:flex-row">
@@ -1209,7 +1224,6 @@ function Checkout() {
                       name="storeName"
                       value={formData.storeName}
                       onChange={handleInputChange}
-                      required
                       placeholder="متجر البركة للأطعمة"
                     />
                   </Field>
@@ -1219,12 +1233,13 @@ function Checkout() {
                     htmlFor="domain"
                     error={
                       domainChecked && domainAvailable === false
-                        ? "هذا الرابط محجوز، جرّب رابطاً آخر"
+                        ? domainError || "هذا الرابط محجوز، جرّب رابطاً آخر"
                         : undefined
                     }
                   >
                     {/* The `.mel.iq` suffix is fixed chrome, not typed — the
-                        field holds only the subdomain the merchant picks. */}
+                        field holds only the subdomain the merchant picks. It
+                        is checked when the field loses focus. */}
                     <div
                       className={`flex h-[52px] w-full items-center gap-2.5 rounded-[14px] bg-field px-4 text-sm transition-colors ${
                         domainChecked && domainAvailable
@@ -1234,176 +1249,153 @@ function Checkout() {
                             : "border border-field-line focus-within:border-[1.5px] focus-within:border-brand-primary"
                       }`}
                     >
-                      {domainChecked && domainAvailable && (
-                        <span className="shrink-0 text-xs font-bold text-mint">✓ متاح</span>
+                      {isCheckingDomain ? (
+                        <Loader2 size={14} className="shrink-0 animate-spin text-muted" />
+                      ) : (
+                        domainChecked &&
+                        domainAvailable && (
+                          <span className="shrink-0 text-xs font-bold text-mint">✓ متاح</span>
+                        )
                       )}
                       <input
                         id="domain"
                         name="domain"
                         dir="ltr"
                         value={formData.domain}
-                        onChange={handleInputChange}
-                        required
+                        onChange={handleDomainChange}
+                        onBlur={() => {
+                          if (!domainChecked && formData.domain) void checkSubdomain();
+                        }}
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         placeholder="albaraka"
                         className="min-w-0 flex-1 bg-transparent text-left text-frost placeholder:text-dim focus:outline-none"
                       />
-                      {formData.domainType === "subdomain" && (
-                        <span dir="ltr" className="shrink-0 font-semibold text-muted">
-                          .mel.iq
-                        </span>
-                      )}
+                      <span dir="ltr" className="shrink-0 font-semibold text-muted">
+                        .mel.iq
+                      </span>
                     </div>
                   </Field>
                 </div>
 
-                {/* Not in the frame, but the flow and the Dynadot integration
-                    both still support bringing your own domain — dropping the
-                    control would quietly remove a paid feature. */}
-                <div className="flex items-center gap-2 self-end rounded-[14px] bg-field p-1">
-                  {[
-                    { id: "subdomain", label: "نطاق فرعي مجاني" },
-                    { id: "custom", label: "نطاق خاص بك" },
-                  ].map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() =>
-                        handleInputChange({
-                          target: { name: "domainType", value: option.id },
-                        } as React.ChangeEvent<HTMLInputElement>)
-                      }
-                      className={`rounded-[10px] px-4 py-2 text-[13px] font-bold transition-colors ${
-                        formData.domainType === option.id
-                          ? "bg-gradient-to-l from-brand-violet to-brand-indigo text-white"
-                          : "text-muted hover:text-frost"
-                      }`}
+                {/* Moved here from the account step, which they made long.
+                    Governorate is saved as the store's location; both start
+                    the AI prompt off when the merchant goes home. */}
+                <div className="flex flex-col gap-5 sm:flex-row">
+                  <Field label="نوع النشاط التجاري" htmlFor="businessType">
+                    <SelectInput
+                      id="businessType"
+                      name="businessType"
+                      value={formData.businessType}
+                      onChange={handleInputChange}
+                      placeholder="اختر نوع النشاط"
                     >
-                      {option.label}
-                    </button>
-                  ))}
+                      {BUSINESS_TYPES.map((type) => (
+                        <option key={type} value={type} className="bg-ink-raised text-frost">
+                          {type}
+                        </option>
+                      ))}
+                    </SelectInput>
+                  </Field>
+                  <Field label="المحافظة" htmlFor="governorate">
+                    <SelectInput
+                      id="governorate"
+                      name="governorate"
+                      value={formData.governorate}
+                      onChange={handleInputChange}
+                      placeholder="اختر المحافظة"
+                    >
+                      {GOVERNORATES.map((name) => (
+                        <option key={name} value={name} className="bg-ink-raised text-frost">
+                          {name}
+                        </option>
+                      ))}
+                    </SelectInput>
+                  </Field>
                 </div>
 
                 <div className="flex flex-col gap-2 text-right">
                   <span className="text-[13px] font-semibold leading-5 text-muted">
                     شعار المتجر
                   </span>
-                  <div className="flex items-center gap-4 rounded-[18px] border border-dashed border-field-line bg-field p-4">
-                    <label
-                      htmlFor="logo-upload"
-                      className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/12 bg-white/[0.04] px-4 py-2.5 text-[13px] font-bold text-frost transition-colors hover:bg-white/[0.08]"
-                    >
-                      <Upload size={16} />
-                      رفع
-                    </label>
-                    <input
-                      id="logo-upload"
-                      type="file"
-                      accept="image/png,image/svg+xml,image/webp,image/jpeg"
-                      onChange={handleLogoUpload}
-                      className="hidden"
-                    />
-                    <span className="flex flex-1 flex-col text-right">
-                      <span className="text-[13px] text-frost">
-                        اسحب شعارك هنا أو اضغط للرفع
-                      </span>
-                      <span className="text-[11px] text-dim">
-                        PNG / SVG / WebP · حتى 2MB · يُفضّل مربع
-                      </span>
-                    </span>
-                    {formData.logo && (
-                      <span className="relative size-14 shrink-0 overflow-hidden rounded-xl bg-white/5">
+                  {formData.logo ? (
+                    <div className="flex items-center gap-4 rounded-[18px] border border-field-line bg-field p-4">
+                      <span className="size-16 shrink-0 overflow-hidden rounded-xl bg-white/5">
                         <img
                           src={formData.logo as string}
                           alt="شعار المتجر"
                           className="size-full object-contain p-1"
                         />
-                        <button
-                          type="button"
-                          aria-label="إزالة الشعار"
-                          onClick={() =>
-                            setFormData((prev) => ({ ...prev, logo: null, logoFile: null }))
-                          }
-                          className="absolute end-0.5 top-0.5 rounded-full bg-black/70 p-0.5 text-white/80 hover:text-white"
-                        >
-                          <X size={11} />
-                        </button>
                       </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCheckDomainAvailability}
-                    disabled={!formData.domain || isCheckingDomain}
-                    className="flex h-[46px] w-full items-center justify-center gap-2 rounded-[14px] border border-white/12 bg-white/[0.04] text-[13px] font-bold text-frost transition-colors hover:bg-white/[0.08] disabled:opacity-40"
-                  >
-                    {isCheckingDomain ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      "التحقق من توفر الرابط"
-                    )}
-                  </button>
-
-                  {formData.domainType === "custom" && dynadotResult && (
-                    <div
-                      className={`rounded-[14px] border p-3 text-[13px] ${
-                        dynadotResult.available && dynadotResult.supported
-                          ? "border-mint/30 bg-mint/8 text-mint"
-                          : "border-amber/30 bg-amber/8 text-amber"
-                      }`}
-                    >
-                      <p dir="ltr" className="font-semibold">
-                        {dynadotResult.domain}
-                      </p>
-                      {!dynadotResult.supported && (
-                        <p className="mt-1">
-                          {dynadotResult.error ||
-                            "نوع الدومين غير مدعوم للتسجيل عبر Dynadot"}
-                        </p>
-                      )}
-                      {dynadotResult.supported && !dynadotResult.available && (
-                        <p className="mt-1">
-                          {dynadotResult.premium
-                            ? "دومين premium — التسجيل متاح لاحقاً"
-                            : "الدومين مسجّل مسبقاً وغير متاح"}
-                        </p>
-                      )}
-                      {dynadotResult.available && (
-                        <DomainPriceBreakdown result={dynadotResult} />
-                      )}
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-frost">
+                        {formData.logoFile?.name || "الشعار"}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="إزالة الشعار"
+                        onClick={() =>
+                          setFormData((prev) => ({ ...prev, logo: null, logoFile: null }))
+                        }
+                        className="flex size-9 shrink-0 items-center justify-center rounded-full border border-white/12 bg-white/[0.04] text-frost hover:bg-white/[0.08]"
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
+                  ) : (
+                    // The whole box is the file input: tap anywhere, or drop.
+                    <label
+                      htmlFor="logo-upload"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) readLogoFile(file);
+                      }}
+                      className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-field-line bg-field px-4 py-7 text-center transition-colors hover:border-brand-primary/60 hover:bg-white/[0.03]"
+                    >
+                      <span className="flex size-12 items-center justify-center rounded-full bg-brand-primary/15 text-brand-primary">
+                        <Upload size={22} />
+                      </span>
+                      <span className="text-[13px] font-semibold text-frost">
+                        اسحب شعارك هنا أو اضغط للرفع
+                      </span>
+                      <span className="text-[11px] text-dim">
+                        PNG / SVG / WebP · حتى 2MB · يُفضّل مربع
+                      </span>
+                      <input
+                        id="logo-upload"
+                        type="file"
+                        accept="image/png,image/svg+xml,image/webp,image/jpeg"
+                        onChange={handleLogoUpload}
+                        className="sr-only"
+                      />
+                    </label>
                   )}
                 </div>
 
                 <StepFooter
-                  submitLabel="متابعة"
-                  disabled={!domainChecked || domainAvailable === false}
-                  onBack={() => setCurrentStep(noPaymentNeeded ? 3 : 4)}
+                  submitLabel="إنشاء المتجر"
+                  busy={creatingStore}
+                  disabled={isCheckingDomain || !formData.domain}
                 />
               </form>
             </div>
             </div>
           )}
+
+          {currentStep === 6 && createdStore && (
+            <div className="rounded-[28px] border border-white/[0.07] bg-[#0a0d1c]/90 p-6 sm:p-9">
+              <CheckoutDone
+                slug={createdStore.slug}
+                storeName={createdStore.name}
+                onHome={() => navigate("/", { replace: true, state: FOCUS_PROMPT_STATE })}
+              />
+            </div>
+          )}
           </div>
         </div>
       </div>
-
-      <StoreProvisioningGate
-        open={Boolean(pendingTemplatesNav)}
-        domain={pendingTemplatesNav?.domain || formData.domain}
-        lastStatus={provisioningStatus}
-        timedOut={provisioningTimedOut}
-        error={provisioningError}
-        onRetry={() => {
-          if (!pendingTemplatesNav) return;
-          void finishAfterProvisioning(pendingTemplatesNav);
-        }}
-        onContinueAnyway={() => {
-          if (pendingTemplatesNav) goToTemplates(pendingTemplatesNav);
-        }}
-      />
     </CheckoutShell>
   );
 }
