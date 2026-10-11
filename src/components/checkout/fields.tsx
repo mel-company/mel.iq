@@ -1,5 +1,5 @@
 import type { ReactNode, SelectHTMLAttributes, InputHTMLAttributes } from "react";
-import { AlertCircle, ChevronDown, Loader2 } from "@/components/icons";
+import { AlertCircle, ArrowRightIcon, ChevronDown, Loader2 } from "@/components/icons";
 import { IQ_LOCAL_PHONE_LENGTH } from "@/utils/phone";
 
 /**
@@ -183,6 +183,30 @@ export function CheckBox({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * "Back" as an icon beside a step's title, so it does not cost the footer a
+ * full-width row on a phone. The arrow points right: backwards under RTL.
+ */
+export function BackIconButton({
+  onClick,
+  label = "رجوع",
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/12 bg-white/[0.04] text-frost transition-colors hover:bg-white/[0.08]"
+    >
+      <ArrowRightIcon size={18} />
+    </button>
   );
 }
 

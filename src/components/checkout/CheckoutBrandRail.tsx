@@ -38,14 +38,8 @@ function CheckoutBrandRail({
   return (
     <aside className="hidden w-[380px] shrink-0 self-stretch lg:block xl:w-[420px]">
       <div className="sticky top-8 flex flex-col gap-10 rounded-[28px] border border-white/[0.07] bg-[#0a0d1c]/90 p-8 text-right shadow-[0_0_60px_rgba(79,96,249,0.12)] backdrop-blur-md xl:p-10">
-        {/* Logo row: mark then wordmark (reads toward the outer edge under RTL). */}
-        <div className="flex items-center justify-end gap-3.5">
-          <div className="flex flex-col text-right">
-            <span dir="ltr" className="text-[24px] font-extrabold leading-none tracking-tight text-white">
-              mel.iq
-            </span>
-            <span className="mt-1 text-[13px] text-[#8b92b0]">نظام إدارة المتاجر</span>
-          </div>
+        {/* Logo row: mark first, so under RTL it sits on the right edge. */}
+        <div className="flex items-center gap-3.5">
           <span className="flex size-[58px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(233.96deg,#b657ff_23.8%,#00bfff_76.3%)] shadow-[0_0_24px_rgba(0,191,255,0.35)]">
             <img
               src="/images/landing/mel-mark.svg"
@@ -56,6 +50,12 @@ function CheckoutBrandRail({
               className="size-[58px]"
             />
           </span>
+          <div className="flex flex-col items-start text-right">
+            <span className="text-[24px] font-extrabold leading-none text-white">
+              منصة ميل
+            </span>
+            <span className="mt-1 text-[13px] text-[#8b92b0]">نظام إدارة المتاجر</span>
+          </div>
         </div>
 
         <div className="flex flex-col gap-3">
@@ -79,18 +79,18 @@ function CheckoutBrandRail({
 
         <ul className="flex flex-col gap-4">
           {TRUST.map((item) => (
-            <li key={item.title} className="flex items-start justify-end gap-3">
-              <span className="flex flex-col text-right">
-                <span className="text-[14px] font-bold text-white">{item.title}</span>
-                <span className="mt-0.5 text-[12px] leading-5 text-[#8b92b0]">
-                  {item.detail}
-                </span>
-              </span>
+            <li key={item.title} className="flex items-start gap-3">
               <span
                 aria-hidden
                 className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#4f60f9] to-[#00bfff] text-[11px] font-bold text-white shadow-[0_0_12px_rgba(79,96,249,0.5)]"
               >
                 ✓
+              </span>
+              <span className="flex flex-col text-right">
+                <span className="text-[14px] font-bold text-white">{item.title}</span>
+                <span className="mt-0.5 text-[12px] leading-5 text-[#8b92b0]">
+                  {item.detail}
+                </span>
               </span>
             </li>
           ))}

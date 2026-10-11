@@ -1,5 +1,5 @@
 /**
- * Mobile-only progress. Desktop progress lives in CheckoutBrandRail.
+ * Step progress above the form, on phones and desktop alike.
  */
 export type CheckoutStep = { number: number; title: string };
 
@@ -19,7 +19,7 @@ function CheckoutStepper({
   );
 
   return (
-    <div className="w-full lg:hidden">
+    <div className="w-full">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-base font-bold text-white">{active?.title}</h2>
         <p className="shrink-0 text-[13px] font-medium text-[#7b8cff]">
