@@ -43,9 +43,13 @@ import type {
 import SuccessModal from "./SuccessModal";
 import BuyCreditsModal from "./BuyCreditsModal";
 import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
-import { useLocation } from "react-router-dom";
-import { PROMPT_DRAFT_KEY, wantsPromptFocus } from "@/utils/promptHandoff";
-import SignupModal from "./SignupModal";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  PROMPT_DRAFT_KEY,
+  consumePromptPending,
+  markPromptPending,
+  wantsPromptFocus,
+} from "@/utils/promptHandoff";
 
 /**
  * The landing page's primary call to action: describe a store, get one.
@@ -192,6 +196,7 @@ async function downscale(file: File): Promise<File> {
 
 export default function PromptComposer() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { data: credits, isLoading: creditsLoading } = useCredits(Boolean(user));
   const queryClient = useQueryClient();
   const handledCreditReturn = useRef(false);
@@ -259,7 +264,6 @@ export default function PromptComposer() {
   const [brandKit, setBrandKit] = useState<File[]>([]);
   const [brandKitPreviews, setBrandKitPreviews] = useState<string[]>([]);
   const [figmaUrl, setFigmaUrl] = useState<string | null>(null);
-  const [signupOpen, setSignupOpen] = useState(false);
   // A stored handle means a build was already running when the page went
   // away; come back up straight into polling so the progress modal
   // reappears instead of the composer pretending nothing happened.
@@ -418,8 +422,6 @@ export default function PromptComposer() {
    *  where the merchant will start editing. */
   const promptInput = useRef<HTMLTextAreaElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
-  // Survives the signup window without being a render dependency.
-  const pendingSubmit = useRef(false);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1398,33 +1400,34 @@ export default function PromptComposer() {
       return;
     }
     if (!user) {
-      // Signed out: the create-account form opens over the prompt, and the
-      // run starts once it reports success, so signing up never leaves the
-      // generation the merchant just asked for.
-      pendingSubmit.current = true;
-      setSignupOpen(true);
+      // Signed out: keep the draft and send them through the normal
+      // create-account page (account → OTP → plan), not a partial overlay.
+      // After checkout finishes, they return here and the effect starts the run.
+      try {
+        sessionStorage.setItem(DRAFT_KEY, prompt);
+      } catch {
+        /* storage blocked — draft may be lost across navigation */
+      }
+      markPromptPending();
+      navigate("/checkout");
       return;
     }
     run();
   };
 
   /**
-   * The run asked for before signing up, started once the account exists.
-   *
-   * From an effect rather than the signup callback, so it goes through
-   * `handleGenerate` as this render sees it: signed in, with the credit
-   * balance loaded. Called straight from the callback, `run` closed over the
-   * signed-out render, skipped the balance check, and a merchant with no
-   * credits got a server refusal instead of the top-up window.
+   * The run asked for before signing up, started once /checkout brings them
+   * back signed in. Goes through `handleGenerate` as this render sees it so
+   * the credit balance is loaded — calling `run` from a stale signed-out
+   * closure skipped that check.
    */
   useEffect(() => {
-    if (!pendingSubmit.current || signupOpen) return;
     if (!user || creditsLoading || phase !== "idle") return;
-    pendingSubmit.current = false;
+    if (!consumePromptPending()) return;
     handleGenerate();
     // handleGenerate is rebuilt every render; these are what gate it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, creditsLoading, phase, signupOpen]);
+  }, [user, creditsLoading, phase]);
 
   const busy =
     phase === "uploading" ||
@@ -1829,17 +1832,6 @@ export default function PromptComposer() {
           </button>
         ))}
       </div>
-
-      <SignupModal
-        open={signupOpen}
-        onClose={() => {
-          setSignupOpen(false);
-          pendingSubmit.current = false;
-        }}
-        // The run itself is started by the pending-run effect next to
-        // handleGenerate: this callback was made while still signed out.
-        onAuthenticated={() => setSignupOpen(false)}
-      />
 
       {/* Also mounted here, not only in the post-generation branch above.
           `setBuyOpen(true)` is reachable from this branch — the `?credits=1`

@@ -24,14 +24,10 @@ import {
 
 /**
  * The one way an account is created: the create-account page's form and code
- * step.
+ * step (`/checkout`).
  *
- * Rendered by the create-account page and, unchanged, in the window that opens
- * over the landing prompt when a signed-out visitor presses «أنشئ متجري». The
- * window exists so signing up does not navigate away from a generation the
- * merchant has already asked for; the form inside it is this one, so the two
- * entry points ask the same questions, check them the same way and handle an
- * existing number the same way.
+ * The landing prompt sends signed-out visitors here after saving their draft,
+ * so account creation is always this full page — not a partial overlay form.
  */
 
 /**
@@ -64,10 +60,7 @@ type SignupFlowProps = {
   layout?: "page" | "modal";
   /** Lets the page keep its stepper in step with the form. */
   onStepChange?: (step: SignupStep) => void;
-  /**
-   * «لديك حساب؟» on the page goes to /login. Without it (the window) the
-   * phone-only sign-in happens in place, so the prompt underneath survives.
-   */
+  /** «لديك حساب؟» on the page goes to /login. */
   onLoginLink?: (localPhone: string) => void;
   /** Toast for a brand-new account; the caller knows what happens next. */
   createdMessage?: string;
