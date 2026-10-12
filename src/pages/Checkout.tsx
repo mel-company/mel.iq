@@ -27,6 +27,11 @@ import { CHECKOUT_DRAFT_KEY, LAST_PAYMENT_ID_KEY } from "@/pages/CheckoutPayment
 import { toast } from "sonner";
 import { normalizeApiResponse } from "@/utils/storeUrls";
 import { FOCUS_PROMPT_STATE, clearPromptPending } from "@/utils/promptHandoff";
+import {
+  getApiErrorMessage,
+  getContentPolicyNameMessage,
+  isContentPolicyError,
+} from "@/utils/otp";
 import { useWaitForDashboardReady } from "@/hooks/useWaitForDashboardReady";
 import StoreProvisioningGate from "@/components/StoreProvisioningGate";
 import { Loader2, Upload, X } from "@/components/icons";
@@ -230,6 +235,8 @@ function Checkout() {
   const [dynadotResult, setDynadotResult] = useState<DynadotSearchResult | null>(
     null,
   );
+  /** Store name rejected by the server content policy — change it to continue. */
+  const [storeNameError, setStoreNameError] = useState("");
 
   const monthlyPrice = Number(formData.plan?.monthly_price ?? 0);
   const isPlanFree = Boolean(formData.plan?.is_free) || monthlyPrice === 0;
@@ -399,6 +406,7 @@ function Checkout() {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    if (e.target.name === "storeName") setStoreNameError("");
     // Reset domain check when domain changes
     if (e.target.name === "domain" || e.target.name === "domainType") {
       setDomainChecked(false);
@@ -794,7 +802,19 @@ function Checkout() {
           },
           onError: (error) => {
             console.error("Error creating store:", error);
-            toast.error("حدث خطأ في إنشاء المتجر. الرجاء المحاولة مرة أخرى.");
+            if (isContentPolicyError(error)) {
+              const message = getContentPolicyNameMessage(error);
+              setStoreNameError(message);
+              toast.error(message);
+              document.getElementById("storeName5")?.focus();
+              return;
+            }
+            toast.error(
+              getApiErrorMessage(
+                error,
+                "حدث خطأ في إنشاء المتجر. الرجاء المحاولة مرة أخرى.",
+              ),
+            );
           },
         });
       } else {
@@ -893,7 +913,7 @@ function Checkout() {
                 </h2>
                 <p className="text-[15px] leading-6 text-[#9aa1bd]">
                   {noPaymentNeeded
-                    ? "هذي الباقة ببلاش اليوم — ما راح ينخصم أي مبلغ هسه"
+                    ? "هذي الباقة مجاناً اليوم — ما راح ينخصم أي مبلغ هسه"
                     : "لن يُخصم أي مبلغ اليوم — تبدأ الفوترة بعد انتهاء التجربة المجانية"}
                 </p>
               </div>
@@ -948,7 +968,7 @@ function Checkout() {
                             <div className="flex items-start justify-between gap-2">
                               {isFree && (
                                 <span className="rounded-full bg-mint/15 px-2.5 py-0.5 text-[11px] font-bold text-mint">
-                                  ببلاش
+                                  مجاناً
                                 </span>
                               )}
                               {selected && (
@@ -983,7 +1003,7 @@ function Checkout() {
                           <p className="mt-auto flex items-end justify-end gap-1 pt-2">
                             {isFree ? (
                               <span className="text-[34px] font-medium tracking-tight text-mint">
-                                ببلاش
+                                مجاناً
                               </span>
                             ) : price ? (
                               <>
@@ -1004,7 +1024,7 @@ function Checkout() {
               )}
 
               <StepFooter
-                submitLabel={noPaymentNeeded ? "متابعة — ببلاش" : "متابعة"}
+                submitLabel={noPaymentNeeded ? "متابعة — مجاناً" : "متابعة"}
                 disabled={!formData.plan}
                 onSubmit={handlePlanSelection}
                 // After OTP the account exists — don't reopen the info form.
@@ -1165,7 +1185,7 @@ function Checkout() {
                   paymentCompleted
                     ? "تم الدفع بنجاح"
                     : noPaymentNeeded
-                      ? "متابعة — ببلاش"
+                      ? "متابعة — مجاناً"
                       : "متابعة"
                 }
                 busy={isInitiatingPayment || processing}
@@ -1203,7 +1223,11 @@ function Checkout() {
                 className="flex flex-col gap-[22px]"
               >
                 <div className="flex flex-col gap-5 sm:flex-row">
-                  <Field label="اسم المتجر" htmlFor="storeName5">
+                  <Field
+                    label="اسم المتجر"
+                    htmlFor="storeName5"
+                    error={storeNameError || undefined}
+                  >
                     <TextInput
                       id="storeName5"
                       name="storeName"
@@ -1211,6 +1235,7 @@ function Checkout() {
                       onChange={handleInputChange}
                       required
                       placeholder="متجر البركة للأطعمة"
+                      state={storeNameError ? "error" : "default"}
                     />
                   </Field>
 

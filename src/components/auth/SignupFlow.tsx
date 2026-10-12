@@ -3,7 +3,12 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { authAPI } from "@/api/endpoints/auth.endpoints";
 import { useAuth } from "@/contexts/AuthContext";
-import { getApiErrorMessage, isPhoneTakenError } from "@/utils/otp";
+import {
+  getApiErrorMessage,
+  getContentPolicyNameMessage,
+  isContentPolicyError,
+  isPhoneTakenError,
+} from "@/utils/otp";
 import {
   formatIqPhone,
   iqPhoneError,
@@ -87,6 +92,8 @@ export default function SignupFlow({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   /** Set when the number cannot be used, shown under the phone field. */
   const [phoneTakenError, setPhoneTakenError] = useState("");
+  /** Set when the server rejects the name for content-policy reasons. */
+  const [namePolicyError, setNamePolicyError] = useState("");
   /** The number the code went to, E.164. */
   const [codePhone, setCodePhone] = useState("");
   /** The code went to an account that already existed. */
@@ -110,7 +117,10 @@ export default function SignupFlow({
     layout === "modal" ? "flex flex-col gap-5" : "flex flex-col gap-5 sm:flex-row";
 
   const nameError =
-    fields.name.trim().length >= 2 ? "" : "يرجى إدخال الاسم الكامل (حرفان على الأقل).";
+    namePolicyError ||
+    (fields.name.trim().length >= 2
+      ? ""
+      : "يرجى إدخال الاسم الكامل (حرفان على الأقل).");
   const emailError = EMAIL_RE.test(fields.email.trim())
     ? ""
     : "يرجى إدخال بريد إلكتروني صالح.";
@@ -133,8 +143,10 @@ export default function SignupFlow({
 
   const setField =
     (name: keyof typeof fields) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      if (name === "name") setNamePolicyError("");
       setFields((prev) => ({ ...prev, [name]: e.target.value }));
+    };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhoneTakenError("");
@@ -199,6 +211,12 @@ export default function SignupFlow({
     } catch (error) {
       if (isPhoneTakenError(error)) {
         await continueWithExistingAccount(phoneE164, error);
+      } else if (isContentPolicyError(error)) {
+        const message = getContentPolicyNameMessage(error);
+        setNamePolicyError(message);
+        markTouched("name");
+        toast.error(message);
+        document.getElementById("name")?.focus();
       } else {
         toast.error(
           getApiErrorMessage(error, "حدث خطأ في التسجيل. الرجاء المحاولة مرة أخرى."),
