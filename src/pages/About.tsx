@@ -1,6 +1,6 @@
 function About() {
   return (
-    <div className="w-full py-12 text-white">
+    <div className="w-full py-12 text-white mt-8 lg:mt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Hero Section */}
         <div className="text-center mb-16">
@@ -13,7 +13,7 @@ function About() {
         </div>
 
 
-        
+
         {/* Mission Section */}
         <section className="mb-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">

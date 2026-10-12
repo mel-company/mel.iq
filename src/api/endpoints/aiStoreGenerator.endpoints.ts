@@ -349,6 +349,8 @@ export const aiStoreGeneratorAPI = {
 
   getCredits: async (): Promise<{
     unlimited: boolean;
+    /** Unlimited accounts only: today's store builds against the daily cap. */
+    daily?: { limit: number; used: number; remaining: number };
     periodStart?: string;
     periodEnd?: string;
     generations: { included?: number; used?: number; remaining: number; purchased?: number };

@@ -31,7 +31,7 @@ function ComposerFallback() {
  */
 function HeroSection() {
   return (
-    <section className="relative px-4 pb-10 pt-10 sm:px-6 lg:pt-16">
+    <section className="relative px-4 pb-10 pt-28 lg:pt-36">
       {/* The grounds the Figma frame paints behind the hero: a deep indigo
           wash off the left shoulder and a violet bloom behind the composer. */}
       <div

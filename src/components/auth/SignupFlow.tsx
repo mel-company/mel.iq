@@ -15,15 +15,14 @@ import {
   toIqE164,
   toLocalDigits,
 } from "@/utils/phone";
-import { seedPromptDraft } from "@/utils/promptHandoff";
 import OtpInputs from "@/components/auth/OtpInputs";
 import {
   CheckBox,
   Field,
   type FieldState,
   PhoneInput,
-  SelectInput,
   StepFooter,
+  BackIconButton,
   TextInput,
 } from "@/components/checkout/fields";
 
@@ -43,19 +42,6 @@ import {
  */
 const OTP_LENGTH = 4;
 
-/** Iraq's governorates, for the account step's picker. */
-const GOVERNORATES = [
-  "بغداد", "البصرة", "نينوى", "أربيل", "النجف", "كربلاء", "بابل", "ذي قار",
-  "الأنبار", "ديالى", "كركوك", "واسط", "صلاح الدين", "المثنى", "القادسية",
-  "ميسان", "دهوك", "السليمانية",
-];
-
-/** Business categories offered on the account step. */
-const BUSINESS_TYPES = [
-  "ملابس وأزياء", "إلكترونيات وهواتف", "مستحضرات تجميل وعطور", "أغذية ومشروبات",
-  "أثاث ومستلزمات منزل", "رياضة ولياقة", "كتب وقرطاسية", "صحة وأدوية", "أخرى",
-];
-
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 
 export type SignupStep = "account" | "login" | "otp";
@@ -69,7 +55,13 @@ type SignupFlowProps = {
   onLoginLink?: (localPhone: string) => void;
   /** Toast for a brand-new account; the caller knows what happens next. */
   createdMessage?: string;
-  onAuthenticated: (info: { existingAccount: boolean }) => void;
+  onAuthenticated: (info: {
+    existingAccount: boolean;
+    name: string;
+    email: string;
+    /** E.164, as the code was sent to. */
+    phone: string;
+  }) => void;
 };
 
 export default function SignupFlow({
@@ -85,8 +77,6 @@ export default function SignupFlow({
     name: "",
     email: "",
     phone: "",
-    businessType: "",
-    governorate: "",
   });
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -264,11 +254,13 @@ export default function SignupFlow({
       }
       setOtpVerified(true);
       login(token, result?.username || fields.name || codePhone, result?.refreshToken);
-      // What they picked as their business starts the prompt off (a draft
-      // they already typed is never replaced).
-      seedPromptDraft(fields.businessType, fields.governorate);
       toast.success(existingAccount ? "تم تسجيل الدخول" : createdMessage);
-      onAuthenticated({ existingAccount });
+      onAuthenticated({
+        existingAccount,
+        name: fields.name.trim(),
+        email: fields.email.trim(),
+        phone: codePhone,
+      });
     } catch (error) {
       toast.error(getApiErrorMessage(error, "رمز التحقق غير صحيح. الرجاء المحاولة مرة أخرى."));
     } finally {
@@ -297,10 +289,16 @@ export default function SignupFlow({
       ? "text-2xl font-extrabold leading-tight text-white"
       : "text-[28px] font-extrabold leading-tight text-white sm:text-[32px]";
 
+  const backFromCode = () =>
+    setStep(existingAccount && !fields.name ? "login" : "account");
+
   if (step === "otp") {
     return (
-      <div className="flex flex-col items-center gap-[22px] py-2 text-center">
-        <div className="flex flex-col items-center gap-1.5">
+      <div className="relative flex flex-col items-center gap-[22px] py-2 text-center">
+        <div className="absolute start-0 top-0">
+          <BackIconButton onClick={backFromCode} />
+        </div>
+        <div className="flex flex-col items-center gap-1.5 px-12">
           <h2 className={headline}>تحقق من رقمك</h2>
           <p className="flex flex-wrap items-center justify-center gap-1.5 text-sm leading-6 text-[#9aa1bd]">
             أرسلنا رمزاً من {OTP_LENGTH} أرقام إلى
@@ -309,7 +307,7 @@ export default function SignupFlow({
             </span>
             <button
               type="button"
-              onClick={() => setStep(existingAccount && !fields.name ? "login" : "account")}
+              onClick={backFromCode}
               className="text-[13px] font-bold text-[#7b8cff] hover:underline"
             >
               تعديل
@@ -336,7 +334,7 @@ export default function SignupFlow({
             onComplete={(code) => void submitCode(code)}
           />
 
-          <div className="flex w-full items-center justify-end text-[13px] leading-5">
+          <div className="flex w-full items-center justify-start text-[13px] leading-5">
             <span className="flex items-center gap-1.5 text-muted">
               لم يصلك الرمز؟
               <button
@@ -362,7 +360,6 @@ export default function SignupFlow({
               submitLabel="متابعة"
               busy={busy}
               disabled={otp.length !== OTP_LENGTH}
-              onBack={() => setStep(existingAccount && !fields.name ? "login" : "account")}
             />
           </div>
         </form>
@@ -477,42 +474,6 @@ export default function SignupFlow({
           </Field>
           {/* No store name: the AI prompt names the store. */}
           {layout === "page" && <span className="hidden flex-1 sm:block" />}
-        </div>
-
-        {/* Not persisted (the register endpoint takes name / email / phone),
-            hence optional. They start the AI prompt off once the code checks
-            out (`seedPromptDraft`). */}
-        <div className={row}>
-          <Field label="نوع النشاط التجاري" htmlFor="businessType">
-            <SelectInput
-              id="businessType"
-              name="businessType"
-              value={fields.businessType}
-              onChange={setField("businessType")}
-              placeholder="اختر نوع النشاط"
-            >
-              {BUSINESS_TYPES.map((type) => (
-                <option key={type} value={type} className="bg-ink-raised text-frost">
-                  {type}
-                </option>
-              ))}
-            </SelectInput>
-          </Field>
-          <Field label="المحافظة" htmlFor="governorate">
-            <SelectInput
-              id="governorate"
-              name="governorate"
-              value={fields.governorate}
-              onChange={setField("governorate")}
-              placeholder="اختر المحافظة"
-            >
-              {GOVERNORATES.map((name) => (
-                <option key={name} value={name} className="bg-ink-raised text-frost">
-                  {name}
-                </option>
-              ))}
-            </SelectInput>
-          </Field>
         </div>
 
         <CheckBox

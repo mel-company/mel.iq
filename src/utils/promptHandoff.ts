@@ -42,12 +42,12 @@ export function consumePromptPending(): boolean {
   }
 }
 
-/** Drop a pending generation — checkout will create the store itself. */
-export function clearPromptPending() {
+/** Whether a run is waiting for the account (without consuming it). */
+export function hasPromptPending(): boolean {
   try {
-    sessionStorage.removeItem(PROMPT_PENDING_KEY);
+    return sessionStorage.getItem(PROMPT_PENDING_KEY) === "1";
   } catch {
-    /* ignore */
+    return false;
   }
 }
 
