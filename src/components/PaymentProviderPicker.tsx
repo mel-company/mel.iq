@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useBillingProviders } from "@/api/wrappers/platform-payment.wrapper";
 import type {
   BillingProvider,
@@ -22,6 +22,38 @@ const PROVIDER_TITLES: Record<string, string> = {
   ZAIN_CASH: "زين كاش",
   QI_CARD: "كي كارد",
 };
+
+/**
+ * The same logos the server sends as `logoUrl`, for the fallback list drawn
+ * when that list could not be loaded, and for a gateway whose `logoUrl`
+ * comes back empty.
+ */
+export const PROVIDER_LOGOS: Record<string, string> = {
+  ZAIN_CASH: "https://cdn.mel.iq/logos/zaincash.png",
+  QI_CARD: "https://cdn.mel.iq/logos/qi-card.png",
+};
+
+/** A gateway's logo tile. Draws nothing when the image will not load. */
+export function PaymentProviderLogo({
+  src,
+  className = "size-10 rounded-xl",
+}: {
+  src?: string | null;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className={`shrink-0 object-cover ${className}`}
+    />
+  );
+}
 
 export function paymentProviderLabel(
   provider: PlatformPaymentProvider | null | undefined,
@@ -67,7 +99,7 @@ export default function PaymentProviderPicker({
     return Object.entries(PROVIDER_TITLES).map(([provider, name], index) => ({
       provider: provider as PlatformPaymentProvider,
       name,
-      logoUrl: "",
+      logoUrl: PROVIDER_LOGOS[provider] ?? "",
       recommended: index === 0,
     }));
   }, [data, isError]);
@@ -116,7 +148,9 @@ export default function PaymentProviderPicker({
             <div
               key={key}
               className={`h-[74px] animate-pulse rounded-2xl ${
-                isDark ? "bg-white/[0.06]" : "bg-black/[0.04] dark:bg-white/[0.04]"
+                isDark
+                  ? "bg-white/[0.06]"
+                  : "bg-black/[0.04] dark:bg-white/[0.04]"
               }`}
             />
           ))}
@@ -163,7 +197,7 @@ export default function PaymentProviderPicker({
               disabled={disabled}
               onClick={() => onChange(option.provider)}
               aria-pressed={selected}
-              className={`rounded-2xl p-4 text-right transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`flex items-center gap-3 rounded-2xl p-4 text-right transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 isDark ? "border-2" : "border"
               } ${
                 selected
@@ -175,19 +209,24 @@ export default function PaymentProviderPicker({
                     : "border-black/8 bg-black/[0.02] hover:border-brand-indigo/30 dark:border-white/8 dark:bg-white/[0.02] dark:hover:border-white/20"
               }`}
             >
-              <span
-                className={`block text-sm font-semibold ${
-                  isDark ? "text-white" : "text-[#0b1020] dark:text-frost"
-                }`}
-              >
-                {PROVIDER_TITLES[option.provider] ?? option.name}
-              </span>
-              <span
-                className={`mt-0.5 block text-xs ${
-                  isDark ? "text-white/45" : "text-[#8a90a8] dark:text-dim"
-                }`}
-              >
-                {option.name}
+              <PaymentProviderLogo
+                src={option.logoUrl || PROVIDER_LOGOS[option.provider]}
+              />
+              <span className="min-w-0">
+                <span
+                  className={`block text-sm font-semibold ${
+                    isDark ? "text-white" : "text-[#0b1020] dark:text-frost"
+                  }`}
+                >
+                  {PROVIDER_TITLES[option.provider] ?? option.name}
+                </span>
+                <span
+                  className={`mt-0.5 block text-xs ${
+                    isDark ? "text-white/45" : "text-[#8a90a8] dark:text-dim"
+                  }`}
+                >
+                  {option.name}
+                </span>
               </span>
             </button>
           );
