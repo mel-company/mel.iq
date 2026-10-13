@@ -24,7 +24,7 @@
       "destination": "/agent/home.md"
     },
     {
-      "source": "/((?!\\.well-known|api|agent|docs|auth\\.md|llms\\.txt|robots\\.txt|sitemap\\.xml).*)",
+      "source": "/((?!\\.well-known|assets/|api|agent|docs|auth\\.md|llms\\.txt|robots\\.txt|sitemap\\.xml).*)",
       "destination": "/index.html"
     }
   ],
