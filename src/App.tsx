@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import WebMcpTools from "./components/WebMcpTools";
 import ScrollToTop from "./components/ScrollToTop";
@@ -9,6 +9,7 @@ import { useAuth } from "./contexts/AuthContext";
 import { Toaster } from "./components/ui/sonner";
 import { SEO_TOPIC_SLUGS } from "./seo/topics";
 import SeoHead from "./seo/SeoHead";
+import RouteErrorBoundary from "./components/RouteErrorBoundary";
 
 // Heavy / rarely-hit routes stay out of the landing bundle so Slow-4G mobile
 // is not paying for Checkout, Dashboard, and the rest on first paint.
@@ -60,11 +61,14 @@ function RouteFallback() {
 }
 
 function App() {
+  const { pathname } = useLocation();
+
   return (
     <div className="min-h-screen bg-white dark:bg-black transition-colors duration-200">
       <ScrollToTop />
       <WebMcpTools />
       <Toaster />
+      <RouteErrorBoundary resetKey={pathname}>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           {/* No navbar on the auth screens: the frames are standalone, and a
@@ -201,6 +205,7 @@ function App() {
           />
         </Routes>
       </Suspense>
+      </RouteErrorBoundary>
     </div>
   );
 }
