@@ -43,6 +43,7 @@ import CheckoutShell from "@/components/checkout/CheckoutShell";
 import CheckoutBrandRail from "@/components/checkout/CheckoutBrandRail";
 import CheckoutDone from "@/components/checkout/CheckoutDone";
 import SignupFlow from "@/components/auth/SignupFlow";
+import { PaymentProviderLogo, PROVIDER_LOGOS } from "@/components/PaymentProviderPicker";
 import {
   BackIconButton,
   Field,
@@ -67,10 +68,10 @@ import {
  * `available` is now decided per render from the server's own list.
  */
 const PAYMENT_METHODS = [
-  { id: "card", title: "بطاقة بنكية", detail: "Visa · Mastercard", mark: "VC", tint: "bg-brand-primary/15 text-brand-primary", provider: null },
-  { id: "zaincash", title: "زين كاش", detail: "ZainCash", mark: "Z", tint: "bg-[#ff5252]/15 text-[#ff5252]", provider: "ZAIN_CASH" as const },
-  { id: "qicard", title: "كي كارد", detail: "Qi Card", mark: "Q", tint: "bg-amber/15 text-amber", provider: "QI_CARD" as const },
-  { id: "fib", title: "FIB", detail: "المصرف الأول", mark: "F", tint: "bg-brand-secondary/15 text-brand-secondary", provider: null },
+  { id: "card", title: "بطاقة بنكية", detail: "Visa · Mastercard", mark: "VC", tint: "bg-brand-primary/15 text-brand-primary", provider: null, logo: null },
+  { id: "zaincash", title: "زين كاش", detail: "ZainCash", mark: "Z", tint: "bg-[#ff5252]/15 text-[#ff5252]", provider: "ZAIN_CASH" as const, logo: PROVIDER_LOGOS.ZAIN_CASH },
+  { id: "qicard", title: "كي كارد", detail: "Qi Card", mark: "Q", tint: "bg-amber/15 text-amber", provider: "QI_CARD" as const, logo: PROVIDER_LOGOS.QI_CARD },
+  { id: "fib", title: "FIB", detail: "المصرف الأول", mark: "F", tint: "bg-brand-secondary/15 text-brand-secondary", provider: null, logo: null },
 ];
 
 /**
@@ -1121,12 +1122,19 @@ function Checkout() {
                                   <span className="size-2.5 rounded-full bg-brand-indigo" />
                                 )}
                               </span>
-                              <span
-                                aria-hidden
-                                className={`flex size-7 items-center justify-center rounded-md text-xs font-bold ${method.tint}`}
-                              >
-                                {method.mark}
-                              </span>
+                              {method.logo ? (
+                                <PaymentProviderLogo
+                                  src={method.logo}
+                                  className="size-7 rounded-md"
+                                />
+                              ) : (
+                                <span
+                                  aria-hidden
+                                  className={`flex size-7 items-center justify-center rounded-md text-xs font-bold ${method.tint}`}
+                                >
+                                  {method.mark}
+                                </span>
+                              )}
                             </span>
                             <span className="flex flex-col">
                               <span className="text-sm font-bold text-frost">
