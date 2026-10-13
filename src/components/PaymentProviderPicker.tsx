@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronDown } from "@/components/icons";
 import { useBillingProviders } from "@/api/wrappers/platform-payment.wrapper";
 import type {
   BillingProvider,
@@ -71,6 +72,12 @@ type PaymentProviderPickerProps = {
   onChange: (provider: PlatformPaymentProvider | null) => void;
   disabled?: boolean;
   variant?: "light" | "dark";
+  /**
+   * `grid` draws every gateway as a card; `select` draws the chosen one as a
+   * single row that opens a list of the others, for a dialog that is already
+   * tall. `select` is drawn for dark surfaces only.
+   */
+  layout?: "grid" | "select";
 };
 
 export default function PaymentProviderPicker({
@@ -78,8 +85,31 @@ export default function PaymentProviderPicker({
   onChange,
   disabled,
   variant = "light",
+  layout = "grid",
 }: PaymentProviderPickerProps) {
   const isDark = variant === "dark";
+  const [open, setOpen] = useState(false);
+  const selectRef = useRef<HTMLDivElement>(null);
+
+  // Close the list on an outside click or Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!selectRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [open]);
   const { data, isLoading, isError } = useBillingProviders();
 
   /**
@@ -176,6 +206,85 @@ export default function PaymentProviderPicker({
         >
           لا تتوفر حالياً أي بوابة دفع. تواصل معنا لإتمام العملية.
         </p>
+      </div>
+    );
+  }
+
+  if (layout === "select") {
+    const current =
+      providers.find((option) => option.provider === value) ?? providers[0];
+    const others = providers.length > 1;
+    const row = (option: BillingProvider) => (
+      <>
+        <PaymentProviderLogo
+          src={option.logoUrl || PROVIDER_LOGOS[option.provider]}
+          className="size-11 rounded-xl"
+        />
+        <span className="min-w-0 flex-1 text-right">
+          <span className="block text-[15px] font-bold text-white">
+            {PROVIDER_TITLES[option.provider] ?? option.name}
+          </span>
+          <span className="mt-0.5 block text-xs text-white/50">
+            {option.name}
+          </span>
+        </span>
+      </>
+    );
+
+    return (
+      <div ref={selectRef} className="relative">
+        <p className="mb-2.5 text-sm font-bold text-white/85">طريقة الدفع</p>
+        <button
+          type="button"
+          disabled={disabled || !others}
+          onClick={() => setOpen((was) => !was)}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className="flex w-full items-center gap-3 rounded-2xl border border-[#00c8ff]/70 bg-white/[0.03] px-4 py-3 shadow-[0_0_18px_rgba(0,200,255,0.12)] transition-colors hover:bg-white/[0.06] disabled:cursor-default disabled:hover:bg-white/[0.03]"
+        >
+          {row(current)}
+          {others && (
+            <ChevronDown
+              size={20}
+              className={`shrink-0 text-white/60 transition-transform ${
+                open ? "rotate-180" : ""
+              }`}
+            />
+          )}
+        </button>
+
+        {open && (
+          <ul
+            role="listbox"
+            aria-label="طريقة الدفع"
+            className="absolute inset-x-0 bottom-full z-20 mb-2 overflow-hidden rounded-2xl border border-white/10 bg-[#101a3d] p-1.5 shadow-2xl"
+          >
+            {providers.map((option) => {
+              const selected = option.provider === current.provider;
+              return (
+                <li key={option.provider}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => {
+                      onChange(option.provider);
+                      setOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
+                      selected ? "bg-[#00c8ff]/10" : "hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    {row(option)}
+                    {selected && (
+                      <Check size={16} className="shrink-0 text-[#00c8ff]" />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     );
   }
