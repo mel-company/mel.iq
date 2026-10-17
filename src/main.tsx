@@ -7,6 +7,7 @@ import App from "./App";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { reloadForNewBuild } from "./utils/staleBuild";
+import { loadClarity } from "./utils/clarity";
 
 // A chunk from a previous deploy is gone: load the current build instead of
 // leaving the page blank. If we just reloaded, the error falls through to
@@ -14,6 +15,8 @@ import { reloadForNewBuild } from "./utils/staleBuild";
 window.addEventListener("vite:preloadError", () => {
   reloadForNewBuild();
 });
+
+loadClarity();
 
 const queryClient = new QueryClient();
 
