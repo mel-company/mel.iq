@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import WebMcpTools from "./components/WebMcpTools";
 import ScrollToTop from "./components/ScrollToTop";
+import JourneyTracker from "./components/JourneyTracker";
 import { MarketingShell } from "./components/LandingNavbar";
 import Landing from "./pages/Landing";
 import { useAuth } from "./contexts/AuthContext";
@@ -66,6 +67,7 @@ function App() {
   return (
     <div className="min-h-screen bg-white dark:bg-black transition-colors duration-200">
       <ScrollToTop />
+      <JourneyTracker />
       <WebMcpTools />
       <Toaster />
       <RouteErrorBoundary resetKey={pathname}>
