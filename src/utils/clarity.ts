@@ -2,9 +2,9 @@
  * Microsoft Clarity (heatmaps + session recordings) for www.mel.iq.
  * The project ID is public (it ships in every visitor's page anyway), so it
  * lives here rather than in an env variable. Find it in Clarity under
- * Settings → Overview. Empty means Clarity stays off.
+ * Settings → Overview.
  */
-const CLARITY_PROJECT_ID = "";
+const CLARITY_PROJECT_ID = "yz0ogjmdqw";
 
 /** Real visitors only: no localhost, no Vercel preview deploys. */
 function isLiveHost(host: string): boolean {
