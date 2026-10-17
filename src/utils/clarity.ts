@@ -11,6 +11,15 @@ function isLiveHost(host: string): boolean {
   return host === "mel.iq" || host.endsWith(".mel.iq");
 }
 
+/**
+ * Public support-ticket links carry their access token in the path (/ticket/:token).
+ * Clarity records the page URL, so it must not start while one of these is
+ * the address; it starts once the app has moved on.
+ */
+function hasSecretInUrl(pathname: string): boolean {
+  return pathname.startsWith("/ticket/");
+}
+
 type ClarityQueue = ((...args: unknown[]) => void) & { q?: unknown[][] };
 
 export function loadClarity(): void {
@@ -33,7 +42,16 @@ export function loadClarity(): void {
     document.head.appendChild(script);
   };
 
+  const injectWhenUrlIsClean = () => {
+    if (!hasSecretInUrl(window.location.pathname)) return inject();
+    const timer = window.setInterval(() => {
+      if (hasSecretInUrl(window.location.pathname)) return;
+      window.clearInterval(timer);
+      inject();
+    }, 1000);
+  };
+
   // Wait until the page has loaded so the tag never competes with first paint.
-  if (document.readyState === "complete") inject();
-  else window.addEventListener("load", inject, { once: true });
+  if (document.readyState === "complete") injectWhenUrlIsClean();
+  else window.addEventListener("load", injectWhenUrlIsClean, { once: true });
 }
