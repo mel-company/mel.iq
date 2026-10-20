@@ -153,7 +153,7 @@ function BenefitsSection() {
             <Card delay={0} className="justify-between gap-10 px-[18px] py-12">
               <div
                 aria-hidden
-                className="pointer-events-none absolute end-0 top-2 h-20 w-2/5 rounded-full bg-[#b657ff] opacity-50 blur-[108px]"
+                className="pointer-events-none absolute end-0 top-2 h-20 w-2/5 glow opacity-50 [--glow:#b657ff2e] [--glow-spread:216px]"
               />
               <CardBody title="تحسين مستمر">
                 طلب جديد، منتج أوشك على النفاد، رسالة من عميل تصلك لحظة حدوثها
@@ -165,7 +165,7 @@ function BenefitsSection() {
             <Card delay={110} className="items-center justify-between gap-10 px-[18px] py-12">
               <div
                 aria-hidden
-                className="pointer-events-none absolute bottom-8 start-1/3 h-24 w-2/5 rounded-full bg-[#b657ff] opacity-50 blur-[108px]"
+                className="pointer-events-none absolute bottom-8 start-1/3 h-24 w-2/5 glow opacity-50 [--glow:#b657ff33] [--glow-spread:216px]"
               />
               <CardBody title="مساعد ذكي يتحدث لغتك">
                 اسأل، واطلب، ونفّذ: تقارير المبيعات، إضافة الخصومات، متابعة
@@ -192,7 +192,7 @@ function BenefitsSection() {
             <Card delay={220} className="items-center justify-between gap-10 px-[18px] py-12 md:col-span-2 lg:col-span-1">
               <div
                 aria-hidden
-                className="pointer-events-none absolute -top-24 start-0 h-48 w-[110%] rounded-full bg-[#b657ff]/25 opacity-50 blur-[110px]"
+                className="pointer-events-none absolute -top-24 start-0 h-48 w-[110%] glow opacity-50 [--glow:#b657ff24] [--glow-spread:220px]"
               />
               <CardBody title="متجر إلكتروني احترافي">
                 أنشئ متجرك بقوالب جاهزة وهوية خاصة بك، مع صفحات منتجات وسلة

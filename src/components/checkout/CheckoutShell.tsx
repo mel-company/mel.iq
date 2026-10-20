@@ -39,11 +39,11 @@ function CheckoutShell({ children }: { children: ReactNode }) {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-40 end-0 size-[560px] rounded-full bg-[#1b5c8f]/20 blur-[140px]"
+        className="pointer-events-none absolute -top-40 end-0 size-[560px] glow [--glow:#1b5c8f2b] [--glow-spread:280px]"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -bottom-32 start-0 size-[480px] rounded-full bg-[#4f60f9]/15 blur-[130px]"
+        className="pointer-events-none absolute -bottom-32 start-0 size-[480px] glow [--glow:#4f60f91f] [--glow-spread:260px]"
       />
 
       {/* Phone: the home link and the logo share one row at the top. */}

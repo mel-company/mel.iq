@@ -28,7 +28,7 @@ function AuthShell({ children }: { children: ReactNode }) {
       {/* The "Light" ellipse — a 759px cyan bloom hanging off the top-right. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-[383px] end-[-120px] size-[759px] rounded-full bg-[#1b5c8f]/25 blur-[180px]"
+        className="pointer-events-none absolute -top-[383px] end-[-120px] size-[759px] glow [--glow:#1b5c8f38] [--glow-spread:360px]"
       />
 
       <Link

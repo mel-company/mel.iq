@@ -425,6 +425,31 @@ section[id] {
 }
 
 /* ---------------------------------------------------------------------------
+ * Soft colour glows behind sections.
+ *
+ * These used to be `rounded-full bg-… blur-[160px]`. iOS Safari keeps a full
+ * bitmap for every blurred layer, sized to the box plus the blur spread at the
+ * screen's 3x, and the landing page's dozen of them (three animating) ran
+ * iPhones out of memory: the page went white. A radial gradient over the same
+ * area draws the same falloff for almost nothing.
+ *
+ *   --glow         colour, with the strength the blur used to leave at its centre
+ *   --glow-spread  how far past the box it fades out: about twice the old blur
+ * ------------------------------------------------------------------------ */
+.glow::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--glow-spread, 0px) * -1);
+  pointer-events: none;
+  background: radial-gradient(closest-side,
+      var(--glow) 0%,
+      color-mix(in oklab, var(--glow) 84%, transparent) 32%,
+      color-mix(in oklab, var(--glow) 50%, transparent) 55%,
+      color-mix(in oklab, var(--glow) 16%, transparent) 77%,
+      transparent 100%);
+}
+
+/* ---------------------------------------------------------------------------
  * A disclosure that opens to its content's height.
  *
  * `grid-template-rows: 0fr -> 1fr` is the one way to transition to an

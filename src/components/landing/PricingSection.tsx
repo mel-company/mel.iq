@@ -348,7 +348,7 @@ function PricingSection() {
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute start-1/2 top-40 h-44 w-[338px] -translate-x-1/2 rounded-full bg-[#5834e9]/30 blur-[120px]"
+        className="pointer-events-none absolute start-1/2 top-40 h-44 w-[338px] -translate-x-1/2 glow [--glow:#5834e922] [--glow-spread:240px]"
       />
 
       <div className="relative mx-auto flex max-w-[1296px] flex-col items-center gap-12">

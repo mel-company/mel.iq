@@ -53,7 +53,7 @@ function TopicBody({ topic }: { topic: SeoTopic }) {
 
       <article className="relative overflow-x-clip px-4 pb-20 pt-10 sm:px-6 lg:pb-28 lg:pt-16">
         <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="absolute -start-1/4 top-0 size-[640px] rounded-full bg-[#1b1147]/50 blur-[150px]" />
+          <div className="absolute -start-1/4 top-0 size-[640px] glow [--glow:#1b114773] [--glow-spread:300px]" />
         </div>
 
         <div className="relative mx-auto max-w-[900px]">

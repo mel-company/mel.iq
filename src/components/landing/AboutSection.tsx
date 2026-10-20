@@ -50,7 +50,7 @@ function AboutSection() {
             style={{ width: size, height: size }}
           />
         ))}
-        <div className="animate-bloom absolute size-[680px] rounded-full bg-[#5834e9]/15 blur-[200px]" />
+        <div className="animate-bloom absolute size-[680px] glow [--glow:#5834e91d] [--glow-spread:400px]" />
       </div>
 
       <div className="relative mx-auto flex max-w-[1296px] flex-col items-center gap-13">

@@ -120,13 +120,13 @@ export const PageGround = () => (
       }}
     />
 
-    <div className="animate-bloom absolute -top-56 -start-40 size-[760px] rounded-full bg-brand-indigo/12 blur-[170px] dark:bg-[#1b1147]/70" />
+    <div className="animate-bloom absolute -top-56 -start-40 size-[760px] glow [--glow:#4f60f91c] [--glow-spread:340px] dark:[--glow:#1b1147a3]" />
     <div
-      className="animate-bloom absolute -top-48 start-1/4 size-[620px] rounded-full bg-brand-secondary/10 blur-[150px] dark:bg-[#3b2a8f]/22"
+      className="animate-bloom absolute -top-48 start-1/4 size-[620px] glow [--glow:#b282ff17] [--glow-spread:300px] dark:[--glow:#3b2a8f30]"
       style={{ animationDelay: "-9s" }}
     />
     <div
-      className="animate-bloom absolute -bottom-56 -end-56 size-[560px] rounded-full bg-brand-primary/8 blur-[180px] dark:bg-[#5834e9]/12"
+      className="animate-bloom absolute -bottom-56 -end-56 size-[560px] glow [--glow:#33c5ff0e] [--glow-spread:360px] dark:[--glow:#5834e915]"
       style={{ animationDelay: "-14s" }}
     />
   </div>
