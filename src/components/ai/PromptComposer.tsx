@@ -787,8 +787,23 @@ export default function PromptComposer() {
       credits?.unlimited ||
       (credits &&
         ((credits.generations?.remaining ?? 0) +
-          (credits.generations?.purchased ?? 0)) > 0),
+          (credits.generations?.purchased ?? 0) +
+          (credits.generations?.trial?.remaining ?? 0)) > 0),
     );
+
+  /**
+   * Basic (and an account with no store yet) does not include AI builds, but
+   * gets one free try, once. Shown while that try is the only thing left.
+   */
+  const onTrialOnly = Boolean(
+    user &&
+      credits &&
+      !credits.unlimited &&
+      (credits.generations?.remaining ?? 0) +
+        (credits.generations?.purchased ?? 0) ===
+        0 &&
+      (credits.generations?.trial?.remaining ?? 0) > 0,
+  );
 
   const stopRecording = () => {
     if (recordingTimerRef.current) {
@@ -1816,6 +1831,12 @@ export default function PromptComposer() {
       </div>
 
       {credits?.unlimited && <UnlimitedCreditsBadge daily={credits.daily} />}
+      {onTrialOnly && phase === "idle" && (
+        <p className="mx-auto mt-4 max-w-xl text-center text-xs leading-6 text-[#a8aec8]">
+          إنشاء المتاجر بالذكاء الاصطناعي غير مشمول في باقتك، رقِّ إلى باقة نمو
+          لاستخدامه، لكن يمكنك تجربته مجاناً الآن مرة واحدة.
+        </p>
+      )}
 
       {/* Starter prompts. The design shows four chips under the composer; they
           fill the box rather than submit, because the merchant still wants to

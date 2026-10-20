@@ -18,10 +18,10 @@ export type PlanUpgradeRequiredError = {
 };
 
 /**
- * The plan upgrades lead to, for when the server has not named it. Its code is
- * still `PLUS`; only the name changed.
+ * The plan upgrades lead to, for when the server has not named it: Grow, whose
+ * code is still `PLUS`. Basic (code `BASIC`) is the entry plan below it.
  */
-export const BASIC_PLAN_NAME = "أساسي";
+export const GROW_PLAN_NAME = "نمو";
 
 const FEATURE_LABELS: Record<string, string> = {
   ai_editor: "محرر الذكاء الاصطناعي",

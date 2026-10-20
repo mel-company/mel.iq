@@ -34,7 +34,7 @@ export type PlatformPaymentInitPayload = {
     | "CHANGE_PLAN"
     | "DOMAIN_REGISTRATION";
   planId?: string;
-  billingPeriod?: "MONTHLY" | "YEARLY";
+  billingPeriod?: "MONTHLY" | "QUARTERLY" | "YEARLY";
   durationMonths?: number;
   storeId?: string;
   domain?: string;
@@ -70,7 +70,7 @@ export type SubscriptionQuote = {
   planId: string;
   planName: string;
   planCode: string | null;
-  billingPeriod: "MONTHLY" | "YEARLY";
+  billingPeriod: "MONTHLY" | "QUARTERLY" | "YEARLY";
   durationMonths: number;
   currency: string;
   /** Due now. `0` means the intro covers it and no gateway is involved. */
@@ -78,6 +78,8 @@ export type SubscriptionQuote = {
   /** The same months with no promo applied. */
   listAmount: number;
   savings: number;
+  /** `ladder` when the intro offer priced it, `period` for the 3-month / yearly discount. */
+  basis?: "ladder" | "period";
   breakdown: {
     freeMonths: number;
     discountMonths: number;
@@ -97,7 +99,7 @@ export type SubscriptionQuote = {
 export type SubscriptionQuoteQuery = {
   type: "INITIAL_SUBSCRIPTION" | "RENEWAL" | "CHANGE_PLAN";
   planId: string;
-  billingPeriod?: "MONTHLY" | "YEARLY";
+  billingPeriod?: "MONTHLY" | "QUARTERLY" | "YEARLY";
   durationMonths?: number;
   /** Required for RENEWAL and CHANGE_PLAN. */
   storeId?: string;

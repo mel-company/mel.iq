@@ -353,7 +353,14 @@ export const aiStoreGeneratorAPI = {
     daily?: { limit: number; used: number; remaining: number };
     periodStart?: string;
     periodEnd?: string;
-    generations: { included?: number; used?: number; remaining: number; purchased?: number };
+    generations: {
+      included?: number;
+      used?: number;
+      remaining: number;
+      purchased?: number;
+      /** The plan's one-time free build(s): Basic, or an account with no store yet. */
+      trial?: { limit: number; used: number; remaining: number };
+    };
     editor: {
       included?: number;
       used?: number;
