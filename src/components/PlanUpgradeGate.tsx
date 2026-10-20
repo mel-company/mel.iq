@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Rocket } from "./icons";
 import {
-  BASIC_PLAN_NAME,
+  GROW_PLAN_NAME,
   featureLabel,
   type PlanUpgradeRequiredError,
 } from "@/utils/planUpgrade";
@@ -24,7 +24,7 @@ type PlanUpgradeGateProps = {
  */
 export function PlanUpgradeGate({
   feature,
-  requiredPlanName = BASIC_PLAN_NAME,
+  requiredPlanName = GROW_PLAN_NAME,
   message,
   manageHref,
   onUpgradeClick,
@@ -84,7 +84,7 @@ export function upgradeGateFromError(
   return {
     feature: error.feature || error.upgrade?.reason || "ai_editor",
     requiredPlanName:
-      error.requiredPlanName || error.upgrade?.planName || BASIC_PLAN_NAME,
+      error.requiredPlanName || error.upgrade?.planName || GROW_PLAN_NAME,
     message: error.message,
   };
 }

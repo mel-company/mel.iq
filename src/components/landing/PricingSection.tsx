@@ -1,4 +1,5 @@
 import { ArrowUpLeft } from "../icons";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import SectionEyebrow from "./SectionEyebrow";
 import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
@@ -32,18 +33,34 @@ type IntroOffer = {
   discountPercent: number;
 };
 
-/**
- * Today's offer, for a plan row that does not carry one (no Basic row yet, or a
- * server from before the offer moved onto the plan).
- */
-const DEFAULT_INTRO: IntroOffer = {
-  enabled: true,
-  freeMonths: 1,
-  discountMonths: 6,
-  discountPercent: 50,
-};
+type Period = "MONTHLY" | "QUARTERLY" | "YEARLY";
 
-const BASIC_MONTHLY = 39_000;
+const PERIODS: { value: Period; label: string; months: number }[] = [
+  { value: "MONTHLY", label: "شهري", months: 1 },
+  { value: "QUARTERLY", label: "3 أشهر", months: 3 },
+  { value: "YEARLY", label: "سنوي", months: 12 },
+];
+
+/**
+ * Each plan as it is sold, for a database that does not carry the row yet
+ * (the Basic row arrives with the Basic/Grow migration) or a field the row
+ * leaves out. A row from `GET /plan` overrides every number here, so a price
+ * or cap edited in the owner dashboard reaches the card.
+ */
+const CATALOGUE = {
+  BASIC: {
+    monthly: 19_000,
+    quarterlyPercent: 10,
+    yearlyPercent: 25,
+    intro: { enabled: true, freeMonths: 1, discountMonths: 0, discountPercent: 0 },
+  },
+  PLUS: {
+    monthly: 39_000,
+    quarterlyPercent: 10,
+    yearlyPercent: 25,
+    intro: { enabled: true, freeMonths: 0, discountMonths: 3, discountPercent: 50 },
+  },
+} as const;
 
 const formatIqd = (amount: number) => amount.toLocaleString("en-IQ");
 
@@ -54,28 +71,108 @@ function monthsLabel(n: number) {
   return `${n} شهراً`;
 }
 
-function readIntro(row: any): IntroOffer {
+function readIntro(row: any, fallback: IntroOffer): IntroOffer {
   const intro = row?.pricing?.monthly?.intro;
-  if (!intro || typeof intro !== "object") return DEFAULT_INTRO;
+  if (!intro || typeof intro !== "object") return fallback;
   return {
     enabled: intro.enabled !== false,
     freeMonths: Number(intro.freeMonths) || 0,
     discountMonths: Number(intro.discountMonths) || 0,
-    discountPercent: Number(intro.discountPercent ?? 50) || 0,
+    discountPercent: Number(intro.discountPercent) || 0,
   };
 }
 
+const capLine = (
+  limit: unknown,
+  fallback: number | null,
+  capped: (n: number) => string,
+  unlimited: string,
+) => {
+  const value =
+    limit === undefined ? fallback : typeof limit === "number" ? limit : null;
+  return value === null ? unlimited : capped(value);
+};
+
+/** What a plan includes, from its row's columns when there is one. */
+function planFeatures(code: "BASIC" | "PLUS", row: any): string[] {
+  const basic = code === "BASIC";
+  const lines = [
+    capLine(row?.max_products, basic ? 50 : null, (n) => `حتى ${n} منتج`, "منتجات بلا حدود"),
+    capLine(
+      row?.max_categories,
+      basic ? 10 : null,
+      (n) =>
+        `حتى ${n} أقسام و${row?.max_category_groups ?? 5} مجموعات أقسام`,
+      "أقسام ومجموعات أقسام بلا حدود",
+    ),
+    capLine(row?.max_monthly_orders, basic ? 50 : null, (n) => `${n} طلب شهرياً`, "طلبات بلا حدود"),
+    capLine(row?.max_coupons, basic ? 5 : null, (n) => `${n} كوبونات خصم`, "كوبونات بلا حدود"),
+  ];
+  const storeCredits = Number(row?.ai_store_credits ?? (basic ? 0 : 3));
+  lines.push(
+    storeCredits > 0
+      ? `${storeCredits} متاجر بالذكاء الاصطناعي شهرياً`
+      : "تجربة مجانية لإنشاء متجر بالذكاء الاصطناعي",
+  );
+  const hasAgent = row?.has_ai_editor ?? !basic;
+  lines.push(
+    hasAgent
+      ? `${row?.ai_editor_credits ?? 20} رصيد شهرياً لمساعد المحرر الذكي`
+      : `تجربة مساعد المحرر الذكي (${row?.ai_editor_trial ?? 5} رسائل)`,
+  );
+  if (row?.has_social_pixels ?? !basic) lines.push("بكسلات الإعلانات: ميتا، تيك توك، سناب");
+  if (row?.has_custom_domain ?? !basic) lines.push("ربط نطاقك الخاص (yourstore.com)");
+  lines.push("محرر المتجر وربط شركات الشحن");
+  return lines;
+}
+
 /**
- * Basic's card with the offer applied: the discounted price beside the struck
- * list price, a line saying how the offer runs, and "start free" when the first
- * month costs nothing.
+ * A plan's card for the chosen billing period.
+ *
+ * Monthly shows the intro offer (Basic's free month, Grow's 50% for three
+ * months). Three months and a year show their own discount on the period's
+ * total. The two never stack: checkout charges whichever is cheaper, which for
+ * a new customer can be the intro.
  */
-function withIntroOffer(
-  plan: PlanCardModel,
-  monthly: number,
-  intro: IntroOffer,
+function priceCard(
+  base: PlanCardModel,
+  code: "BASIC" | "PLUS",
+  row: any,
+  period: Period,
 ): PlanCardModel {
-  if (!intro.enabled) return plan;
+  const fallback = CATALOGUE[code];
+  const monthly =
+    Number(row?.monthly_price) > 0 ? Number(row.monthly_price) : fallback.monthly;
+
+  if (period !== "MONTHLY") {
+    const months = period === "YEARLY" ? 12 : 3;
+    const percent = Number(
+      period === "YEARLY"
+        ? row?.pricing?.yearly?.discountPercent ?? fallback.yearlyPercent
+        : row?.pricing?.quarterly?.discountPercent ?? fallback.quarterlyPercent,
+    );
+    const list = monthly * months;
+    const price =
+      period === "YEARLY" && Number(row?.pricing?.yearly?.price) > 0
+        ? Number(row.pricing.yearly.price)
+        : period === "QUARTERLY" && Number(row?.pricing?.quarterly?.price) > 0
+          ? Number(row.pricing.quarterly.price)
+          : Math.round((list * (100 - percent)) / 100);
+    return {
+      ...base,
+      price: formatIqd(price),
+      priceLabel: period === "YEARLY" ? "/سنوياً" : "/3 أشهر",
+      listPrice: percent > 0 ? formatIqd(list) : undefined,
+      offer:
+        percent > 0
+          ? `وفّر ${percent}%: ${formatIqd(Math.round(price / months))} د.ع للشهر.`
+          : undefined,
+    };
+  }
+
+  const intro = readIntro(row, fallback.intro);
+  const card = { ...base, price: formatIqd(monthly), priceLabel: "/شهرياً" };
+  if (!intro.enabled) return card;
   const hasFree = intro.freeMonths > 0;
   const hasDiscount = intro.discountMonths > 0 && intro.discountPercent > 0;
   const discounted = Math.round((monthly * (100 - intro.discountPercent)) / 100);
@@ -90,13 +187,13 @@ function withIntroOffer(
   }
   if (hasDiscount) {
     parts.push(
-      `خصم ${intro.discountPercent}% لمدة ${monthsLabel(intro.discountMonths)}`,
+      `خصم ${intro.discountPercent}% لأول ${monthsLabel(intro.discountMonths)}`,
     );
   }
 
   return {
-    ...plan,
-    ...(hasDiscount
+    ...card,
+    ...(hasDiscount && !hasFree
       ? { price: formatIqd(discounted), listPrice: formatIqd(monthly) }
       : {}),
     offer: parts.length ? `${parts.join("، ثم ")}.` : undefined,
@@ -104,63 +201,41 @@ function withIntroOffer(
   };
 }
 
-/**
- * Basic, the plan on sale. Stated here rather than read from `GET /plan` so
- * the section always shows its three tiers, whatever plan rows a database
- * holds; the API only supplies the id checkout should preselect.
- */
 const BASIC_PLAN: PlanCardModel = {
   id: "basic",
   name: "أساسي",
-  blurb: "كل ما تحتاجه لتبدأ البيع: المحرر والذكاء الاصطناعي والشحن.",
-  features: [
-    "محرر المتجر",
-    "رصيد الذكاء الاصطناعي",
-    "منتجات غير محدودة",
-    "طلبات غير محدودة",
-    "ربط شركات الشحن",
-    "تطبيق التاجر للجوال",
-  ],
-  price: formatIqd(BASIC_MONTHLY),
+  blurb: "لتبدأ البيع: متجرك ومحرره وربط الشحن، مع تجربة مجانية للذكاء الاصطناعي.",
+  features: [],
+  price: null,
+  priceLabel: "/شهرياً",
+};
+
+const GROW_PLAN: PlanCardModel = {
+  id: "grow",
+  name: "نمو",
+  blurb: "للمتجر الذي يكبر: بلا حدود، مع الذكاء الاصطناعي والإعلانات ونطاقك الخاص.",
+  features: [],
+  price: null,
   priceLabel: "/شهرياً",
   featured: true,
 };
 
-/**
- * The tiers after Basic. They have no plan rows — there is nothing to charge
- * for yet — so they are described here rather than fetched.
- */
-const UPCOMING_PLANS: PlanCardModel[] = [
-  {
-    id: "professional",
-    name: "احترافي",
-    blurb: "للمتاجر المتنامية التي تحتاج هوية وأدوات أوسع.",
-    features: [
-      "كل مميزات الأساسي",
-      "ربط نطاق مخصص (yourstore.com)",
-      "ربط تصاميم Figma",
-      "الدفع الإلكتروني",
-    ],
-    price: null,
-    priceLabel: "قريباً",
-    comingSoon: true,
-  },
-  {
-    id: "enterprise",
-    name: "مؤسسي",
-    blurb: "للمشاريع الكبيرة والسلاسل متعددة الفروع بمتطلبات متقدمة.",
-    features: [
-      "كل مميزات الاحترافي",
-      "كود مخصص",
-      "ربط عبر واجهة API",
-      "ربط أنظمة ERP",
-      "تكاملات مخصصة حسب الطلب",
-    ],
-    price: null,
-    priceLabel: "اتصل بنا",
-    contactOnly: true,
-  },
-];
+/** Not on sale: described here, with a contact button. */
+const ENTERPRISE_PLAN: PlanCardModel = {
+  id: "enterprise",
+  name: "مؤسسي",
+  blurb: "للمشاريع الكبيرة والسلاسل متعددة الفروع بمتطلبات متقدمة.",
+  features: [
+    "كل مميزات نمو",
+    "كود مخصص",
+    "ربط عبر واجهة API",
+    "ربط أنظمة ERP",
+    "تكاملات مخصصة حسب الطلب",
+  ],
+  price: null,
+  priceLabel: "اتصل بنا",
+  contactOnly: true,
+};
 
 /** The bullet marker: a dark plate with a small brand dot centred on it. */
 function FeatureMarker() {
@@ -292,53 +367,63 @@ function PlanCard({
 }
 
 /**
- * Landing pricing: Basic, then the announced Professional and Enterprise
- * tiers. All three are always shown. `GET /plan` is read only for Basic's id
- * (code PLUS), so its button opens checkout with the plan preselected.
+ * Landing pricing: Basic and Grow, the two plans on sale, with Enterprise
+ * beside them, and a monthly / 3 months / yearly switch. `GET /plan` supplies
+ * each plan's id (so checkout opens with it preselected), price, offer and
+ * caps; the catalogue above stands in for a row that is not there.
  */
 function PricingSection() {
   const { data } = useFetchAllPlans();
+  const [period, setPeriod] = useState<Period>("MONTHLY");
 
   const raw = Array.isArray(data)
     ? data
     : (data as any)?.data || (data as any)?.plans || [];
-  const basicRow = Array.isArray(raw)
-    ? raw.find(
-        (plan: any) =>
-          plan?.enabled !== false &&
-          String(plan?.code || "").toUpperCase() === "PLUS",
-      )
-    : undefined;
+  const rowFor = (code: string) =>
+    Array.isArray(raw)
+      ? raw.find(
+          (plan: any) =>
+            plan?.enabled !== false &&
+            String(plan?.code || "").toUpperCase() === code,
+        )
+      : undefined;
+  const basicRow = rowFor("BASIC");
+  const growRow = rowFor("PLUS");
 
-  const intro = basicRow ? readIntro(basicRow) : DEFAULT_INTRO;
-  // The row's price when there is one, so a price edited in the owner
-  // dashboard reaches the card too.
-  const monthly =
-    Number(basicRow?.monthly_price) > 0
-      ? Number(basicRow.monthly_price)
-      : BASIC_MONTHLY;
-  const basic: PlanCardModel = withIntroOffer(
+  const checkoutHref = (row: any) =>
+    row
+      ? `/checkout?planId=${encodeURIComponent(String(row.id))}&period=${period}`
+      : `/checkout?period=${period}`;
+
+  const basic = priceCard(
     {
       ...BASIC_PLAN,
-      price: formatIqd(monthly),
-      ...(basicRow
-        ? {
-            href: `/checkout?planId=${encodeURIComponent(String(basicRow.id))}`,
-          }
-        : {}),
+      name: basicRow?.name || BASIC_PLAN.name,
+      features: planFeatures("BASIC", basicRow),
+      href: checkoutHref(basicRow),
     },
-    monthly,
-    intro,
+    "BASIC",
+    basicRow,
+    period,
   );
-  const introLine = basic.offer;
-  const [professional, enterprise] = UPCOMING_PLANS;
-  // Stacked on phones, Basic, the plan on sale, comes first. On desktop it
-  // takes the raised centre column, with Enterprise to its right (the first
-  // column in RTL) and Professional to its left.
+  const grow = priceCard(
+    {
+      ...GROW_PLAN,
+      name: growRow?.name || GROW_PLAN.name,
+      features: planFeatures("PLUS", growRow),
+      href: checkoutHref(growRow),
+    },
+    "PLUS",
+    growRow,
+    period,
+  );
+  // Stacked on phones, Grow, the featured plan, comes first. On desktop it
+  // takes the raised centre column, with Basic to its right (the first column
+  // in RTL) and Enterprise to its left.
   const ordered: { plan: PlanCardModel; column: string }[] = [
-    { plan: basic, column: "lg:col-start-2" },
-    { plan: enterprise, column: "lg:col-start-1" },
-    { plan: professional, column: "lg:col-start-3" },
+    { plan: grow, column: "lg:col-start-2" },
+    { plan: basic, column: "lg:col-start-1" },
+    { plan: ENTERPRISE_PLAN, column: "lg:col-start-3" },
   ];
 
   return (
@@ -361,11 +446,31 @@ function PricingSection() {
             className="text-prose-lg max-w-[1181px] text-center"
             style={{ "--reveal-delay": "100ms" } as React.CSSProperties}
           >
-            {introLine
-              ? `ابدأ بالباقة الأساسية: ${introLine.replace(/\.$/, "")}. `
-              : "ابدأ بالباقة الأساسية. "}
-            الباقة الاحترافية قادمة قريباً، وللمؤسسات تواصل معنا.
+            ابدأ بالأساسية بشهر مجاني، أو انطلق مع نمو بخصم 50% لأول 3 أشهر.
+            وفّر 10% عند الاشتراك لـ 3 أشهر و25% عند الاشتراك السنوي.
           </p>
+          <div
+            role="tablist"
+            aria-label="مدة الاشتراك"
+            className="flex rounded-full bg-[#131331] p-1"
+          >
+            {PERIODS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={period === option.value}
+                onClick={() => setPeriod(option.value)}
+                className={`rounded-full px-5 py-2 text-sm transition-colors ${
+                  period === option.value
+                    ? "bg-gradient-to-l from-[#4f60f9] to-[#7569ff] text-frost"
+                    : "text-[#9c96e3] hover:text-frost"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="grid w-full max-w-[1240px] gap-6 lg:grid-cols-3 lg:items-end lg:gap-3">

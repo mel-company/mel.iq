@@ -82,12 +82,53 @@ const PAYMENT_METHODS = [
  * read here so the cards are not silently blank either way.
  */
 function planFeatures(plan: any): string[] {
-  return (plan?.features || [])
+  const named = (plan?.features || [])
     .map((row: any) => row?.feature ?? row)
     .filter((f: any) => f && f.enabled !== false)
     .map((f: any) => String(f.name || "").trim())
     .filter(Boolean);
+  return named.length > 0 ? named : planGrant(plan);
 }
+
+/**
+ * The plan's grant from its own columns (caps, AI, Grow features), for a plan
+ * with no feature rows — which is every plan in production.
+ */
+function planGrant(plan: any): string[] {
+  if (!plan || !("max_products" in plan)) return [];
+  const cap = (limit: unknown, capped: (n: number) => string, unlimited: string) =>
+    typeof limit === "number" ? capped(limit) : unlimited;
+  const lines = [
+    cap(plan.max_products, (n) => `حتى ${n} منتج`, "منتجات بلا حدود"),
+    cap(plan.max_categories, (n) => `حتى ${n} أقسام`, "أقسام بلا حدود"),
+    cap(plan.max_monthly_orders, (n) => `${n} طلب شهرياً`, "طلبات بلا حدود"),
+    cap(plan.max_coupons, (n) => `${n} كوبونات خصم`, "كوبونات بلا حدود"),
+  ];
+  if (Number(plan.ai_store_credits) > 0) {
+    lines.push(`${plan.ai_store_credits} متاجر بالذكاء الاصطناعي شهرياً`);
+  } else if (Number(plan.ai_store_trial) > 0) {
+    lines.push("تجربة مجانية لإنشاء متجر بالذكاء الاصطناعي");
+  }
+  if (plan.has_ai_editor && Number(plan.ai_editor_credits) > 0) {
+    lines.push(`${plan.ai_editor_credits} رصيد شهرياً لمساعد المحرر الذكي`);
+  } else if (Number(plan.ai_editor_trial) > 0) {
+    lines.push(`تجربة مساعد المحرر الذكي (${plan.ai_editor_trial} رسائل)`);
+  }
+  if (plan.has_social_pixels) lines.push("بكسلات الإعلانات: ميتا، تيك توك، سناب");
+  if (plan.has_custom_domain) lines.push("ربط نطاقك الخاص");
+  return lines;
+}
+
+type BillingPeriod = "MONTHLY" | "QUARTERLY" | "YEARLY";
+
+const BILLING_PERIODS: { value: BillingPeriod; label: string }[] = [
+  { value: "MONTHLY", label: "شهري" },
+  { value: "QUARTERLY", label: "3 أشهر" },
+  { value: "YEARLY", label: "سنوي" },
+];
+
+const readPeriod = (raw: string | null): BillingPeriod =>
+  raw === "QUARTERLY" || raw === "YEARLY" ? raw : "MONTHLY";
 
 /**
  * The plan's intro offer (free months, then a discount), from the catalogue's
@@ -119,7 +160,11 @@ function planIntro(plan: any): {
           monthly * (1 - Number(plan?.promo_discount_percent ?? 0) / 100),
         ),
       };
-  if (!intro.enabled || intro.freeMonths <= 0 || monthly <= 0) return null;
+  // Basic opens with a free month; Grow with half price for three months.
+  const hasDiscount = intro.discountMonths > 0 && intro.discountPercent > 0;
+  if (!intro.enabled || monthly <= 0 || (intro.freeMonths <= 0 && !hasDiscount)) {
+    return null;
+  }
   const { enabled: _enabled, ...rest } = intro;
   return rest;
 }
@@ -129,6 +174,14 @@ function Checkout() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user, loading: authLoading } = useAuth();
+  /**
+   * Monthly, 3 months (10% off) or a year (25% off), from the pricing
+   * section's switch. Never stacked with the intro offer: the server prices
+   * both and charges the cheaper, and the summary shows what that is.
+   */
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(() =>
+    readPeriod(searchParams.get("period")),
+  );
   /**
    * Set only by the payment return, which still walks the manual payment →
    * store steps for a paid checkout already under way. A plain visit to
@@ -306,7 +359,7 @@ function Checkout() {
       ? {
           type: "INITIAL_SUBSCRIPTION",
           planId: String(planIdForQuote),
-          billingPeriod: "MONTHLY",
+          billingPeriod,
         }
       : null,
   );
@@ -362,11 +415,14 @@ function Checkout() {
       }
     }
 
-    // Basic, the plan on sale (its code is still PLUS), whichever way the
-    // merchant arrived: signup, the dashboard, or a link without a plan.
-    const defaultPlan = plansData.find(
-      (plan: any) => String(plan.code || "").toUpperCase() === "PLUS",
-    );
+    // Basic, whichever way the merchant arrived: signup, the dashboard, or a
+    // link without a plan. Its first month is free, so signup is not
+    // interrupted by a payment. PLUS (Grow) on a server without the Basic row.
+    const byCode = (code: string) =>
+      plansData.find(
+        (plan: any) => String(plan.code || "").toUpperCase() === code,
+      );
+    const defaultPlan = byCode("BASIC") ?? byCode("PLUS");
     if (defaultPlan) {
       setFormData((prev) => ({ ...prev, plan: defaultPlan }));
     }
@@ -629,7 +685,7 @@ function Checkout() {
         // Omitted when nothing is due: the server resolves its own default and
         // then never opens a transaction.
         provider: selectedMethod?.provider ?? undefined,
-        billingPeriod: "MONTHLY",
+        billingPeriod,
         returnBaseUrl: `${window.location.origin}/checkout/payment-return`,
       },
       {
@@ -880,8 +936,34 @@ function Checkout() {
                 <p className="text-[15px] leading-6 text-[#9aa1bd]">
                   {noPaymentNeeded
                     ? "هذي الباقة مجاناً اليوم — ما راح ينخصم أي مبلغ هسه"
-                    : "لن يُخصم أي مبلغ اليوم — تبدأ الفوترة بعد انتهاء التجربة المجانية"}
+                    : quote
+                      ? `المستحق اليوم ${dueToday}${promoExplanation ? ` — ${promoExplanation}` : ""}`
+                      : "اختر الباقة ومدة الاشتراك"}
                 </p>
+                <div
+                  role="tablist"
+                  aria-label="مدة الاشتراك"
+                  className="mt-2 flex w-fit rounded-full border border-white/[0.08] bg-white/[0.03] p-1"
+                >
+                  {BILLING_PERIODS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="tab"
+                      aria-selected={billingPeriod === option.value}
+                      onClick={() => setBillingPeriod(option.value)}
+                      className={`rounded-full px-4 py-1.5 text-[13px] font-bold transition-colors ${
+                        billingPeriod === option.value
+                          ? "bg-[#4f60f9] text-white"
+                          : "text-[#9aa1bd] hover:text-white"
+                      }`}
+                    >
+                      {option.label}
+                      {option.value === "QUARTERLY" && " · خصم 10%"}
+                      {option.value === "YEARLY" && " · خصم 25%"}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {plans.isLoading ? (
@@ -1010,6 +1092,7 @@ function Checkout() {
                             // The offer as it will be charged: free month(s),
                             // then the discounted months, then list price.
                             <div className="mt-auto flex flex-col gap-3 pt-2">
+                              {intro.freeMonths > 0 && (
                               <p className="flex items-end gap-2">
                                 <span className="text-[34px] font-medium leading-none tracking-tight text-mint">
                                   ببلاش
@@ -1020,6 +1103,7 @@ function Checkout() {
                                     : `أول ${intro.freeMonths} أشهر`}
                                 </span>
                               </p>
+                              )}
                               {intro.discountMonths > 0 && (
                                 <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                                   <span className="text-[22px] font-medium text-white">
@@ -1039,10 +1123,12 @@ function Checkout() {
                               <p className="text-[12px] text-[#73799b]">
                                 بعدها {price} د.ع شهرياً
                               </p>
+                              {intro.freeMonths > 0 && (
                               <p className="flex items-center gap-2 rounded-xl border border-mint/25 bg-mint/10 px-3 py-2 text-[12px] font-bold text-mint">
                                 <span aria-hidden>✓</span>
                                 ما تحتاج بطاقة دفع
                               </p>
+                              )}
                             </div>
                           ) : (
                             <p className="mt-auto flex items-end justify-end gap-1 pt-2">
@@ -1078,7 +1164,9 @@ function Checkout() {
                   طريقة الدفع
                 </h2>
                 <p className="text-sm leading-6 text-[#9aa1bd]">
-                  لن يُخصم أي مبلغ اليوم — تبدأ الفوترة بعد انتهاء التجربة المجانية
+                  {dueNow > 0 && quote
+                    ? `المستحق اليوم ${dueToday}`
+                    : "لن يُخصم أي مبلغ اليوم — تبدأ الفوترة بعد انتهاء التجربة المجانية"}
                 </p>
               </div>
 
