@@ -42,8 +42,8 @@ function PlatformSection() {
       className="relative overflow-hidden px-4 py-20 sm:px-6 lg:py-24"
     >
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute -start-40 top-1/4 h-[520px] w-[70%] rounded-full bg-[#2a1163]/40 blur-[150px]" />
-        <div className="absolute end-0 top-0 h-[480px] w-1/2 rounded-full bg-[#1d1052]/50 blur-[140px]" />
+        <div className="absolute -start-40 top-1/4 h-[520px] w-[70%] glow [--glow:#2a11634d] [--glow-spread:300px]" />
+        <div className="absolute end-0 top-0 h-[480px] w-1/2 glow [--glow:#1d105259] [--glow-spread:280px]" />
       </div>
 
       {/* The frame puts the copy on the left and the phones on the right, so

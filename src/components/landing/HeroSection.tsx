@@ -38,9 +38,9 @@ function HeroSection() {
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"
       >
-        <div className="animate-bloom absolute -start-1/4 top-0 size-[780px] rounded-full bg-[#1b1147]/60 blur-[160px]" />
+        <div className="animate-bloom absolute -start-1/4 top-0 size-[780px] glow [--glow:#1b114791] [--glow-spread:320px]" />
         <div
-          className="animate-bloom absolute start-1/2 top-1/3 size-[620px] -translate-x-1/2 rounded-full bg-[#3b2a8f]/25 blur-[150px]"
+          className="animate-bloom absolute start-1/2 top-1/3 size-[620px] -translate-x-1/2 glow [--glow:#3b2a8f38] [--glow-spread:300px]"
           style={{ animationDelay: "-9s" }}
         />
       </div>

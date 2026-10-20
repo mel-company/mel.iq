@@ -74,8 +74,8 @@ function AppDownloadSection() {
       className="relative overflow-hidden px-4 py-20 sm:px-6 lg:py-24"
     >
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute start-1/2 top-0 h-[420px] w-[70%] -translate-x-1/2 rounded-full bg-[#2a1163]/35 blur-[150px]" />
-        <div className="absolute -end-20 bottom-0 h-[360px] w-[45%] rounded-full bg-[#1d1052]/45 blur-[140px]" />
+        <div className="absolute start-1/2 top-0 h-[420px] w-[70%] -translate-x-1/2 glow [--glow:#2a116340] [--glow-spread:300px]" />
+        <div className="absolute -end-20 bottom-0 h-[360px] w-[45%] glow [--glow:#1d105242] [--glow-spread:280px]" />
       </div>
 
       <div className="relative mx-auto flex max-w-[1600px] flex-col items-center gap-12 lg:flex-row-reverse lg:items-center lg:gap-10">

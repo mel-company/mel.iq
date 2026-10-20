@@ -147,10 +147,25 @@
   }
   </script>
 
+  <!-- First paint, before the JS bundle has downloaded and run: the site's
+       dark ground with a small spinner instead of a blank white page. React
+       replaces the spinner when it mounts, which also drops the dark ground
+       so light pages keep their own. -->
+  <style>
+    html:has(.boot-spinner) { background: #03010f; }
+    .boot-spinner {
+      position: fixed; inset: 0; margin: auto;
+      width: 40px; height: 40px; box-sizing: border-box;
+      border: 2px solid rgba(255, 255, 255, 0.2); border-top-color: #fff;
+      border-radius: 50%;
+      animation: boot-spin 0.8s linear infinite;
+    }
+    @keyframes boot-spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 
 <body>
-  <div id="root"></div>
+  <div id="root"><div class="boot-spinner" role="status" aria-label="جارٍ التحميل"></div></div>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>

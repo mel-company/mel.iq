@@ -84,7 +84,7 @@ function FeaturesSection() {
     <section id="features" className="relative overflow-hidden px-4 py-20 sm:px-6 lg:py-24">
       <div
         aria-hidden
-        className="pointer-events-none absolute start-1/2 top-1/3 size-[700px] -translate-x-1/2 rounded-full bg-[#2b1566]/35 blur-[170px]"
+        className="pointer-events-none absolute start-1/2 top-1/3 size-[700px] -translate-x-1/2 glow [--glow:#2b15664f] [--glow-spread:340px]"
       />
 
       <div className="relative mx-auto flex max-w-[1320px] flex-col gap-10">
