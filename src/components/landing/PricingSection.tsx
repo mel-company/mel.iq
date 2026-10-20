@@ -13,6 +13,8 @@ type PlanCardModel = {
   price: string | null;
   priceLabel: string;
   featured?: boolean;
+  /** «الأكثر شيوعاً», from the row's `most_popular`. */
+  popular?: boolean;
   contactOnly?: boolean;
   /** Announced, not on sale: no price and no way to buy it yet. */
   comingSoon?: boolean;
@@ -283,9 +285,16 @@ function PlanCard({
         }`}
       >
         <div className="flex flex-col gap-6 text-right">
-          <h3 className="text-4xl font-bold text-frost lg:text-5xl">
-            {plan.name}
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-4xl font-bold text-frost lg:text-5xl">
+              {plan.name}
+            </h3>
+            {plan.popular ? (
+              <span className="rounded-full bg-gradient-to-l from-[#4f60f9] to-[#7569ff] px-3 py-1 text-xs font-bold text-white shadow-[0_0_16px_rgba(52,92,232,0.6)]">
+                الأكثر شيوعاً
+              </span>
+            ) : null}
+          </div>
           {plan.blurb ? (
             <p className="text-sm leading-7 text-[#cac9d1]">{plan.blurb}</p>
           ) : null}
@@ -401,6 +410,7 @@ function PricingSection() {
       name: basicRow?.name || BASIC_PLAN.name,
       features: planFeatures("BASIC", basicRow),
       href: checkoutHref(basicRow),
+      popular: Boolean(basicRow?.most_popular),
     },
     "BASIC",
     basicRow,
@@ -412,6 +422,8 @@ function PricingSection() {
       name: growRow?.name || GROW_PLAN.name,
       features: planFeatures("PLUS", growRow),
       href: checkoutHref(growRow),
+      // Grow is the one we push, so without its row it keeps the badge.
+      popular: growRow ? Boolean(growRow.most_popular) : true,
     },
     "PLUS",
     growRow,
@@ -446,8 +458,8 @@ function PricingSection() {
             className="text-prose-lg max-w-[1181px] text-center"
             style={{ "--reveal-delay": "100ms" } as React.CSSProperties}
           >
-            ابدأ بالأساسية بشهر مجاني، أو انطلق مع نمو بخصم 50% لأول 3 أشهر.
-            وفّر 10% عند الاشتراك لـ 3 أشهر و25% عند الاشتراك السنوي.
+            اختر الباقة التي تناسب متجرك، ووفّر أكثر عند الاشتراك لـ 3 أشهر أو
+            لسنة كاملة.
           </p>
           <div
             role="tablist"
