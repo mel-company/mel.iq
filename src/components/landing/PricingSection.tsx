@@ -65,7 +65,7 @@ const CATALOGUE = {
     monthly: 39_000,
     quarterlyPercent: 10,
     yearlyPercent: 25,
-    intro: { enabled: true, freeMonths: 0, discountMonths: 3, discountPercent: 50 },
+    intro: { enabled: false, freeMonths: 0, discountMonths: 0, discountPercent: 0 },
   },
 } as const;
 
@@ -84,8 +84,9 @@ function readIntro(row: any, fallback: IntroOffer): IntroOffer {
   return {
     enabled: intro.enabled !== false,
     freeMonths: Number(intro.freeMonths) || 0,
-    discountMonths: Number(intro.discountMonths) || 0,
-    discountPercent: Number(intro.discountPercent) || 0,
+    // No half-price intro months — only a free month (Basic) is on offer.
+    discountMonths: 0,
+    discountPercent: 0,
   };
 }
 
@@ -136,10 +137,10 @@ function planFeatures(code: "BASIC" | "PLUS", row: any): string[] {
 /**
  * A plan's card for the chosen billing period.
  *
- * Monthly shows the intro offer (Basic's free month, Grow's 50% for three
- * months). Three months and a year show their own discount on the period's
- * total. The two never stack: checkout charges whichever is cheaper, which for
- * a new customer can be the intro.
+ * Monthly shows Basic's free-month intro when the row has one. Three months
+ * and a year show their own discount on the period's total. The two never
+ * stack: checkout charges whichever is cheaper, which for a new customer can
+ * be the intro.
  */
 function priceCard(
   base: PlanCardModel,

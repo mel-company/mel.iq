@@ -195,22 +195,20 @@ function planIntro(plan: any): {
     ? {
         enabled: Boolean(fromPricing.enabled),
         freeMonths: Number(fromPricing.freeMonths ?? 0),
-        discountMonths: Number(fromPricing.discountMonths ?? 0),
-        discountPercent: Number(fromPricing.discountPercent ?? 0),
-        discountPrice: Number(fromPricing.discountPrice ?? 0),
+        // No half-price intro months — only a free month (Basic) is on offer.
+        discountMonths: 0,
+        discountPercent: 0,
+        discountPrice: 0,
       }
     : {
         enabled: Boolean(plan?.promo_enabled),
         freeMonths: Number(plan?.promo_free_months ?? 0),
-        discountMonths: Number(plan?.promo_discount_months ?? 0),
-        discountPercent: Number(plan?.promo_discount_percent ?? 0),
-        discountPrice: Math.round(
-          monthly * (1 - Number(plan?.promo_discount_percent ?? 0) / 100),
-        ),
+        discountMonths: 0,
+        discountPercent: 0,
+        discountPrice: 0,
       };
-  // Basic opens with a free month; Grow with half price for three months.
-  const hasDiscount = intro.discountMonths > 0 && intro.discountPercent > 0;
-  if (!intro.enabled || monthly <= 0 || (intro.freeMonths <= 0 && !hasDiscount)) {
+  // Basic opens with a free month; there is no multi-month half-price intro.
+  if (!intro.enabled || monthly <= 0 || intro.freeMonths <= 0) {
     return null;
   }
   const { enabled: _enabled, ...rest } = intro;
