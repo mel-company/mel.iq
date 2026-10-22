@@ -37,10 +37,15 @@ type IntroOffer = {
 
 type Period = "MONTHLY" | "QUARTERLY" | "YEARLY";
 
-const PERIODS: { value: Period; label: string; months: number }[] = [
+const PERIODS: {
+  value: Period;
+  label: string;
+  months: number;
+  badge?: string;
+}[] = [
   { value: "MONTHLY", label: "شهري", months: 1 },
-  { value: "QUARTERLY", label: "3 أشهر", months: 3 },
-  { value: "YEARLY", label: "سنوي", months: 12 },
+  { value: "QUARTERLY", label: "3 أشهر", months: 3, badge: "خصم 10%" },
+  { value: "YEARLY", label: "سنوي", months: 12, badge: "خصم 25%" },
 ];
 
 /**
@@ -464,7 +469,7 @@ function PricingSection() {
           <div
             role="tablist"
             aria-label="مدة الاشتراك"
-            className="flex rounded-full bg-[#131331] p-1"
+            className="flex max-w-full flex-wrap justify-center rounded-full bg-[#131331] p-1"
           >
             {PERIODS.map((option) => (
               <button
@@ -473,13 +478,14 @@ function PricingSection() {
                 role="tab"
                 aria-selected={period === option.value}
                 onClick={() => setPeriod(option.value)}
-                className={`rounded-full px-5 py-2 text-sm transition-colors ${
+                className={`rounded-full px-4 py-2 text-sm transition-colors sm:px-5 ${
                   period === option.value
                     ? "bg-gradient-to-l from-[#4f60f9] to-[#7569ff] text-frost"
                     : "text-[#9c96e3] hover:text-frost"
                 }`}
               >
                 {option.label}
+                {option.badge ? ` · ${option.badge}` : ""}
               </button>
             ))}
           </div>

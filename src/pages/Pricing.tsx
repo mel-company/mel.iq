@@ -142,7 +142,7 @@ function Pricing() {
                 نعم، يمكنك ترقية أو خفض خطتك في أي وقت. التغييرات سارية فوراً.
               </p>
             </div>
-            <div className="bg-white dark:bg-black p-6 rounded-lg shadow border border-gray-200 dark:border-gray-800 transition-all">
+            {/* <div className="bg-white dark:bg-black p-6 rounded-lg shadow border border-gray-200 dark:border-gray-800 transition-all">
               <h3 className="text-xl font-semibold text-black dark:text-white mb-2">
                 هل هناك عرض للبداية؟
               </h3>
@@ -150,7 +150,7 @@ function Pricing() {
                 الشهر الأول مجاني، ثم 6 أشهر بنصف السعر، ثم السعر الكامل.
                 العرض مرة واحدة لكل حساب وعلى الفوترة الشهرية.
               </p>
-            </div>
+            </div> */}
             <div className="bg-white dark:bg-black p-6 rounded-lg shadow border border-gray-200 dark:border-gray-800 transition-all">
               <h3 className="text-xl font-semibold text-black dark:text-white mb-2">
                 ما هي طرق الدفع المقبولة؟

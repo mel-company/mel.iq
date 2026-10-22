@@ -1,5 +1,4 @@
 import { lazy, Suspense } from "react";
-import TrustBadge from "../TrustBadge";
 
 const PromptComposer = lazy(() => import("../ai/PromptComposer"));
 
@@ -31,7 +30,7 @@ function ComposerFallback() {
  */
 function HeroSection() {
   return (
-    <section className="relative px-4 pb-10 pt-28 lg:pt-36">
+    <section className="relative px-4 pb-16 pt-36 lg:pb-20 lg:pt-48">
       {/* The grounds the Figma frame paints behind the hero: a deep indigo
           wash off the left shoulder and a violet bloom behind the composer. */}
       <div
@@ -53,23 +52,13 @@ function HeroSection() {
               on scroll — the observer reports an intersection immediately.
               The delays turn that into a staggered entrance. */}
           <div className="flex w-full max-w-[791px] flex-col items-center gap-6">
-            {/* `flex`, not a bare block: the badge's root is `inline-flex`,
-                and a block wrapper would add a line box's baseline gap under
-                it and nudge everything below down a few pixels. */}
-            <div data-reveal className="flex">
-              <TrustBadge />
-            </div>
-            <h1
-              data-reveal
-              className="text-display text-center"
-              style={{ "--reveal-delay": "90ms" } as React.CSSProperties}
-            >
+            <h1 data-reveal className="text-display text-center">
               أطلـق مـتجرك الالــكتروني
             </h1>
             <p
               data-reveal
               className="text-lede max-w-[720px] text-center"
-              style={{ "--reveal-delay": "180ms" } as React.CSSProperties}
+              style={{ "--reveal-delay": "90ms" } as React.CSSProperties}
             >
               بأقل من خمس دقائق, كل ما تحتاجه للبيع عبر الإنترنت بنظام ذكي
               وتصميم عصري، بدون أي تعقيدات برمجية وبأقل وقت أعدادات
@@ -79,7 +68,7 @@ function HeroSection() {
           <div
             data-reveal
             className="w-full"
-            style={{ "--reveal-delay": "270ms" } as React.CSSProperties}
+            style={{ "--reveal-delay": "180ms" } as React.CSSProperties}
           >
             {/* PromptComposer pulls GenerationProgress, and the AI
                 API client — keep it off the critical path so TBT stays low. */}

@@ -131,6 +131,54 @@ const readPeriod = (raw: string | null): BillingPeriod =>
   raw === "QUARTERLY" || raw === "YEARLY" ? raw : "MONTHLY";
 
 /**
+ * Catalogue price for the chosen billing period.
+ *
+ * Monthly is list (or the intro offer elsewhere). Quarterly / yearly apply
+ * their own discount on the period total — 10% / 25% by default — and never
+ * stack with the intro ladder.
+ */
+function periodCataloguePrice(
+  plan: any,
+  period: BillingPeriod,
+): {
+  amount: number;
+  listAmount: number | null;
+  label: string;
+  discountPercent: number;
+} {
+  const monthly = Number(plan?.monthly_price ?? 0);
+  if (period === "MONTHLY") {
+    return {
+      amount: monthly,
+      listAmount: null,
+      label: "/شهرياً",
+      discountPercent: 0,
+    };
+  }
+  const months = period === "YEARLY" ? 12 : 3;
+  const discountPercent = Number(
+    period === "YEARLY"
+      ? (plan?.pricing?.yearly?.discountPercent ?? 25)
+      : (plan?.pricing?.quarterly?.discountPercent ?? 10),
+  );
+  const listAmount = monthly * months;
+  const fromApi =
+    period === "YEARLY"
+      ? Number(plan?.pricing?.yearly?.price ?? 0)
+      : Number(plan?.pricing?.quarterly?.price ?? 0);
+  const amount =
+    fromApi > 0
+      ? fromApi
+      : Math.round((listAmount * (100 - discountPercent)) / 100);
+  return {
+    amount,
+    listAmount: discountPercent > 0 ? listAmount : null,
+    label: period === "YEARLY" ? "/سنوياً" : "/3 أشهر",
+    discountPercent,
+  };
+}
+
+/**
  * The plan's intro offer (free months, then a discount), from the catalogue's
  * `pricing` block or, on older payloads, the plan's promo columns. `null` when
  * the plan runs no offer.
@@ -943,7 +991,7 @@ function Checkout() {
                 <div
                   role="tablist"
                   aria-label="مدة الاشتراك"
-                  className="mt-2 flex w-fit rounded-full border border-white/[0.08] bg-white/[0.03] p-1"
+                  className="mt-2 flex w-fit max-w-full flex-wrap rounded-full border border-white/[0.08] bg-white/[0.03] p-1"
                 >
                   {BILLING_PERIODS.map((option) => (
                     <button
@@ -952,7 +1000,7 @@ function Checkout() {
                       role="tab"
                       aria-selected={billingPeriod === option.value}
                       onClick={() => setBillingPeriod(option.value)}
-                      className={`rounded-full px-4 py-1.5 text-[13px] font-bold transition-colors ${
+                      className={`rounded-full px-3 py-1.5 text-[13px] font-bold transition-colors sm:px-4 ${
                         billingPeriod === option.value
                           ? "bg-[#4f60f9] text-white"
                           : "text-[#9aa1bd] hover:text-white"
@@ -1006,14 +1054,22 @@ function Checkout() {
                     const monthly = Number(plan.monthly_price ?? 0);
                     const isFree =
                       Boolean(plan.is_free) || monthly === 0;
+                    const catalogue = periodCataloguePrice(plan, billingPeriod);
                     const price =
-                      !isFree && monthly > 0
-                        ? monthly.toLocaleString("en-IQ")
+                      !isFree && catalogue.amount > 0
+                        ? catalogue.amount.toLocaleString("en-IQ")
                         : null;
-                    // A buyer whose quote says they owe money has spent the
-                    // intro on an earlier store: show them list price.
+                    const listPrice =
+                      catalogue.listAmount != null &&
+                      catalogue.listAmount > catalogue.amount
+                        ? catalogue.listAmount.toLocaleString("en-IQ")
+                        : null;
+                    // Intro offer is monthly-only and never stacks with the
+                    // 3-month / yearly period discount. A buyer whose quote
+                    // says they owe money has spent the intro already.
                     const intro =
-                      selected && quote && quote.amount > 0
+                      billingPeriod !== "MONTHLY" ||
+                      (selected && quote && quote.amount > 0)
                         ? null
                         : planIntro(plan);
                     return (
@@ -1131,12 +1187,27 @@ function Checkout() {
                               )}
                             </div>
                           ) : (
-                            <p className="mt-auto flex items-end justify-end gap-1 pt-2">
-                              <span className="text-[34px] font-medium tracking-tight text-white">
-                                {price}
-                              </span>
-                              <span className="pb-1 text-sm text-[#73799b]">د.ع /شهرياً</span>
-                            </p>
+                            <div className="mt-auto flex flex-col items-end gap-2 pt-2">
+                              {listPrice && (
+                                <span className="text-sm text-[#73799b] line-through">
+                                  {listPrice} د.ع
+                                </span>
+                              )}
+                              <p className="flex items-end justify-end gap-1">
+                                <span className="text-[34px] font-medium tracking-tight text-white">
+                                  {price}
+                                </span>
+                                <span className="pb-1 text-sm text-[#73799b]">
+                                  د.ع {catalogue.label}
+                                </span>
+                              </p>
+                              {catalogue.discountPercent > 0 && (
+                                <span className="rounded-full bg-[#4f60f9]/20 px-2 py-0.5 text-[11px] font-bold text-[#9eb0ff]">
+                                  خصم{" "}
+                                  <bdi dir="ltr">{catalogue.discountPercent}%</bdi>
+                                </span>
+                              )}
+                            </div>
                           )}
                           </div>
                         </div>
