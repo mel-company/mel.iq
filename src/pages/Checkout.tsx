@@ -119,23 +119,21 @@ function planGrant(plan: any): string[] {
   return lines;
 }
 
-type BillingPeriod = "MONTHLY" | "QUARTERLY" | "YEARLY";
+type BillingPeriod = "MONTHLY" | "YEARLY";
 
 const BILLING_PERIODS: { value: BillingPeriod; label: string }[] = [
   { value: "MONTHLY", label: "شهري" },
-  { value: "QUARTERLY", label: "3 أشهر" },
   { value: "YEARLY", label: "سنوي" },
 ];
 
 const readPeriod = (raw: string | null): BillingPeriod =>
-  raw === "QUARTERLY" || raw === "YEARLY" ? raw : "MONTHLY";
+  raw === "YEARLY" ? "YEARLY" : "MONTHLY";
 
 /**
  * Catalogue price for the chosen billing period.
  *
- * Monthly is list (or the intro offer elsewhere). Quarterly / yearly apply
- * their own discount on the period total — 10% / 25% by default — and never
- * stack with the intro ladder.
+ * Monthly is list (or the intro offer elsewhere). Yearly applies 25% off the
+ * 12-month total and never stacks with the intro ladder.
  */
 function periodCataloguePrice(
   plan: any,
@@ -155,17 +153,11 @@ function periodCataloguePrice(
       discountPercent: 0,
     };
   }
-  const months = period === "YEARLY" ? 12 : 3;
   const discountPercent = Number(
-    period === "YEARLY"
-      ? (plan?.pricing?.yearly?.discountPercent ?? 25)
-      : (plan?.pricing?.quarterly?.discountPercent ?? 10),
+    plan?.pricing?.yearly?.discountPercent ?? 25,
   );
-  const listAmount = monthly * months;
-  const fromApi =
-    period === "YEARLY"
-      ? Number(plan?.pricing?.yearly?.price ?? 0)
-      : Number(plan?.pricing?.quarterly?.price ?? 0);
+  const listAmount = monthly * 12;
+  const fromApi = Number(plan?.pricing?.yearly?.price ?? 0);
   const amount =
     fromApi > 0
       ? fromApi
@@ -173,7 +165,7 @@ function periodCataloguePrice(
   return {
     amount,
     listAmount: discountPercent > 0 ? listAmount : null,
-    label: period === "YEARLY" ? "/سنوياً" : "/3 أشهر",
+    label: "/سنوياً",
     discountPercent,
   };
 }
@@ -223,9 +215,9 @@ function Checkout() {
   const [searchParams] = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   /**
-   * Monthly, 3 months (10% off) or a year (25% off), from the pricing
-   * section's switch. Never stacked with the intro offer: the server prices
-   * both and charges the cheaper, and the summary shows what that is.
+   * Monthly or yearly (25% off), from the pricing section's switch. Never
+   * stacked with the intro offer: the server prices both and charges the
+   * cheaper, and the summary shows what that is.
    */
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(() =>
     readPeriod(searchParams.get("period")),
@@ -1007,7 +999,6 @@ function Checkout() {
                       }`}
                     >
                       {option.label}
-                      {option.value === "QUARTERLY" && " · خصم 10%"}
                       {option.value === "YEARLY" && " · خصم 25%"}
                     </button>
                   ))}
@@ -1065,8 +1056,8 @@ function Checkout() {
                         ? catalogue.listAmount.toLocaleString("en-IQ")
                         : null;
                     // Intro offer is monthly-only and never stacks with the
-                    // 3-month / yearly period discount. A buyer whose quote
-                    // says they owe money has spent the intro already.
+                    // yearly period discount. A buyer whose quote says they
+                    // owe money has spent the intro already.
                     const intro =
                       billingPeriod !== "MONTHLY" ||
                       (selected && quote && quote.amount > 0)

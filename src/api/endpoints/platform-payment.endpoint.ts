@@ -78,7 +78,7 @@ export type SubscriptionQuote = {
   /** The same months with no promo applied. */
   listAmount: number;
   savings: number;
-  /** `ladder` when the intro offer priced it, `period` for the 3-month / yearly discount. */
+  /** `ladder` when the intro offer priced it, `period` for the yearly discount. */
   basis?: "ladder" | "period";
   breakdown: {
     freeMonths: number;

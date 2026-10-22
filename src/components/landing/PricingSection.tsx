@@ -35,7 +35,7 @@ type IntroOffer = {
   discountPercent: number;
 };
 
-type Period = "MONTHLY" | "QUARTERLY" | "YEARLY";
+type Period = "MONTHLY" | "YEARLY";
 
 const PERIODS: {
   value: Period;
@@ -44,7 +44,6 @@ const PERIODS: {
   badge?: string;
 }[] = [
   { value: "MONTHLY", label: "شهري", months: 1 },
-  { value: "QUARTERLY", label: "3 أشهر", months: 3, badge: "خصم 10%" },
   { value: "YEARLY", label: "سنوي", months: 12, badge: "خصم 25%" },
 ];
 
@@ -57,13 +56,11 @@ const PERIODS: {
 const CATALOGUE = {
   BASIC: {
     monthly: 19_000,
-    quarterlyPercent: 10,
     yearlyPercent: 25,
     intro: { enabled: true, freeMonths: 1, discountMonths: 0, discountPercent: 0 },
   },
   PLUS: {
     monthly: 39_000,
-    quarterlyPercent: 10,
     yearlyPercent: 25,
     intro: { enabled: true, freeMonths: 0, discountMonths: 3, discountPercent: 50 },
   },
@@ -137,9 +134,9 @@ function planFeatures(code: "BASIC" | "PLUS", row: any): string[] {
  * A plan's card for the chosen billing period.
  *
  * Monthly shows the intro offer (Basic's free month, Grow's 50% for three
- * months). Three months and a year show their own discount on the period's
- * total. The two never stack: checkout charges whichever is cheaper, which for
- * a new customer can be the intro.
+ * months). A year shows 25% off the 12-month total. The two never stack:
+ * checkout charges whichever is cheaper, which for a new customer can be the
+ * intro.
  */
 function priceCard(
   base: PlanCardModel,
@@ -151,28 +148,23 @@ function priceCard(
   const monthly =
     Number(row?.monthly_price) > 0 ? Number(row.monthly_price) : fallback.monthly;
 
-  if (period !== "MONTHLY") {
-    const months = period === "YEARLY" ? 12 : 3;
+  if (period === "YEARLY") {
     const percent = Number(
-      period === "YEARLY"
-        ? row?.pricing?.yearly?.discountPercent ?? fallback.yearlyPercent
-        : row?.pricing?.quarterly?.discountPercent ?? fallback.quarterlyPercent,
+      row?.pricing?.yearly?.discountPercent ?? fallback.yearlyPercent,
     );
-    const list = monthly * months;
+    const list = monthly * 12;
     const price =
-      period === "YEARLY" && Number(row?.pricing?.yearly?.price) > 0
+      Number(row?.pricing?.yearly?.price) > 0
         ? Number(row.pricing.yearly.price)
-        : period === "QUARTERLY" && Number(row?.pricing?.quarterly?.price) > 0
-          ? Number(row.pricing.quarterly.price)
-          : Math.round((list * (100 - percent)) / 100);
+        : Math.round((list * (100 - percent)) / 100);
     return {
       ...base,
       price: formatIqd(price),
-      priceLabel: period === "YEARLY" ? "/سنوياً" : "/3 أشهر",
+      priceLabel: "/سنوياً",
       listPrice: percent > 0 ? formatIqd(list) : undefined,
       offer:
         percent > 0
-          ? `وفّر ${percent}%: ${formatIqd(Math.round(price / months))} د.ع للشهر.`
+          ? `وفّر ${percent}%: ${formatIqd(Math.round(price / 12))} د.ع للشهر.`
           : undefined,
     };
   }
@@ -382,9 +374,9 @@ function PlanCard({
 
 /**
  * Landing pricing: Basic and Grow, the two plans on sale, with Enterprise
- * beside them, and a monthly / 3 months / yearly switch. `GET /plan` supplies
- * each plan's id (so checkout opens with it preselected), price, offer and
- * caps; the catalogue above stands in for a row that is not there.
+ * beside them, and a monthly / yearly switch. `GET /plan` supplies each
+ * plan's id (so checkout opens with it preselected), price, offer and caps;
+ * the catalogue above stands in for a row that is not there.
  */
 function PricingSection() {
   const { data } = useFetchAllPlans();
@@ -463,8 +455,7 @@ function PricingSection() {
             className="text-prose-lg max-w-[1181px] text-center"
             style={{ "--reveal-delay": "100ms" } as React.CSSProperties}
           >
-            اختر الباقة التي تناسب متجرك، ووفّر أكثر عند الاشتراك لـ 3 أشهر أو
-            لسنة كاملة.
+            اختر الباقة التي تناسب متجرك، ووفّر 25% عند الاشتراك لسنة كاملة.
           </p>
           <div
             role="tablist"
