@@ -37,7 +37,7 @@ export function quoteExplanation(
   quote: SubscriptionQuote | undefined,
 ): string | null {
   if (!quote) return null;
-  // Priced by the yearly discount rather than the intro offer.
+  // Priced by the 3-month / yearly discount rather than the intro offer.
   if (quote.basis === "period" && quote.listAmount > 0 && quote.savings > 0) {
     const percent = Math.round((quote.savings / quote.listAmount) * 100);
     return `${monthsLabel(quote.durationMonths)} بخصم ${percent}%`;
