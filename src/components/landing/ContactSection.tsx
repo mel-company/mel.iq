@@ -10,8 +10,8 @@ const MESSAGE_MAX = 500;
 
 /** The panel ground the form and every channel card share. */
 const PANEL =
-  "linear-gradient(90deg, rgba(27,24,65,0.05) 0%, rgba(166,140,240,0.05) 52%, rgba(27,24,65,0.05) 100%), " +
-  "linear-gradient(90deg, #06031f 0%, #06031f 100%)";
+  "linear-gradient(90deg, rgba(27,24,65,0.04) 0%, rgba(166,140,240,0.08) 52%, rgba(27,24,65,0.04) 100%), " +
+  "linear-gradient(90deg, var(--color-ink-panel) 0%, var(--color-ink-panel) 100%)";
 
 const CHANNELS = [
   {
@@ -68,7 +68,7 @@ function Field({
 }
 
 const INPUT =
-  "w-full rounded-[14px] bg-slate px-4 py-3.5 text-sm text-white placeholder:text-[#4a5596] outline-none transition-shadow focus:ring-2 focus:ring-brand-primary/40";
+  "w-full rounded-[14px] bg-field px-4 py-3.5 text-sm text-frost placeholder:text-dim outline-none transition-shadow focus:ring-2 focus:ring-brand-primary/40";
 
 const EMPTY_FORM = {
   phone: "",

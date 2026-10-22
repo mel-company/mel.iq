@@ -147,18 +147,34 @@
   }
   </script>
 
-  <!-- First paint, before the JS bundle has downloaded and run: the site's
-       dark ground with a small spinner instead of a blank white page. React
-       replaces the spinner when it mounts, which also drops the dark ground
-       so light pages keep their own. -->
+  <!-- Apply saved / system theme before paint so light mode does not flash
+       the dark marketing wash, and the reverse. -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("theme");
+        var dark =
+          saved === "dark" ||
+          (saved !== "light" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", dark);
+      } catch (_) {}
+    })();
+  </script>
+
+  <!-- First paint spinner on the themed page ground until React mounts. -->
   <style>
-    html:has(.boot-spinner) { background: #03010f; }
+    html:has(.boot-spinner) { background: #f7f8fc; }
+    html.dark:has(.boot-spinner) { background: #03010f; }
     .boot-spinner {
       position: fixed; inset: 0; margin: auto;
       width: 40px; height: 40px; box-sizing: border-box;
-      border: 2px solid rgba(255, 255, 255, 0.2); border-top-color: #fff;
+      border: 2px solid rgba(11, 16, 32, 0.2); border-top-color: #0b1020;
       border-radius: 50%;
       animation: boot-spin 0.8s linear infinite;
+    }
+    html.dark .boot-spinner {
+      border-color: rgba(255, 255, 255, 0.2); border-top-color: #fff;
     }
     @keyframes boot-spin { to { transform: rotate(360deg); } }
   </style>

@@ -22,7 +22,7 @@ const TICKER_TILES = [
 function TickerTile({ tile }: { tile: (typeof TICKER_TILES)[number] }) {
   return (
     <span
-      className="relative block size-13 shrink-0 overflow-hidden rounded-xl border border-black bg-[#0c0e27]"
+      className="relative block size-13 shrink-0 overflow-hidden rounded-xl border border-hairline bg-ink-panel dark:border-black dark:bg-[#0c0e27]"
     >
       <img src={tile.bg} alt="" aria-hidden className="absolute inset-0 size-full" />
       <img
@@ -78,7 +78,7 @@ function Card({
     <div
       data-reveal
       style={{ "--reveal-delay": `${delay}ms` } as React.CSSProperties}
-      className={`card-hover relative flex flex-col overflow-hidden rounded-[32px] bg-[#190a45]/20 ${className}`}
+      className={`card-hover relative flex flex-col overflow-hidden rounded-[32px] bg-ink-panel/80 dark:bg-[#190a45]/20 ${className}`}
     >
       {children}
     </div>
@@ -116,7 +116,7 @@ function NotificationCard() {
         <p className="text-[11px] text-muted">معرف الاشعارات: #3eebc29d</p>
       </div>
 
-      <div className="flex flex-col gap-1 border-t border-white/5 pt-2">
+      <div className="flex flex-col gap-1 border-t border-hairline pt-2">
         <p className="text-[13px] font-semibold text-brand-primary underline">
           كفر ايفون 16 برو ماكس
         </p>

@@ -10,12 +10,12 @@ import {
 import { useLocation } from "react-router-dom";
 
 /**
- * The merchant dashboard renders in dark only. Its surfaces were designed
- * against the dark ground, so the light theme is not offered there — and a
- * saved light preference is ignored for as long as the merchant is inside it,
- * never overwritten, so the marketing pages still open the way they chose.
+ * Auth and checkout stay dark: their grounds, fields, and chrome were
+ * designed against the ink wash. A saved light preference is ignored while
+ * the merchant is on these routes, never overwritten, so marketing and the
+ * dashboard still open the way they chose.
  */
-const DARK_ONLY_ROUTES = ["/dashboard", "/store"];
+const DARK_ONLY_ROUTES = ["/login", "/checkout"];
 
 function isDarkOnlyRoute(pathname: string) {
   return DARK_ONLY_ROUTES.some(
@@ -56,8 +56,8 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   }, [isDark]);
 
   // Only the merchant's own choice is stored. Persisting the forced value
-  // would make a trip through the dashboard silently repaint the rest of
-  // the site dark.
+  // would make a trip through checkout silently repaint the rest of the
+  // site dark.
   useEffect(() => {
     localStorage.setItem("theme", prefersDark ? "dark" : "light");
   }, [prefersDark]);

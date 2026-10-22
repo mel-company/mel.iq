@@ -46,8 +46,8 @@ function LogoItem({ logo }: { logo: Logo }) {
 
 function PartnerStrip() {
   return (
-    <section className="relative border-y border-white/[0.04] bg-ink-raised/40 py-8">
-      <p data-reveal className="mb-6 text-center text-lg font-light text-white">
+    <section className="relative border-y border-hairline bg-ink-raised/40 py-8">
+      <p data-reveal className="mb-6 text-center text-lg font-light text-frost">
         متاجر تنمو معنا كل يوم
       </p>
 

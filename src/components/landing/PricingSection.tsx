@@ -250,7 +250,7 @@ function FeatureMarker() {
   return (
     <span
       aria-hidden
-      className="flex size-[29px] shrink-0 items-center justify-center rounded-[10px] bg-[#131331]"
+      className="flex size-[29px] shrink-0 items-center justify-center rounded-[10px] bg-slate"
     >
       <span className="size-[7px] rounded-full bg-brand-primary" />
     </span>
@@ -286,7 +286,7 @@ function PlanCard({
       }`}
     >
       <div
-        className={`flex flex-1 flex-col gap-12 rounded-[20px] bg-[#06051e] px-8 pt-8 ${
+        className={`flex flex-1 flex-col gap-12 rounded-[20px] bg-ink-raised px-8 pt-8 dark:bg-[#06051e] ${
           plan.featured ? "pb-10" : "pb-8"
         }`}
       >
@@ -302,10 +302,10 @@ function PlanCard({
             ) : null}
           </div>
           {plan.blurb ? (
-            <p className="text-sm leading-7 text-[#cac9d1]">{plan.blurb}</p>
+            <p className="text-sm leading-7 text-prose">{plan.blurb}</p>
           ) : null}
           <div
-            className={`h-px w-full bg-gradient-to-l from-[#0c0f26] to-[#0c0f26] ${
+            className={`h-px w-full bg-gradient-to-l from-transparent to-transparent ${
               plan.featured ? "via-[#3f48d9]" : "via-[#9262ad]"
             }`}
           />
@@ -329,7 +329,7 @@ function PlanCard({
         <div className="mt-auto flex flex-col items-end gap-12">
           <div className="flex flex-col items-end gap-3">
             {plan.listPrice && (
-              <span className="text-lg leading-6 text-[#73799b] line-through decoration-[#73799b]/70">
+              <span className="text-lg leading-6 text-ash line-through decoration-ash/70">
                 {plan.listPrice} د.ع
               </span>
             )}
@@ -338,13 +338,13 @@ function PlanCard({
                 {plan.price ? `${plan.price} د.ع` : plan.priceLabel}
               </span>
               {plan.price && (
-                <span className="text-base leading-6 text-[#73799b]">
+                <span className="text-base leading-6 text-ash">
                   {plan.priceLabel}
                 </span>
               )}
             </p>
             {plan.offer && (
-              <p className="text-right text-sm leading-6 text-[#9c96e3]">
+              <p className="text-right text-sm leading-6 text-eyebrow">
                 {plan.offer}
               </p>
             )}
@@ -367,7 +367,7 @@ function PlanCard({
                 className={`flex items-center gap-[13px] rounded-full px-7 py-2.5 text-base leading-6 text-frost ${
                   plan.featured
                     ? "bg-gradient-to-l from-[#4f60f9] to-[#7569ff]"
-                    : "bg-[#00031c]"
+                    : "bg-ink-panel dark:bg-[#00031c]"
                 }`}
               >
                 {ctaLabel}
@@ -470,7 +470,7 @@ function PricingSection() {
           <div
             role="tablist"
             aria-label="مدة الاشتراك"
-            className="flex max-w-full flex-wrap justify-center rounded-full bg-[#131331] p-1"
+            className="flex max-w-full flex-wrap justify-center rounded-full bg-slate p-1 dark:bg-[#131331]"
           >
             {PERIODS.map((option) => (
               <button
@@ -481,8 +481,8 @@ function PricingSection() {
                 onClick={() => setPeriod(option.value)}
                 className={`rounded-full px-4 py-2 text-sm transition-colors sm:px-5 ${
                   period === option.value
-                    ? "bg-gradient-to-l from-[#4f60f9] to-[#7569ff] text-frost"
-                    : "text-[#9c96e3] hover:text-frost"
+                    ? "bg-gradient-to-l from-[#4f60f9] to-[#7569ff] text-white"
+                    : "text-eyebrow hover:text-frost"
                 }`}
               >
                 {option.label}

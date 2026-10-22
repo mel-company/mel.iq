@@ -41,7 +41,7 @@ function SiteFooter() {
   };
 
   return (
-    <footer className="bg-gradient-to-b from-[#03010f] to-[#11054d] px-6 py-14 lg:px-24">
+    <footer className="bg-gradient-to-b from-ink to-ink-panel px-6 py-14 dark:from-[#03010f] dark:to-[#11054d] lg:px-24">
       <div className="mx-auto max-w-[1541px]">
         <div data-reveal className="flex flex-col items-center gap-4">
           <Link to="/" className="flex items-center gap-5" aria-label="ميل — الصفحة الرئيسية">
@@ -78,7 +78,7 @@ function SiteFooter() {
                   target="_blank"
                   rel="noreferrer noopener"
                   aria-label={label}
-                  className="flex size-11 items-center justify-center rounded-xl bg-slate text-white transition-colors hover:bg-slate/70"
+                  className="flex size-11 items-center justify-center rounded-xl bg-slate text-frost transition-colors hover:bg-slate/70"
                 >
                   <Icon size={16} />
                 </a>

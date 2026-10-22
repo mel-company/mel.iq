@@ -1616,7 +1616,7 @@ export default function PromptComposer() {
 
   return (
     <div className="w-full">
-      <div className="mx-auto w-full max-w-[791px] rounded-[32px] border border-white/5 p-3 backdrop-blur-[50px] transition-colors focus-within:border-brand-primary/25">
+      <div className="mx-auto w-full max-w-[791px] rounded-[32px] border border-hairline p-3 backdrop-blur-[50px] transition-colors focus-within:border-brand-primary/25">
         <div className="flex flex-col gap-3 rounded-3xl p-3 text-right">
           <textarea
             ref={promptInput}
@@ -1631,14 +1631,14 @@ export default function PromptComposer() {
             }}
             rows={3}
             placeholder="اوصف متجرك… مثال: متجر لبيع الأجهزة الإلكترونية والهواتف الذكية في بغداد، بألوان زرقاء عصرية"
-            className="min-h-[117px] w-full resize-none rounded-[18px] bg-white/5 p-[18px] text-white placeholder:text-[#625794] focus:outline-none"
+            className="min-h-[117px] w-full resize-none rounded-[18px] bg-glass p-[18px] text-frost placeholder:text-dim focus:outline-none"
           />
 
           {/* Only shown as the limit gets close — a counter on every short
             prompt is noise. */}
           {prompt.length > PROMPT_MAX_LENGTH * 0.75 && (
             <p
-              className={`-mt-1 text-left text-xs ${prompt.length > PROMPT_MAX_LENGTH ? "text-red-400" : "text-white/35"
+              className={`-mt-1 text-left text-xs ${prompt.length > PROMPT_MAX_LENGTH ? "text-red-400" : "text-frost/35"
                 }`}
               dir="ltr"
             >
@@ -1707,7 +1707,7 @@ export default function PromptComposer() {
                 title={voicePhase === "recording" ? "إيقاف التسجيل" : "اكتب صوتياً"}
                 className={`relative flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors ${voicePhase === "recording"
                   ? "bg-red-500/15 text-red-400 hover:bg-red-500/25"
-                  : "text-white hover:bg-white/5 disabled:cursor-wait"
+                  : "text-frost hover:bg-glass disabled:cursor-wait"
                   }`}
               >
                 {voicePhase === "recording" ? (
@@ -1736,9 +1736,9 @@ export default function PromptComposer() {
                   aria-expanded={attachOpen}
                   aria-label="إرفاق"
                   title="إرفاق"
-                  className={`flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-white/5 ${attachOpen || images.length || brandKit.length
+                  className={`flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-glass ${attachOpen || images.length || brandKit.length
                     ? "text-brand-primary"
-                    : "text-white"
+                    : "text-frost"
                     }`}
                 >
                   <Paperclip size={18} />
@@ -1748,7 +1748,7 @@ export default function PromptComposer() {
                   <div
                     role="menu"
                     aria-label="نوع المرفق"
-                    className="absolute bottom-full start-0 z-20 mb-2 w-64 overflow-hidden rounded-2xl border border-white/10 bg-[#241f56] p-1 shadow-2xl"
+                    className="absolute bottom-full start-0 z-20 mb-2 w-64 overflow-hidden rounded-2xl border border-hairline bg-ink-raised p-1 shadow-2xl dark:bg-[#241f56]"
                   >
                     <AttachOption
                       icon={<ImagePlus size={16} />}
@@ -1850,7 +1850,7 @@ export default function PromptComposer() {
               setPrompt(starter);
               promptInput.current?.focus();
             }}
-            className="rounded-xl border border-white/15 px-4 py-2.5 text-xs text-white transition-colors hover:border-white/25 hover:bg-white/5"
+            className="rounded-xl border border-hairline px-4 py-2.5 text-xs text-frost transition-colors hover:border-brand-primary/30 hover:bg-glass"
           >
             {starter}
           </button>
@@ -1893,14 +1893,14 @@ function AttachOption({
       role="menuitem"
       onClick={onSelect}
       disabled={disabled}
-      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start transition-colors hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start transition-colors hover:bg-glass disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#00c8ff]/12 text-[#00c8ff]">
         {icon}
       </span>
       <span className="min-w-0">
-        <span className="block text-sm text-white/90">{title}</span>
-        <span className="block truncate text-[11px] text-white/40">{hint}</span>
+        <span className="block text-sm text-frost/90">{title}</span>
+        <span className="block truncate text-[11px] text-frost/40">{hint}</span>
       </span>
     </button>
   );
@@ -1926,7 +1926,7 @@ function Attachment({
 }) {
   return (
     <span
-      className={`relative block h-14 w-14 shrink-0 overflow-hidden rounded-xl border ${accent ? "border-[#00c8ff]/50 bg-[#00c8ff]/8" : "border-white/12 bg-white/5"
+      className={`relative block h-14 w-14 shrink-0 overflow-hidden rounded-xl border ${accent ? "border-[#00c8ff]/50 bg-[#00c8ff]/8" : "border-hairline bg-glass"
         }`}
     >
       <img

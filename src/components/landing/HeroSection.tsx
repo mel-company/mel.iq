@@ -6,16 +6,15 @@ const PromptComposer = lazy(() => import("../ai/PromptComposer"));
 function ComposerFallback() {
   return (
     <div className="w-full" aria-hidden>
-      <div className="mx-auto w-full max-w-[791px] rounded-[32px] border border-white/5 p-3 backdrop-blur-[50px]">
+      <div className="mx-auto w-full max-w-[791px] rounded-[32px] border border-hairline p-3 backdrop-blur-[50px]">
         <div className="flex flex-col gap-3 rounded-3xl p-3">
-          <div className="min-h-[117px] w-full animate-pulse rounded-[18px] bg-white/5" />
+          <div className="min-h-[117px] w-full animate-pulse rounded-[18px] bg-glass" />
           <div className="flex items-center justify-between gap-3">
             <div className="flex gap-2">
-              <div className="size-11 animate-pulse rounded-xl bg-white/5" />
-              <div className="size-11 animate-pulse rounded-xl bg-white/5" />
+              <div className="size-11 animate-pulse rounded-xl bg-glass" />
+              <div className="size-11 animate-pulse rounded-xl bg-glass" />
             </div>
-            <div className="h-11 w-28 animate-pulse rounded-xl bg-white/5" />
-          </div>
+            <div className="h-11 w-28 animate-pulse rounded-xl bg-glass" />          </div>
         </div>
       </div>
     </div>

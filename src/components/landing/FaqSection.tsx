@@ -34,7 +34,7 @@ function FaqSection() {
                 key={item.question}
                   data-reveal
                   style={{ "--reveal-delay": `${i * 60}ms` } as React.CSSProperties}
-                  className="overflow-hidden rounded-[14px] bg-ink-panel transition-colors hover:bg-[#0a0524]"
+                  className="overflow-hidden rounded-[14px] bg-ink-panel transition-colors hover:bg-slate/60 dark:hover:bg-[#0a0524]"
                 >
                   <h3>
                     <button
@@ -48,11 +48,11 @@ function FaqSection() {
                     >
                       <span
                         aria-hidden
-                        className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-hairline text-white transition-colors duration-300"
+                        className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-hairline text-frost transition-colors duration-300"
                       >
                         {isOpen ? <Minus size={24} /> : <Plus size={24} />}
                       </span>
-                      <span className="text-lg font-medium leading-[1.5] text-white sm:text-xl">
+                      <span className="text-lg font-medium leading-[1.5] text-frost sm:text-xl">
                         {item.question}
                       </span>
                     </button>

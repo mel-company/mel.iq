@@ -51,7 +51,7 @@ function StoreButton({
       rel="noopener noreferrer"
       data-reveal
       style={{ "--reveal-delay": `${delay}ms` } as React.CSSProperties}
-      className="group flex min-w-[200px] items-center gap-3 rounded-[18px] border border-white/15 bg-white/[0.04] px-5 py-3.5 text-frost transition-colors hover:border-brand-primary/40 hover:bg-white/[0.07]"
+      className="group flex min-w-[200px] items-center gap-3 rounded-[18px] border border-hairline bg-glass px-5 py-3.5 text-frost transition-colors hover:border-brand-primary/40 hover:bg-glass-strong"
     >
       {icon}
       <span className="flex flex-col text-right leading-tight">

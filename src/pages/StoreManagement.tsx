@@ -78,6 +78,7 @@ import {
   resolveStoreLogoUrl,
   StatusPill,
 } from "@/components/dashboard/chrome";
+import FloatingThemeToggle from "@/components/FloatingThemeToggle";
 import { toast } from "sonner";
 import type { PlatformPaymentProvider } from "@/api/endpoints/platform-payment.endpoint";
 import PaymentProviderPicker, {
@@ -847,7 +848,7 @@ const SubscriptionPanel = ({
 };
 
 const LoadingSkeleton = () => (
-  <div className="dark relative min-h-screen">
+  <div className="relative min-h-screen">
     <PageGround />
     <div className="relative">
       <div className={`border-b ${hairline}`}>
@@ -876,7 +877,7 @@ const LoadingSkeleton = () => (
 );
 
 const StoreNotFound = ({ onBack }: { onBack: () => void }) => (
-  <div className="dark relative flex min-h-screen items-center justify-center px-4">
+  <div className="relative flex min-h-screen items-center justify-center px-4">
     <PageGround />
     <div className={`${cardFrame} relative w-full max-w-md`}>
       <div className={`${cardPanel} flex flex-col items-center px-6 py-14 text-center`}>
@@ -1721,11 +1722,8 @@ function StoreManagement() {
   ];
 
   return (
-    // `dark` on the page itself, not just the route: the management screen is
-    // designed against the dark ground and has no light half worth reaching.
-    // `ThemeContext` forces it too, but that is a routing decision, and this
-    // page should not come out half-lit if the route list ever changes.
-    <div className="dark relative min-h-screen">
+    <div className="relative min-h-screen">
+      <FloatingThemeToggle />
       <PageGround />
 
       {returnPaymentId &&

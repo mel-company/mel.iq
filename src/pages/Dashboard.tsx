@@ -37,6 +37,7 @@ import {
   resolveStoreLogoUrl,
   StatusPill,
 } from "@/components/dashboard/chrome";
+import FloatingThemeToggle from "@/components/FloatingThemeToggle";
 import { ArrowRight } from "@hugeicons/core-free-icons";
 import { FOCUS_PROMPT_STATE } from "@/utils/promptHandoff";
 
@@ -579,6 +580,7 @@ function Dashboard() {
     // `auto`, which would turn the page into its own scroll container under a
     // sticky navbar.
     <div className="relative min-h-screen overflow-x-clip">
+      <FloatingThemeToggle />
       <PageGround />
 
       {/* Header. Transparent over the ground rather than the opaque bar it

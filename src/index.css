@@ -1,6 +1,52 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Mel surface + text tokens. Brand accents stay fixed; grounds and copy
+ * invert under `.dark` so marketing and the dashboard share one palette.
+ * Light values align with dashboard chrome (`#f5f6fd` / `#0b1020`).
+ */
+:root {
+  /* Soft paper light — low contrast so the grid and chrome do not shout. */
+  --mel-ink: #f7f8fc;
+  --mel-ink-raised: #ffffff;
+  --mel-ink-panel: #f1f3f9;
+  --mel-slate: #e6e8f0;
+  --mel-eyebrow: #6b74d6;
+  --mel-prose: #6a7088;
+  --mel-frost: #1a1f33;
+  --mel-ash: #7a8094;
+  --mel-hairline: #e4e6ef;
+  --mel-muted: #6a7088;
+  --mel-field: #ffffff;
+  --mel-field-line: #e8eaf2;
+  --mel-dim: #9499ab;
+  --mel-line: #cfd2de;
+  --mel-lede: rgba(26, 31, 51, 0.68);
+  --mel-glass: rgba(26, 31, 51, 0.04);
+  --mel-glass-strong: rgba(26, 31, 51, 0.07);
+}
+
+.dark {
+  --mel-ink: #03010f;
+  --mel-ink-raised: #0a0e27;
+  --mel-ink-panel: #05011a;
+  --mel-slate: #1f2448;
+  --mel-eyebrow: #959efe;
+  --mel-prose: #b9a6d4;
+  --mel-frost: #f4f7ff;
+  --mel-ash: #94969d;
+  --mel-hairline: #1d1d20;
+  --mel-muted: #a4b1fa;
+  --mel-field: #0c1130;
+  --mel-field-line: #2a3168;
+  --mel-dim: #6c78b8;
+  --mel-line: #4a5596;
+  --mel-lede: rgba(255, 255, 255, 0.75);
+  --mel-glass: rgba(255, 255, 255, 0.06);
+  --mel-glass-strong: rgba(255, 255, 255, 0.1);
+}
+
 @theme {
   --font-setar: "Setar XS", ui-sans-serif, sans-serif;
 
@@ -12,29 +58,32 @@
   --color-brand-violet: #7569ff;
   /* Page ground. `ink-raised` is the hero's deeper indigo, `ink-panel` the
      flat ground the FAQ rows and pricing cards sit on. */
-  --color-ink: #03010f;
-  --color-ink-raised: #0a0e27;
-  --color-ink-panel: #05011a;
-  --color-slate: #1f2448;
-  --color-eyebrow: #959efe;
-  --color-prose: #b9a6d4;
+  --color-ink: var(--mel-ink);
+  --color-ink-raised: var(--mel-ink-raised);
+  --color-ink-panel: var(--mel-ink-panel);
+  --color-slate: var(--mel-slate);
+  --color-eyebrow: var(--mel-eyebrow);
+  --color-prose: var(--mel-prose);
   /* Named for the values, not the slots they fill: a `--color-card-title`
      would make Tailwind emit a `.text-card-title` that collides with the
      typography class of the same name defined below. */
-  --color-frost: #f4f7ff;
-  --color-ash: #94969d;
-  --color-hairline: #1d1d20;
-  --color-muted: #a4b1fa;
+  --color-frost: var(--mel-frost);
+  --color-ash: var(--mel-ash);
+  --color-hairline: var(--mel-hairline);
+  --color-muted: var(--mel-muted);
   --color-mint: #00dfa8;
   --color-amber: #ff9b3d;
 
   /* The auth screens' own palette: a field ground a shade above the card,
      its resting border, and the two dimmer text tones under `muted`. */
-  --color-field: #0c1130;
-  --color-field-line: #2a3168;
-  --color-dim: #6c78b8;
-  --color-line: #4a5596;
+  --color-field: var(--mel-field);
+  --color-field-line: var(--mel-field-line);
+  --color-dim: var(--mel-dim);
+  --color-line: var(--mel-line);
   --color-violet: #7d26f7;
+  --color-lede: var(--mel-lede);
+  --color-glass: var(--mel-glass);
+  --color-glass-strong: var(--mel-glass-strong);
 }
 
 @font-face {
@@ -86,6 +135,8 @@ body {
   margin: 0;
   font-family: var(--font-setar);
   font-weight: 300;
+  background-color: var(--color-ink);
+  color: var(--color-frost);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.2s ease, color 0.2s ease;
@@ -107,7 +158,7 @@ body {
   font-size: clamp(2.125rem, 5vw, 4rem);
   line-height: 1.2;
   letter-spacing: 0;
-  color: #ffffff;
+  color: var(--color-frost);
 }
 
 .text-section-title {
@@ -116,7 +167,7 @@ body {
   font-size: clamp(1.75rem, 3.6vw, 3rem);
   line-height: 1.25;
   letter-spacing: 0;
-  color: #ffffff;
+  color: var(--color-frost);
 }
 
 /* Hero subtitle and section ledes — 24px/38px in the file. */
@@ -126,7 +177,7 @@ body {
   font-size: clamp(1rem, 1.6vw, 1.5rem);
   line-height: 1.6;
   letter-spacing: 0;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--color-lede);
 }
 
 /* The long-form paragraphs under an eyebrow — 24px/48px, violet-tinted. */
@@ -155,7 +206,7 @@ body {
   font-size: clamp(1.0625rem, 1.4vw, 1.27rem);
   line-height: 1.6;
   letter-spacing: 0;
-  color: #ffffff;
+  color: var(--color-frost);
 }
 
 .text-card-body {

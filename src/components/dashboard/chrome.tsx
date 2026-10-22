@@ -103,15 +103,9 @@ const GRID_LINES = (rgba: string) => `
 export const PageGround = () => (
   <div
     aria-hidden
-    className="pointer-events-none fixed inset-0 overflow-hidden bg-[#f5f6fd] dark:bg-ink"
+    className="pointer-events-none fixed inset-0 overflow-hidden bg-ink"
   >
-    <div
-      className="absolute inset-0 dark:hidden"
-      style={{
-        backgroundImage: GRID_LINES("rgba(79, 96, 249, 0.05)"),
-        backgroundSize: "109px 109px",
-      }}
-    />
+    {/* Light: no grid — the squares were reading too loud on paper. */}
     <div
       className="absolute inset-0 hidden dark:block"
       style={{
@@ -120,13 +114,13 @@ export const PageGround = () => (
       }}
     />
 
-    <div className="animate-bloom absolute -top-56 -start-40 size-[760px] glow [--glow:#4f60f91c] [--glow-spread:340px] dark:[--glow:#1b1147a3]" />
+    <div className="animate-bloom absolute -top-56 -start-40 size-[760px] glow [--glow:#4f60f908] [--glow-spread:340px] dark:[--glow:#1b1147a3]" />
     <div
-      className="animate-bloom absolute -top-48 start-1/4 size-[620px] glow [--glow:#b282ff17] [--glow-spread:300px] dark:[--glow:#3b2a8f30]"
+      className="animate-bloom absolute -top-48 start-1/4 size-[620px] glow [--glow:#b282ff0a] [--glow-spread:300px] dark:[--glow:#3b2a8f30]"
       style={{ animationDelay: "-9s" }}
     />
     <div
-      className="animate-bloom absolute -bottom-56 -end-56 size-[560px] glow [--glow:#33c5ff0e] [--glow-spread:360px] dark:[--glow:#5834e915]"
+      className="animate-bloom absolute -bottom-56 -end-56 size-[560px] glow [--glow:#33c5ff06] [--glow-spread:360px] dark:[--glow:#5834e915]"
       style={{ animationDelay: "-14s" }}
     />
   </div>

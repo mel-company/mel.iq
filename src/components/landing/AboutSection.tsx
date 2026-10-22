@@ -65,7 +65,7 @@ function AboutSection() {
             style={{ "--reveal-delay": "100ms" } as React.CSSProperties}
           >
             <p className="text-prose-lg">
-              <span className="text-[1.35em] font-bold text-white">
+              <span className="text-[1.35em] font-bold text-frost">
                 تأسست ميل.IQ برؤية بسيطة,
               </span>{" "}
               جعل أدوات الأعمال القوية في متناول الجميع، بغض النظر عن حجمهم أو
@@ -90,7 +90,7 @@ function AboutSection() {
           // ground inset over it rather than a `border-color`.
           className="relative inline-flex items-center gap-3 overflow-hidden rounded-full bg-gradient-to-b from-[#4d4d4d]/25 via-white/25 to-transparent p-px shadow-[0_0_25px_rgba(178,130,255,0.15)] transition-shadow hover:shadow-[0_0_32px_rgba(178,130,255,0.3)]"
         >
-          <span className="flex items-center gap-3 rounded-full bg-[#00031c] px-6 py-3 text-lg font-light text-frost">
+          <span className="flex items-center gap-3 rounded-full bg-ink-panel px-6 py-3 text-lg font-light text-frost dark:bg-[#00031c]">
             أكتشف المزيد عن ميل
             <ArrowUpLeft size={16} className="text-brand-primary" />
           </span>
@@ -107,13 +107,13 @@ function AboutSection() {
                 i > 0 ? "sm:border-e sm:border-hairline" : ""
                 }`}
             >
-              <dt dir="ltr" className="text-5xl font-bold text-white lg:text-[3.6rem]">
+              <dt dir="ltr" className="text-5xl font-bold text-frost lg:text-[3.6rem]">
                 {stat.figure}
               </dt>
-              <dd className="max-w-[337px] text-center text-lg font-light leading-relaxed text-[#4f4e56] lg:text-2xl">
-                <span className="font-bold text-white">{stat.lead}</span>{" "}
+              <dd className="max-w-[337px] text-center text-lg font-light leading-relaxed text-ash lg:text-2xl">
+                <span className="font-bold text-frost">{stat.lead}</span>{" "}
                 <span className="font-normal">{stat.mid}</span> {stat.tail}{" "}
-                <span className="text-white">{stat.emphasis}</span>
+                <span className="text-frost">{stat.emphasis}</span>
               </dd>
             </div>
           ))}

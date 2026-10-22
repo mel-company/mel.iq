@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { ExternalLink, LayoutDashboard, Menu, Sparkle, X } from "./icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useStorefrontUrl } from "../hooks/useStorefrontUrl";
 import { useHasStore } from "../hooks/useHasStore";
 import { FOCUS_PROMPT_STATE } from "../utils/promptHandoff";
 import { useScrollReveal } from "../hooks/useScrollReveal";
+import FloatingThemeToggle from "./FloatingThemeToggle";
 import SiteFooter from "./landing/SiteFooter";
 
 /**
@@ -40,20 +41,19 @@ function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
   const { hasStore, loading: storesLoading } = useHasStore();
 
   if (loading || storesLoading) {
-    return <div className="h-15 w-[187px] animate-pulse rounded-[18px] bg-white/5" />;
+    return <div className="h-15 w-[187px] animate-pulse rounded-[18px] bg-glass" />;
   }
 
   if (user) {
     return (
       <>
-
         {storefrontUrl && (
           <a
             href={storefrontUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={onNavigate}
-            className="flex h-15 w-full items-center justify-center gap-2 rounded-[18px] border border-white/15 px-4 text-base text-white transition-colors hover:bg-white/5 sm:w-[187px]"
+            className="flex h-15 w-full items-center justify-center gap-2 rounded-[18px] border border-hairline px-4 text-base text-frost transition-colors hover:bg-glass sm:w-[187px]"
           >
             <ExternalLink size={16} />
             زيارة متجري
@@ -98,7 +98,7 @@ function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
       <Link
         to="/login"
         onClick={onNavigate}
-        className="flex h-15 w-full items-center justify-center rounded-[18px] border border-white/15 px-4 text-base text-white transition-colors hover:bg-white/5 sm:w-[187px]"
+        className="flex h-15 w-full items-center justify-center rounded-[18px] border border-hairline px-4 text-base text-frost transition-colors hover:bg-glass sm:w-[187px]"
       >
         تسجيل الدخول
       </Link>
@@ -108,7 +108,6 @@ function AuthActions({ onNavigate }: { onNavigate?: () => void }) {
 
 function LandingNavbar() {
   const location = useLocation();
-  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -176,7 +175,7 @@ function LandingNavbar() {
     // labels unreadable. The bar therefore carries the page ground at low
     // opacity plus a blur — near-invisible over the hero, legible everywhere
     // else.
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/6 bg-ink/60 px-4 backdrop-blur-xl sm:px-6 lg:px-17.25">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-hairline/50 bg-ink/70 px-4 backdrop-blur-xl sm:px-6 lg:px-17.25">
       <div className="mx-auto flex max-w-400 items-center justify-between">
         {/* Desktop. RTL flow puts the first child on the right, which is where
             the design places the nav items and the logo. */}
@@ -187,13 +186,14 @@ function LandingNavbar() {
             aria-label="ميل — الصفحة الرئيسية"
             className="flex size-24 shrink-0 items-center justify-center"
           >
+            {/* Light mode: mark is white, so invert to ink; dark keeps original. */}
             <img
               src="/images/landing/mel-mark.svg"
               alt=""
               aria-hidden
               width={52}
               height={52}
-              className="size-[52px]"
+              className="size-[52px] brightness-0 dark:brightness-100"
             />
           </Link>
 
@@ -202,8 +202,11 @@ function LandingNavbar() {
               key={item.label}
               to={navItemHref(item)}
               onClick={handleNavigate(i, item)}
-              className={`text-nav flex h-14 w-28 items-center justify-center whitespace-nowrap py-2.5 transition-colors ${i === activeIndex ? "text-white" : "text-white/60 hover:text-white"
-                }`}
+              className={`text-nav flex h-14 w-28 items-center justify-center whitespace-nowrap py-2.5 transition-colors ${
+                i === activeIndex
+                  ? "text-frost"
+                  : "text-frost/55 hover:text-frost"
+              }`}
             >
               {item.label}
             </Link>
@@ -221,7 +224,7 @@ function LandingNavbar() {
             onClick={() => setMobileOpen((open) => !open)}
             aria-label="القائمة"
             aria-expanded={mobileOpen}
-            className="p-2 text-white/80 transition-colors hover:text-white"
+            className="p-2 text-frost/80 transition-colors hover:text-frost"
           >
             {mobileOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
@@ -237,28 +240,29 @@ function LandingNavbar() {
               aria-hidden
               width={36}
               height={36}
-              className="size-9"
+              className="size-9 brightness-0 dark:brightness-100"
             />
           </Link>
         </div>
       </div>
 
       {mobileOpen && (
-        <nav className="mx-auto mb-4 mt-2 flex max-w-400 flex-col gap-1 rounded-3xl bg-ink/80 p-4 lg:hidden">
+        <nav className="mx-auto mb-4 mt-2 flex max-w-400 flex-col gap-1 rounded-3xl border border-hairline bg-ink/90 p-4 backdrop-blur-xl lg:hidden">
           {NAV_ITEMS.map((item, i) => (
             <Link
               key={item.label}
               to={navItemHref(item)}
               onClick={handleNavigate(i, item)}
-              className={`text-nav rounded-xl px-3 py-2.5 transition-colors ${i === activeIndex
-                ? "bg-white/10 text-white"
-                : "text-white/60 hover:bg-white/5 hover:text-white"
-                }`}
+              className={`text-nav rounded-xl px-3 py-2.5 transition-colors ${
+                i === activeIndex
+                  ? "bg-glass-strong text-frost"
+                  : "text-frost/55 hover:bg-glass hover:text-frost"
+              }`}
             >
               {item.label}
             </Link>
           ))}
-          <div className="mt-2 flex flex-col gap-2 border-t border-white/10 pt-3">
+          <div className="mt-2 flex flex-col gap-2 border-t border-hairline pt-3">
             <AuthActions onNavigate={() => setMobileOpen(false)} />
           </div>
         </nav>
@@ -277,18 +281,20 @@ export function MarketingShell({ children }: { children: ReactNode }) {
   useScrollReveal();
 
   return (
-    <div className="min-h-screen bg-ink font-setar font-light text-white">
+    <div className="min-h-screen bg-ink font-setar font-light text-frost">
+      {/* Grid stays near-invisible in light; dark keeps the original wash. */}
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-0"
+        className="pointer-events-none fixed inset-0 opacity-[0.35] dark:opacity-100"
         style={{
           backgroundImage: `
-            linear-gradient(rgba(149, 158, 254, 0.025) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(149, 158, 254, 0.025) 1px, transparent 1px)
+            linear-gradient(color-mix(in srgb, var(--color-eyebrow) 2.5%, transparent) 1px, transparent 1px),
+            linear-gradient(90deg, color-mix(in srgb, var(--color-eyebrow) 2.5%, transparent) 1px, transparent 1px)
           `,
           backgroundSize: "109px 109px",
         }}
       />
+      <FloatingThemeToggle />
       <LandingNavbar />
       <main className="relative">{children}</main>
       <SiteFooter />
