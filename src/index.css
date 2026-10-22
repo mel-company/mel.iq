@@ -7,24 +7,24 @@
  * Light values align with dashboard chrome (`#f5f6fd` / `#0b1020`).
  */
 :root {
-  /* Soft paper light — low contrast so the grid and chrome do not shout. */
-  --mel-ink: #f7f8fc;
+  /* Clean paper light — readable on phones without muddy overlays. */
+  --mel-ink: #fafbff;
   --mel-ink-raised: #ffffff;
-  --mel-ink-panel: #f1f3f9;
-  --mel-slate: #e6e8f0;
-  --mel-eyebrow: #6b74d6;
-  --mel-prose: #6a7088;
-  --mel-frost: #1a1f33;
+  --mel-ink-panel: #f3f5fb;
+  --mel-slate: #e8eaf2;
+  --mel-eyebrow: #5c66d4;
+  --mel-prose: #5f657c;
+  --mel-frost: #151a2c;
   --mel-ash: #7a8094;
-  --mel-hairline: #e4e6ef;
-  --mel-muted: #6a7088;
+  --mel-hairline: #e8eaf2;
+  --mel-muted: #5f657c;
   --mel-field: #ffffff;
-  --mel-field-line: #e8eaf2;
-  --mel-dim: #9499ab;
-  --mel-line: #cfd2de;
-  --mel-lede: rgba(26, 31, 51, 0.68);
-  --mel-glass: rgba(26, 31, 51, 0.04);
-  --mel-glass-strong: rgba(26, 31, 51, 0.07);
+  --mel-field-line: #e4e6ef;
+  --mel-dim: #8b91a5;
+  --mel-line: #d5d8e4;
+  --mel-lede: rgba(21, 26, 44, 0.7);
+  --mel-glass: rgba(21, 26, 44, 0.035);
+  --mel-glass-strong: rgba(21, 26, 44, 0.06);
 }
 
 .dark {

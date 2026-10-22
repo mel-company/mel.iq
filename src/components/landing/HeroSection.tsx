@@ -36,9 +36,10 @@ function HeroSection() {
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"
       >
-        <div className="animate-bloom absolute -start-1/4 top-0 size-[780px] glow [--glow:#1b114791] [--glow-spread:320px]" />
+        {/* Soft lilac wash in light; original indigo blooms only in dark. */}
+        <div className="animate-bloom absolute -start-1/4 top-0 size-[780px] glow [--glow:#4f60f914] [--glow-spread:280px] dark:[--glow:#1b114791] dark:[--glow-spread:320px]" />
         <div
-          className="animate-bloom absolute start-1/2 top-1/3 size-[620px] -translate-x-1/2 glow [--glow:#3b2a8f38] [--glow-spread:300px]"
+          className="animate-bloom absolute start-1/2 top-1/3 size-[620px] -translate-x-1/2 glow [--glow:#b282ff10] [--glow-spread:260px] dark:[--glow:#3b2a8f38] dark:[--glow-spread:300px]"
           style={{ animationDelay: "-9s" }}
         />
       </div>

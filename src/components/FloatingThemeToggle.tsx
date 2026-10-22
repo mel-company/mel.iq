@@ -1,8 +1,9 @@
 import { useTheme } from "../contexts/ThemeContext";
 
 /**
- * Theme switch on the physical left edge, vertically centred — a single
- * round plate with the icon, matching the merchant dashboard control.
+ * Theme switch on the physical left edge.
+ * Desktop: vertically centred. Mobile: bottom-left so it does not cover
+ * the hero copy or composer on a narrow light-mode screen.
  */
 export default function FloatingThemeToggle() {
   const { isDark, canToggleTheme, toggleTheme } = useTheme();
@@ -13,7 +14,7 @@ export default function FloatingThemeToggle() {
       type="button"
       onClick={toggleTheme}
       aria-label={isDark ? "التبديل للوضع الفاتح" : "التبديل للوضع الداكن"}
-      className="fixed left-3 top-1/2 z-50 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-black/8 bg-white text-[#1a1f33] shadow-[0_4px_16px_-4px_rgba(11,16,32,0.35)] transition-transform hover:scale-105 dark:border-white/12 dark:bg-[#12122a] dark:text-frost dark:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.55)]"
+      className="fixed left-3 z-50 flex size-10 items-center justify-center rounded-full border border-black/8 bg-white text-[#1a1f33] shadow-[0_4px_16px_-4px_rgba(11,16,32,0.35)] transition-transform hover:scale-105 bottom-[max(1rem,env(safe-area-inset-bottom))] dark:border-white/12 dark:bg-[#12122a] dark:text-frost dark:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.55)] md:bottom-auto md:top-1/2 md:-translate-y-1/2"
     >
       {isDark ? (
         <svg

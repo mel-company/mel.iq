@@ -175,7 +175,7 @@ function LandingNavbar() {
     // labels unreadable. The bar therefore carries the page ground at low
     // opacity plus a blur — near-invisible over the hero, legible everywhere
     // else.
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-hairline/50 bg-ink/70 px-4 backdrop-blur-xl sm:px-6 lg:px-17.25">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-hairline bg-white px-4 dark:border-white/6 dark:bg-ink/70 dark:backdrop-blur-xl sm:px-6 lg:px-17.25">
       <div className="mx-auto flex max-w-400 items-center justify-between">
         {/* Desktop. RTL flow puts the first child on the right, which is where
             the design places the nav items and the logo. */}
@@ -247,7 +247,7 @@ function LandingNavbar() {
       </div>
 
       {mobileOpen && (
-        <nav className="mx-auto mb-4 mt-2 flex max-w-400 flex-col gap-1 rounded-3xl border border-hairline bg-ink/90 p-4 backdrop-blur-xl lg:hidden">
+        <nav className="mx-auto mb-4 mt-2 flex max-w-400 flex-col gap-1 rounded-3xl border border-hairline bg-white p-4 shadow-sm dark:bg-ink/90 dark:shadow-none dark:backdrop-blur-xl lg:hidden">
           {NAV_ITEMS.map((item, i) => (
             <Link
               key={item.label}
@@ -282,14 +282,14 @@ export function MarketingShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-ink font-setar font-light text-frost">
-      {/* Grid stays near-invisible in light; dark keeps the original wash. */}
+      {/* No grid in light — especially loud on phones. Dark keeps the wash. */}
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-0 opacity-[0.35] dark:opacity-100"
+        className="pointer-events-none fixed inset-0 hidden dark:block"
         style={{
           backgroundImage: `
-            linear-gradient(color-mix(in srgb, var(--color-eyebrow) 2.5%, transparent) 1px, transparent 1px),
-            linear-gradient(90deg, color-mix(in srgb, var(--color-eyebrow) 2.5%, transparent) 1px, transparent 1px)
+            linear-gradient(rgba(149, 158, 254, 0.025) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(149, 158, 254, 0.025) 1px, transparent 1px)
           `,
           backgroundSize: "109px 109px",
         }}
