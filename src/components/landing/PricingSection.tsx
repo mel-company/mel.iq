@@ -102,23 +102,12 @@ const capLine = (
 };
 
 /**
- * What a plan includes: lines built from its row's real limits and switches,
- * then any extra lines written for it in the owner dashboard. The dashboard
- * keeps a copy of this builder (`automaticFeatureLines`) so its editor shows
- * the same lines.
+ * What a plan includes, built only from its row's limits and the switches the
+ * backend enforces, so the card cannot promise what a store is not given. The
+ * owner dashboard (`automaticFeatureLines`) and the merchant dashboard's plans
+ * page keep copies of this builder; keep the three in sync.
  */
 function planFeatures(code: "BASIC" | "PLUS", row: any): string[] {
-  const automatic = limitFeatures(code, row);
-  const extras = Array.isArray(row?.feature_lines)
-    ? row.feature_lines.filter(
-        (line: unknown): line is string =>
-          typeof line === "string" && line.trim() !== "" && !automatic.includes(line.trim()),
-      )
-    : [];
-  return [...automatic, ...extras];
-}
-
-function limitFeatures(code: "BASIC" | "PLUS", row: any): string[] {
   const basic = code === "BASIC";
   const lines = [
     capLine(row?.max_products, basic ? 50 : null, (n) => `حتى ${n} منتج`, "منتجات بلا حدود"),
@@ -144,9 +133,15 @@ function limitFeatures(code: "BASIC" | "PLUS", row: any): string[] {
       ? `${row?.ai_editor_credits ?? 20} رصيد شهرياً لمساعد المحرر الذكي`
       : `تجربة مساعد المحرر الذكي (${row?.ai_editor_trial ?? 5} رسائل)`,
   );
+  // On unless the row says otherwise: the columns default to on.
+  if (row?.has_online_payment !== false) lines.push("الدفع الإلكتروني: زين كاش وكي كارد");
+  if (row?.has_courier_integrations !== false) lines.push("ربط شركات الشحن وإرسال الطلبات تلقائياً");
+  if (row?.has_advanced_stats !== false) lines.push("إحصائيات وتقارير متقدمة");
   if (row?.has_social_pixels ?? !basic) lines.push("بكسلات الإعلانات: ميتا، تيك توك، سناب");
   if (row?.has_custom_domain ?? !basic) lines.push("ربط نطاقك الخاص (yourstore.com)");
-  lines.push("محرر المتجر وربط شركات الشحن");
+  if (row?.has_mobile_app ?? true) lines.push("تطبيق التاجر على الهاتف");
+  if (row?.has_pos ?? !basic) lines.push("نقطة البيع POS");
+  lines.push("محرر المتجر والدفع عند الاستلام");
   return lines;
 }
 
