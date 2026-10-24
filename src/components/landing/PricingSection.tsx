@@ -65,7 +65,7 @@ const CATALOGUE = {
     monthly: 39_000,
     quarterlyPercent: 10,
     yearlyPercent: 25,
-    intro: { enabled: false, freeMonths: 0, discountMonths: 0, discountPercent: 0 },
+    intro: { enabled: true, freeMonths: 1, discountMonths: 0, discountPercent: 0 },
   },
 } as const;
 
@@ -101,8 +101,16 @@ const capLine = (
   return value === null ? unlimited : capped(value);
 };
 
-/** What a plan includes, from its row's columns when there is one. */
+/**
+ * What a plan includes: the list written for it in the owner dashboard, or
+ * lines built from its row's columns. The dashboard keeps a copy of this
+ * builder (`automaticFeatureLines`) so its editor opens on the same lines.
+ */
 function planFeatures(code: "BASIC" | "PLUS", row: any): string[] {
+  const written = Array.isArray(row?.feature_lines)
+    ? row.feature_lines.filter((line: unknown) => typeof line === "string" && line.trim())
+    : [];
+  if (written.length) return written;
   const basic = code === "BASIC";
   const lines = [
     capLine(row?.max_products, basic ? 50 : null, (n) => `حتى ${n} منتج`, "منتجات بلا حدود"),
