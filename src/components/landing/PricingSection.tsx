@@ -102,15 +102,23 @@ const capLine = (
 };
 
 /**
- * What a plan includes: the list written for it in the owner dashboard, or
- * lines built from its row's columns. The dashboard keeps a copy of this
- * builder (`automaticFeatureLines`) so its editor opens on the same lines.
+ * What a plan includes: lines built from its row's real limits and switches,
+ * then any extra lines written for it in the owner dashboard. The dashboard
+ * keeps a copy of this builder (`automaticFeatureLines`) so its editor shows
+ * the same lines.
  */
 function planFeatures(code: "BASIC" | "PLUS", row: any): string[] {
-  const written = Array.isArray(row?.feature_lines)
-    ? row.feature_lines.filter((line: unknown) => typeof line === "string" && line.trim())
+  const automatic = limitFeatures(code, row);
+  const extras = Array.isArray(row?.feature_lines)
+    ? row.feature_lines.filter(
+        (line: unknown): line is string =>
+          typeof line === "string" && line.trim() !== "" && !automatic.includes(line.trim()),
+      )
     : [];
-  if (written.length) return written;
+  return [...automatic, ...extras];
+}
+
+function limitFeatures(code: "BASIC" | "PLUS", row: any): string[] {
   const basic = code === "BASIC";
   const lines = [
     capLine(row?.max_products, basic ? 50 : null, (n) => `حتى ${n} منتج`, "منتجات بلا حدود"),
