@@ -108,6 +108,10 @@ const capLine = (
  * page keep copies of this builder; keep the three in sync.
  */
 function planFeatures(code: "BASIC" | "PLUS", row: any): string[] {
+  // The server builds the lines (wording, visibility and order set in admin,
+  // numbers from the plan); this builder is only the fallback without a row
+  // or with a server older than `card_lines`.
+  if (Array.isArray(row?.card_lines)) return row.card_lines;
   const basic = code === "BASIC";
   const lines = [
     capLine(row?.max_products, basic ? 50 : null, (n) => `حتى ${n} منتج`, "منتجات بلا حدود"),
