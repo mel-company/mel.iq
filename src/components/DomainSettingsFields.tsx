@@ -1,6 +1,12 @@
 import DomainPriceBreakdown from "@/components/DomainPriceBreakdown";
 import type { DomainType } from "@/hooks/useDomainCheck";
 import type { DynadotSearchResult } from "@/api/endpoints/dynadot.endpoints";
+import {
+  DOMAIN_TLDS,
+  joinCustomDomain,
+  splitCustomDomain,
+  type DomainTld,
+} from "@/utils/domainTlds";
 
 type DomainSettingsFieldsProps = {
   domain: string;
@@ -86,6 +92,15 @@ export default function DomainSettingsFields({
   const styles = VARIANT_STYLES[variant];
   const domainInputName = `${inputNamePrefix}domain`;
   const domainTypeInputName = `${inputNamePrefix}domainType`;
+  const { name: customName, tld: customTld } = splitCustomDomain(domain);
+
+  const setCustomName = (raw: string) => {
+    onDomainChange(joinCustomDomain(raw, customTld));
+  };
+
+  const setCustomTld = (next: DomainTld) => {
+    onDomainChange(joinCustomDomain(customName, next));
+  };
 
   return (
     <div>
@@ -175,15 +190,39 @@ export default function DomainSettingsFields({
               />
             </>
           ) : (
-            <input
-              type="text"
-              name={domainInputName}
-              value={domain}
-              onChange={(e) => onDomainChange(e.target.value)}
-              required
-              className={`w-full rounded-2xl ${styles.border} px-4 py-2 outline-none transition-all duration-300 focus:border-transparent focus:ring-2 ${styles.input}`}
-              placeholder="example.com"
-            />
+            <>
+              {/* TLD on the visual right (same chrome as `.mel.iq` for subdomains). */}
+              <label className="sr-only" htmlFor={`${domainInputName}-tld`}>
+                امتداد الدومين
+              </label>
+              <select
+                id={`${domainInputName}-tld`}
+                dir="ltr"
+                value={customTld}
+                onChange={(e) => setCustomTld(e.target.value as DomainTld)}
+                className={`cursor-pointer rounded-r-2xl ${styles.border} border-l-0 px-3 py-3 text-sm font-semibold outline-none transition-all duration-300 focus:ring-2 ${styles.suffix}`}
+                aria-label="امتداد الدومين"
+              >
+                {DOMAIN_TLDS.map((tld) => (
+                  <option key={tld} value={tld}>
+                    {tld}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                name={domainInputName}
+                dir="ltr"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                required
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                className={`min-w-0 flex-1 rounded-l-2xl ${styles.border} border-r-0 px-4 py-2 outline-none transition-all duration-300 focus:border-transparent focus:ring-2 ${styles.input}`}
+                placeholder="example"
+              />
+            </>
           )}
         </div>
       </div>

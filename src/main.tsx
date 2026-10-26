@@ -18,7 +18,19 @@ window.addEventListener("vite:preloadError", () => {
 
 loadClarity();
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // 401 after refresh is authz / session — retrying only storms /auth/refresh
+      retry: (failureCount, error) => {
+        const status = (error as { response?: { status?: number } })?.response
+          ?.status;
+        if (status === 401 || status === 403) return false;
+        return failureCount < 2;
+      },
+    },
+  },
+});
 
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("Missing root element");

@@ -46,6 +46,12 @@ export const useFetchStorePlans = (storeId?: string, enabled = true) => {
     queryFn: () => planAPI.fetchStorePlans(storeId),
     enabled,
     staleTime: 60_000,
+    retry: (count, error) => {
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 401 || status === 403) return false;
+      return count < 2;
+    },
   });
 };
 
@@ -58,5 +64,11 @@ export const usePlanEntitlements = (storeId?: string, enabled = true) => {
     queryFn: () => planAPI.fetchEntitlements(storeId),
     enabled,
     staleTime: 30_000,
+    retry: (count, error) => {
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 401 || status === 403) return false;
+      return count < 2;
+    },
   });
 };

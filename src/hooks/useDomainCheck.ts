@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import type { DynadotSearchResult } from "@/api/endpoints/dynadot.endpoints";
 import { useDynadotSearch } from "@/api/wrappers/dynadot.wrappers";
 import { useCheckStoreDomainAvailability } from "@/api/wrappers/store.wrappers";
+import { joinCustomDomain, splitCustomDomain } from "@/utils/domainTlds";
 
 export type DomainType = "subdomain" | "custom";
 
@@ -112,6 +113,15 @@ export function useDomainCheck({
   const handleDomainTypeChange = useCallback(
     (type: DomainType) => {
       setDomainType(type);
+      // Switching into buy: keep the slug and attach the default TLD.
+      if (type === "custom") {
+        setDomain((prev) => {
+          const { name, tld } = splitCustomDomain(prev);
+          return joinCustomDomain(name || prev, tld);
+        });
+      } else {
+        setDomain((prev) => splitCustomDomain(prev).name || prev.split(".")[0] || prev);
+      }
       resetCheck();
     },
     [resetCheck],
@@ -128,7 +138,16 @@ export function useDomainCheck({
     setDynadotResult(null);
 
     if (domainType === "custom") {
-      const normalized = domain.trim().toLowerCase();
+      const { name, tld } = splitCustomDomain(domain);
+      const normalized = joinCustomDomain(name, tld);
+      if (!normalized) {
+        setIsCheckingDomain(false);
+        toast.error("الرجاء إدخال اسم الدومين أولاً");
+        return;
+      }
+      if (normalized !== domain.trim().toLowerCase()) {
+        setDomain(normalized);
+      }
       dynadotSearchMutation.mutate(
         { domain: normalized },
         {
