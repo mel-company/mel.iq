@@ -1,4 +1,6 @@
+import { useEffect, useId, useRef, useState } from "react";
 import DomainPriceBreakdown from "@/components/DomainPriceBreakdown";
+import { Check, ChevronDown } from "@/components/icons";
 import type { DomainType } from "@/hooks/useDomainCheck";
 import type { DynadotSearchResult } from "@/api/endpoints/dynadot.endpoints";
 import {
@@ -53,6 +55,12 @@ const VARIANT_STYLES = {
       "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200",
     resultWarn:
       "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200",
+    // Theme tokens flip with `.dark` — no hardcoded light/dark hex pairs.
+    menu: "border-hairline bg-ink-raised text-frost shadow-xl",
+    menuItem: "text-frost hover:bg-glass",
+    menuItemActive: "bg-brand-indigo/12 text-brand-indigo dark:bg-brand-primary/18 dark:text-brand-primary",
+    suffixOpen:
+      "ring-2 ring-brand-indigo/35 dark:ring-brand-primary/40",
   },
   management: {
     label: "text-[#5b6178] dark:text-muted",
@@ -74,6 +82,12 @@ const VARIANT_STYLES = {
       "border-mint/30 bg-mint/10 text-[#00795a] dark:bg-mint/[0.08] dark:text-mint",
     resultWarn:
       "border-amber/35 bg-amber/10 text-[#a35400] dark:bg-amber/[0.08] dark:text-amber",
+    menu: "border-hairline bg-ink-raised text-frost shadow-xl",
+    menuItem: "text-frost hover:bg-glass",
+    menuItemActive:
+      "bg-brand-indigo/12 text-brand-indigo dark:bg-brand-primary/18 dark:text-brand-primary",
+    suffixOpen:
+      "ring-2 ring-brand-indigo/35 dark:ring-brand-primary/40",
   },
 } as const;
 
@@ -92,6 +106,9 @@ export default function DomainSettingsFields({
   const styles = VARIANT_STYLES[variant];
   const domainInputName = `${inputNamePrefix}domain`;
   const domainTypeInputName = `${inputNamePrefix}domainType`;
+  const tldListId = useId();
+  const tldMenuRef = useRef<HTMLDivElement>(null);
+  const [tldOpen, setTldOpen] = useState(false);
   const { name: customName, tld: customTld } = splitCustomDomain(domain);
 
   const setCustomName = (raw: string) => {
@@ -100,7 +117,30 @@ export default function DomainSettingsFields({
 
   const setCustomTld = (next: DomainTld) => {
     onDomainChange(joinCustomDomain(customName, next));
+    setTldOpen(false);
   };
+
+  useEffect(() => {
+    if (domainType !== "custom") setTldOpen(false);
+  }, [domainType]);
+
+  useEffect(() => {
+    if (!tldOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!tldMenuRef.current?.contains(event.target as Node)) {
+        setTldOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTldOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [tldOpen]);
 
   return (
     <div>
@@ -170,7 +210,7 @@ export default function DomainSettingsFields({
             ? "اسم الدومين الفرعي"
             : "الدومين المخصص"}
         </label>
-        <div className="flex">
+        <div className="relative flex">
           {domainType === "subdomain" ? (
             <>
               <span
@@ -191,24 +231,66 @@ export default function DomainSettingsFields({
             </>
           ) : (
             <>
-              {/* TLD on the visual right (same chrome as `.mel.iq` for subdomains). */}
-              <label className="sr-only" htmlFor={`${domainInputName}-tld`}>
-                امتداد الدومين
-              </label>
-              <select
-                id={`${domainInputName}-tld`}
-                dir="ltr"
-                value={customTld}
-                onChange={(e) => setCustomTld(e.target.value as DomainTld)}
-                className={`cursor-pointer rounded-r-2xl ${styles.border} border-l-0 px-3 py-3 text-sm font-semibold outline-none transition-all duration-300 focus:ring-2 ${styles.suffix}`}
-                aria-label="امتداد الدومين"
-              >
-                {DOMAIN_TLDS.map((tld) => (
-                  <option key={tld} value={tld}>
-                    {tld}
-                  </option>
-                ))}
-              </select>
+              {/* Custom menu — native <select> paints OS chrome that clashes
+                  with the dark management shell. */}
+              <div ref={tldMenuRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  id={`${domainInputName}-tld`}
+                  dir="ltr"
+                  aria-haspopup="listbox"
+                  aria-expanded={tldOpen}
+                  aria-controls={tldListId}
+                  aria-label="امتداد الدومين"
+                  onClick={() => setTldOpen((was) => !was)}
+                  className={`flex h-full min-w-22 items-center justify-center gap-1 rounded-r-2xl ${styles.border} border-l-0 px-3 py-3 text-sm font-semibold transition-colors ${styles.suffix} ${
+                    tldOpen ? styles.suffixOpen : ""
+                  }`}
+                >
+                  <span>{customTld}</span>
+                  <ChevronDown
+                    size={14}
+                    className={`shrink-0 text-current opacity-70 transition-transform ${
+                      tldOpen ? "rotate-180" : ""
+                    }`}
+                    aria-hidden
+                  />
+                </button>
+
+                {tldOpen && (
+                  <ul
+                    id={tldListId}
+                    role="listbox"
+                    aria-label="امتداد الدومين"
+                    dir="ltr"
+                    className={`absolute right-0 top-full z-30 mt-2 max-h-56 min-w-30 overflow-y-auto rounded-2xl border p-1.5 ${styles.menu}`}
+                  >
+                    {DOMAIN_TLDS.map((tld) => {
+                      const selected = tld === customTld;
+                      return (
+                        <li key={tld}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={selected}
+                            onClick={() => setCustomTld(tld)}
+                            className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                              selected
+                                ? styles.menuItemActive
+                                : styles.menuItem
+                            }`}
+                          >
+                            <span>{tld}</span>
+                            {selected && (
+                              <Check size={14} className="shrink-0 opacity-80" />
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
               <input
                 type="text"
                 name={domainInputName}
