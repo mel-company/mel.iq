@@ -1,10 +1,18 @@
 import axiosInstance from "@/utils/AxiosInstance";
 
+export type StoreDomainLink = {
+  type: "platform" | "custom";
+  label: string;
+  url: string;
+  primary: boolean;
+};
+
 export type CustomDomainResponse = {
-  domain: string;
-  customDomain: string;
-  storeUrl: string;
-  platformUrl: string;
+  domain: string | null;
+  customDomain: string | null;
+  storeUrl: string | null;
+  platformUrl: string | null;
+  links?: StoreDomainLink[];
 };
 
 /** Path 3 only: discover how to connect an already-owned domain. Check only — does not attach. */
@@ -42,6 +50,24 @@ export const domainAPI = {
     const { data } = await axiosInstance.post<CustomDomainResponse>(
       "/domain/custom-domain",
       { domain: params.domain.trim().toLowerCase() },
+    );
+    return data;
+  },
+
+  /**
+   * Detach custom domain. Platform users (mel.iq) must pass storeId; store-user
+   * JWT scopes itself without a body.
+   */
+  removeCustomDomain: async (params?: {
+    storeId?: string;
+  }): Promise<CustomDomainResponse> => {
+    const storeId = params?.storeId?.trim();
+    const { data } = await axiosInstance.delete<CustomDomainResponse>(
+      "/domain/custom-domain",
+      {
+        params: storeId ? { storeId } : undefined,
+        data: storeId ? { storeId } : undefined,
+      },
     );
     return data;
   },

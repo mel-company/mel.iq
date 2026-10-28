@@ -3,6 +3,9 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useFetchStores, useUpdateStore } from "@/api/wrappers/store.wrappers";
 import DomainSettingsFields from "@/components/DomainSettingsFields";
 import BringYourOwnDomain from "@/components/BringYourOwnDomain";
+import StoreDomainLinks from "@/components/StoreDomainLinks";
+import { useRemoveCustomDomain } from "@/api/wrappers/domain.wrappers";
+import type { StoreDomainLink } from "@/api/endpoints/domain.endpoints";
 import {
   getStoreDomainInputValue,
   getStoreDomainType,
@@ -119,6 +122,10 @@ interface Store {
   customDomain?: string | null;
   /** Public storefront URL from API, e.g. https://mystore.mel.iq */
   storeUrl?: string;
+  /** Always the platform slug URL when present. */
+  platformUrl?: string | null;
+  /** Platform + custom open links from the API. */
+  links?: StoreDomainLink[];
   is_deleted?: boolean;
   instagram?: string | null;
   facebook?: string | null;
@@ -990,6 +997,8 @@ function StoreManagement() {
   const resumeMutation = useResumeSubscription();
   const cancelMutation = useCancelSubscription();
   const updateStoreMutation = useUpdateStore();
+  const removeCustomDomainMutation = useRemoveCustomDomain();
+  const [confirmRemoveCustomOpen, setConfirmRemoveCustomOpen] = useState(false);
   const { data: plansData } = useFetchAllPlans();
   const { data: storePlansData } = useFetchStorePlans(storeId, Boolean(storeId));
   const { data: entitlements } = usePlanEntitlements(
@@ -1617,10 +1626,56 @@ function StoreManagement() {
     domainPath === "buy" ? getDomainPurchasePricing(dynadotResult?.price) : null;
 
   const platformSlug = normalizePlatformSlug(store.domain);
-  const platformUrl = platformSlug ? `https://${platformSlug}.mel.iq` : null;
+  const platformUrl =
+    store.platformUrl ||
+    (platformSlug ? `https://${platformSlug}.mel.iq` : null);
   const dashboardUrl = platformSlug
     ? `https://dash.${platformSlug}.mel.iq`
     : null;
+  const customDomainValue = store.customDomain?.trim() || "";
+  const storeLinks: StoreDomainLink[] = store.links?.length
+    ? store.links
+    : [
+        ...(platformUrl
+          ? [
+              {
+                type: "platform" as const,
+                label: "رابط MEL",
+                url: platformUrl,
+                primary: !customDomainValue,
+              },
+            ]
+          : []),
+        ...(customDomainValue
+          ? [
+              {
+                type: "custom" as const,
+                label: "النطاق المخصص",
+                url: `https://${customDomainValue.replace(/^https?:\/\//, "")}`,
+                primary: true,
+              },
+            ]
+          : []),
+      ];
+
+  const confirmRemoveCustomDomain = () => {
+    if (!storeId) return;
+    removeCustomDomainMutation.mutate(
+      { storeId },
+      {
+        onSuccess: () => {
+          setConfirmRemoveCustomOpen(false);
+          toast.success("تم إلغاء النطاق المخصص. متجرك يبقى على رابط MEL.");
+          void refetchStores();
+        },
+        onError: (error: any) => {
+          toast.error(
+            error?.response?.data?.message || "تعذر إلغاء النطاق المخصص",
+          );
+        },
+      },
+    );
+  };
   const logoUrl = resolveStoreLogoUrl(store.logo);
   const subscriptionBadge = subscription
     ? getStatusBadge(subscription.status)
@@ -2045,6 +2100,18 @@ function StoreManagement() {
                     />
                   </div>
 
+                  <div className="mb-6">
+                    <StoreDomainLinks
+                      links={storeLinks}
+                      removingCustom={removeCustomDomainMutation.isPending}
+                      onRemoveCustom={
+                        customDomainValue
+                          ? () => setConfirmRemoveCustomOpen(true)
+                          : undefined
+                      }
+                    />
+                  </div>
+
                   <div className="mb-6 grid gap-3 sm:grid-cols-3">
                     {domainPaths.map((path) => (
                       <ChoiceCard
@@ -2235,6 +2302,50 @@ function StoreManagement() {
           </div>
         </main>
       </div>
+
+      {confirmRemoveCustomOpen && (
+        <Modal
+          title="إلغاء النطاق المخصص"
+          tone="danger"
+          onClose={() => {
+            if (removeCustomDomainMutation.isPending) return;
+            setConfirmRemoveCustomOpen(false);
+          }}
+        >
+          <p className={`text-sm leading-relaxed ${ink.body}`}>
+            سيتم فك ربط{" "}
+            <span dir="ltr" className={`font-bold ${ink.heading}`}>
+              {customDomainValue}
+            </span>{" "}
+            عن المتجر. رابط MEL يبقى يعمل كالمعتاد.
+          </p>
+          <ModalFooter>
+            <button
+              type="button"
+              disabled={removeCustomDomainMutation.isPending}
+              onClick={() => setConfirmRemoveCustomOpen(false)}
+              className={btnGhost}
+            >
+              رجوع
+            </button>
+            <button
+              type="button"
+              disabled={removeCustomDomainMutation.isPending}
+              onClick={confirmRemoveCustomDomain}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-red-600 px-5 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-60"
+            >
+              {removeCustomDomainMutation.isPending ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  جاري الإلغاء...
+                </>
+              ) : (
+                "تأكيد الإلغاء"
+              )}
+            </button>
+          </ModalFooter>
+        </Modal>
+      )}
 
       {/* Renew Modal */}
       {showRenewModal && (
