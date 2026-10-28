@@ -2153,7 +2153,7 @@ function StoreManagement() {
                   </div>
 
                   {OWNED_DOMAIN_ENABLED && domainPath === "owned" ? (
-                    <BringYourOwnDomain />
+                    <BringYourOwnDomain storeId={storeId!} />
                   ) : (
                     <form onSubmit={handleDomainSubmit} className="space-y-5">
                       <DomainSettingsFields

@@ -39,7 +39,11 @@ export const useDiscoverDomainConnect = () => {
 
 /** Path 3: get signed applyUrl then open provider UX. */
 export const useStartDomainConnect = () => {
-  return useMutation<DomainConnectStartResult, Error, { domain: string }>({
-    mutationFn: ({ domain }) => domainAPI.startConnect(domain),
+  return useMutation<
+    DomainConnectStartResult,
+    Error,
+    { domain: string; redirectUri?: string }
+  >({
+    mutationFn: (params) => domainAPI.startConnect(params),
   });
 };

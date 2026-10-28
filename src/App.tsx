@@ -26,6 +26,7 @@ const Templates = lazy(() => import("./pages/Templates"));
 const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const StoreManagement = lazy(() => import("./pages/StoreManagement"));
+const DomainConnectDone = lazy(() => import("./pages/DomainConnectDone"));
 const OTPVerification = lazy(() => import("./pages/Otp"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AuthRedirectError = lazy(() => import("./pages/AuthRedirectError"));
@@ -106,6 +107,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <StoreManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/domain-connect/done"
+            element={
+              <ProtectedRoute>
+                <DomainConnectDone />
               </ProtectedRoute>
             }
           />
