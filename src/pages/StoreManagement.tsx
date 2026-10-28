@@ -1651,7 +1651,7 @@ function StoreManagement() {
     });
 
   /** Path 3 (bring-your-own domain) — locked for this release. */
-  const OWNED_DOMAIN_ENABLED = false;
+  const OWNED_DOMAIN_ENABLED = true;
 
   const domainPaths: {
     id: DomainPath;
