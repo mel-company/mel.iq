@@ -1633,30 +1633,28 @@ function StoreManagement() {
     ? `https://dash.${platformSlug}.mel.iq`
     : null;
   const customDomainValue = store.customDomain?.trim() || "";
-  const storeLinks: StoreDomainLink[] = store.links?.length
-    ? store.links
-    : [
-        ...(platformUrl
-          ? [
-              {
-                type: "platform" as const,
-                label: "رابط MEL",
-                url: platformUrl,
-                primary: !customDomainValue,
-              },
-            ]
-          : []),
-        ...(customDomainValue
-          ? [
-              {
-                type: "custom" as const,
-                label: "النطاق المخصص",
-                url: `https://${customDomainValue.replace(/^https?:\/\//, "")}`,
-                primary: true,
-              },
-            ]
-          : []),
-      ];
+  // Rebuild from source fields so a platform-only `links[]` never hides an
+  // attached custom domain.
+  const storeLinks: StoreDomainLink[] = (() => {
+    const links: StoreDomainLink[] = [];
+    if (platformUrl) {
+      links.push({
+        type: "platform",
+        label: "رابط MEL",
+        url: platformUrl,
+        primary: !customDomainValue,
+      });
+    }
+    if (customDomainValue) {
+      links.push({
+        type: "custom",
+        label: "النطاق المخصص",
+        url: `https://${customDomainValue.replace(/^https?:\/\//, "")}`,
+        primary: true,
+      });
+    }
+    return links.length ? links : store.links ?? [];
+  })();
 
   const confirmRemoveCustomDomain = () => {
     if (!storeId) return;
