@@ -2491,7 +2491,8 @@ function StoreManagement() {
           }}
         >
           <p className={`text-sm ${ink.body}`}>
-            اختر الخطة التي تريد الترقية إليها. الترقية إلى باقة {GROW_PLAN_NAME} تُفعَّل بعد
+            اختر الخطة التي تريد الترقية إليها. الترقية إلى باقة{" "}
+            {entitlements?.upgradeTo?.planName || GROW_PLAN_NAME} تُفعَّل بعد
             إتمام الدفع.
           </p>
 

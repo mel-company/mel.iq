@@ -969,7 +969,9 @@ function Checkout() {
             // Basic is already picked; this shows only while the quote decides
             // whether anything is due before the store step.
             <p className="py-16 text-center text-sm text-[#9aa1bd]">
-              جاري تجهيز باقتك الأساسية…
+              {formData.plan?.name
+                ? `جاري تجهيز باقة ${formData.plan.name}…`
+                : "جاري تجهيز باقتك…"}
             </p>
           )}
 

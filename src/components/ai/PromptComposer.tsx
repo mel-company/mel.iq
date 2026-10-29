@@ -44,6 +44,7 @@ import SuccessModal from "./SuccessModal";
 import BuyCreditsModal from "./BuyCreditsModal";
 import UnlimitedCreditsBadge from "./UnlimitedCreditsBadge";
 import { parsePlanUpgradeRequired } from "@/utils/planUpgrade";
+import { useGrowPlanName } from "@/api/wrappers/plan.wrappers";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   PROMPT_DRAFT_KEY,
@@ -795,6 +796,7 @@ export default function PromptComposer() {
    * Basic (and an account with no store yet) does not include AI builds, but
    * gets one free try, once. Shown while that try is the only thing left.
    */
+  const growPlanName = useGrowPlanName();
   const onTrialOnly = Boolean(
     user &&
       credits &&
@@ -1833,8 +1835,8 @@ export default function PromptComposer() {
       {credits?.unlimited && <UnlimitedCreditsBadge daily={credits.daily} />}
       {onTrialOnly && phase === "idle" && (
         <p className="mx-auto mt-4 max-w-xl text-center text-xs leading-6 text-[#a8aec8]">
-          إنشاء المتاجر بالذكاء الاصطناعي غير مشمول في باقتك، رقِّ إلى باقة نمو
-          لاستخدامه، لكن يمكنك تجربته مجاناً الآن مرة واحدة.
+          إنشاء المتاجر بالذكاء الاصطناعي غير مشمول في باقتك، رقِّ إلى باقة{" "}
+          {growPlanName} لاستخدامه، لكن يمكنك تجربته مجاناً الآن مرة واحدة.
         </p>
       )}
 

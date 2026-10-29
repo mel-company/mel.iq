@@ -41,11 +41,10 @@ const PERIODS: {
   value: Period;
   label: string;
   months: number;
-  badge?: string;
 }[] = [
   { value: "MONTHLY", label: "شهري", months: 1 },
-  { value: "QUARTERLY", label: "3 أشهر", months: 3, badge: "خصم 10%" },
-  { value: "YEARLY", label: "سنوي", months: 12, badge: "خصم 25%" },
+  { value: "QUARTERLY", label: "3 أشهر", months: 3 },
+  { value: "YEARLY", label: "سنوي", months: 12 },
 ];
 
 /**
@@ -244,12 +243,12 @@ const GROW_PLAN: PlanCardModel = {
 };
 
 /** Not on sale: described here, with a contact button. */
-const ENTERPRISE_PLAN: PlanCardModel = {
+const enterprisePlan = (growName: string): PlanCardModel => ({
   id: "enterprise",
   name: "مؤسسي",
   blurb: "للمشاريع الكبيرة والسلاسل متعددة الفروع بمتطلبات متقدمة.",
   features: [
-    "كل مميزات نمو",
+    `كل مميزات ${growName}`,
     "كود مخصص",
     "ربط عبر واجهة API",
     "ربط أنظمة ERP",
@@ -258,7 +257,7 @@ const ENTERPRISE_PLAN: PlanCardModel = {
   price: null,
   priceLabel: "اتصل بنا",
   contactOnly: true,
-};
+});
 
 /** The bullet marker: a dark plate with a small brand dot centred on it. */
 function FeatureMarker() {
@@ -429,6 +428,7 @@ function PricingSection() {
     {
       ...BASIC_PLAN,
       name: basicRow?.name || BASIC_PLAN.name,
+      blurb: basicRow?.description?.trim() || BASIC_PLAN.blurb,
       features: planFeatures("BASIC", basicRow),
       href: checkoutHref(basicRow),
       popular: Boolean(basicRow?.most_popular),
@@ -441,6 +441,7 @@ function PricingSection() {
     {
       ...GROW_PLAN,
       name: growRow?.name || GROW_PLAN.name,
+      blurb: growRow?.description?.trim() || GROW_PLAN.blurb,
       features: planFeatures("PLUS", growRow),
       href: checkoutHref(growRow),
       // Grow is the one we push, so without its row it keeps the badge.
@@ -456,8 +457,27 @@ function PricingSection() {
   const ordered: { plan: PlanCardModel; column: string }[] = [
     { plan: grow, column: "lg:col-start-2" },
     { plan: basic, column: "lg:col-start-1" },
-    { plan: ENTERPRISE_PLAN, column: "lg:col-start-3" },
+    { plan: enterprisePlan(grow.name), column: "lg:col-start-3" },
   ];
+
+  /**
+   * The switch's «خصم N%», from the plans' own discount columns. The larger
+   * of the two when they differ, and no badge when neither has one.
+   */
+  const periodBadge = (value: Period) => {
+    if (value === "MONTHLY") return undefined;
+    const key = value === "YEARLY" ? "yearly" : "quarterly";
+    const percents = (["BASIC", "PLUS"] as const).map((code) => {
+      const row = code === "BASIC" ? basicRow : growRow;
+      const fallback =
+        value === "YEARLY"
+          ? CATALOGUE[code].yearlyPercent
+          : CATALOGUE[code].quarterlyPercent;
+      return Number(row?.pricing?.[key]?.discountPercent ?? fallback) || 0;
+    });
+    const best = Math.max(...percents);
+    return best > 0 ? `خصم ${best}%` : undefined;
+  };
 
   return (
     <section
@@ -501,7 +521,7 @@ function PricingSection() {
                 }`}
               >
                 {option.label}
-                {option.badge ? ` · ${option.badge}` : ""}
+                {periodBadge(option.value) ? ` · ${periodBadge(option.value)}` : ""}
               </button>
             ))}
           </div>
