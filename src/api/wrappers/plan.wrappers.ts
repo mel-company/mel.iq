@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { planAPI } from "../endpoints/plan.endpoint";
+import { GROW_PLAN_NAME } from "@/utils/planUpgrade";
 
 /**
  * Query key factory for plan
@@ -24,6 +25,21 @@ export const useFetchAllPlans = () => {
     queryKey: planKeys.lists(),
     queryFn: () => planAPI.fetchAll(),
   });
+};
+
+/**
+ * Grow's name (code PLUS) as saved in the owner dashboard, for copy that names
+ * the plan to upgrade to. `GROW_PLAN_NAME` only until the catalogue loads.
+ */
+export const useGrowPlanName = (): string => {
+  const { data } = useFetchAllPlans();
+  const rows = Array.isArray(data)
+    ? data
+    : (data as any)?.data || (data as any)?.plans || [];
+  const grow = Array.isArray(rows)
+    ? rows.find((plan: any) => String(plan?.code || "").toUpperCase() === "PLUS")
+    : undefined;
+  return String(grow?.name || "").trim() || GROW_PLAN_NAME;
 };
 
 /**
