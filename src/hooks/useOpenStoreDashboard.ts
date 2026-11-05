@@ -15,46 +15,60 @@ export function toStoreSlug(domain?: string | null): string {
   );
 }
 
+function pickBridgeRedirect(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const root = data as Record<string, unknown>;
+  const nested =
+    root.data && typeof root.data === "object"
+      ? (root.data as Record<string, unknown>)
+      : null;
+  for (const obj of [root, nested]) {
+    const url = obj?.redirectUrl;
+    if (typeof url === "string" && url.includes("/bridge?token=")) {
+      return url;
+    }
+  }
+  return null;
+}
+
 /**
  * Owner SSO: mel.iq → dash.{slug}.mel.iq/bridge?token=… → signed-in dashboard.
- * Never open the bare /login host for the merchant who is already logged in here.
+ *
+ * Same-tab redirect (not a blank popup). Async `window.open("")` often never
+ * navigates after the API returns, so the merchant sees “nothing happen”.
+ * Never fall back to a bare dash host — that dumps them on /login without a session.
  */
 export function useOpenStoreDashboard() {
   const mutation = useValidateToStorefront();
 
   const openDashboard = useCallback(
-    (storeDomain: string | null | undefined, fallbackUrl?: string | null) => {
+    (storeDomain: string | null | undefined) => {
       const slug = toStoreSlug(storeDomain);
       if (!slug) {
         toast.error("تعذر تحديد المتجر");
         return;
       }
 
-      // Keep the gesture so Safari allows the tab; fill URL after mint.
-      const newWindow = window.open("", "_blank");
-
       mutation.mutate(
         { store: slug },
         {
-          onSuccess: (data: { redirectUrl?: string; data?: { redirectUrl?: string } }) => {
-            const redirectUrl =
-              data?.redirectUrl || data?.data?.redirectUrl || fallbackUrl || null;
+          onSuccess: (data) => {
+            const redirectUrl = pickBridgeRedirect(data);
             if (!redirectUrl) {
-              newWindow?.close();
               toast.error("تعذر فتح الداشبورد. حاول مرة أخرى.");
               return;
             }
-            if (newWindow && !newWindow.closed) {
-              newWindow.location.href = redirectUrl;
-              return;
-            }
-            window.location.href = redirectUrl;
+            // Direct hand-off in this tab — what owners expect from mel.iq.
+            window.location.assign(redirectUrl);
           },
           onError: (error: unknown) => {
-            newWindow?.close();
             const message =
-              (error as { response?: { data?: { message?: string } }; message?: string })
-                ?.response?.data?.message ||
+              (
+                error as {
+                  response?: { data?: { message?: string } };
+                  message?: string;
+                }
+              )?.response?.data?.message ||
               (error as { message?: string })?.message ||
               "حدث خطأ في فتح الداشبورد";
             toast.error(message);

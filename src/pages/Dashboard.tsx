@@ -241,7 +241,7 @@ const StoreCard = ({
   const dashboardUrl = resolveDashboardUrl(store);
 
   const handleOpenDashboard = () => {
-    openDashboard(domainOnly || store.domain, dashboardUrl);
+    openDashboard(domainOnly || store.domain);
   };
 
   const handleOpenStorefront = () => {

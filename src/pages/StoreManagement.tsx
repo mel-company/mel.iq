@@ -1868,9 +1868,7 @@ function StoreManagement() {
               {dashboardUrl && (
                 <button
                   type="button"
-                  onClick={() =>
-                    openDashboard(platformSlug || store.domain, dashboardUrl)
-                  }
+                  onClick={() => openDashboard(platformSlug || store.domain)}
                   disabled={openingDashboard}
                   className={btnPrimary}
                 >
@@ -2027,10 +2025,7 @@ function StoreManagement() {
                               type="button"
                               disabled={openingDashboard}
                               onClick={() =>
-                                openDashboard(
-                                  platformSlug || store.domain,
-                                  dashboardUrl,
-                                )
+                                openDashboard(platformSlug || store.domain)
                               }
                               className={className}
                             >
