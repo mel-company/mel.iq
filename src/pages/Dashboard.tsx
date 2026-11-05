@@ -7,11 +7,8 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useQueries } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
-import {
-  useMe,
-  useLogout,
-  useValidateToStorefront,
-} from "@/api/wrappers/auth.wrappers";
+import { useMe, useLogout } from "@/api/wrappers/auth.wrappers";
+import { useOpenStoreDashboard } from "@/hooks/useOpenStoreDashboard";
 import { useFetchStores } from "@/api/wrappers/store.wrappers";
 import { toast } from "sonner";
 import { subscriptionKeys } from "@/api/wrappers/subscription.wrapper";
@@ -213,7 +210,7 @@ const StoreCard = ({
   subscription: Subscription | null;
   onManage: () => void;
 }) => {
-  const openStoreMutation = useValidateToStorefront();
+  const { openDashboard, isPending: openingDashboard } = useOpenStoreDashboard();
   const [copied, setCopied] = useState(false);
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const copyTimer = useRef<number | null>(null);
@@ -244,41 +241,7 @@ const StoreCard = ({
   const dashboardUrl = resolveDashboardUrl(store);
 
   const handleOpenDashboard = () => {
-    if (!domainOnly) return;
-
-    // Open immediately on click so Safari treats it as a user gesture.
-    const newWindow = window.open("", "_blank");
-
-    openStoreMutation.mutate(
-      { store: domainOnly },
-      {
-        onSuccess: (data: any) => {
-          const redirectUrl =
-            data?.redirectUrl ||
-            data?.data?.redirectUrl ||
-            dashboardUrl;
-          if (!redirectUrl) {
-            newWindow?.close();
-            toast.error("تعذر فتح الداشبورد. حاول مرة أخرى.");
-            return;
-          }
-          if (newWindow && !newWindow.closed) {
-            newWindow.location.href = redirectUrl;
-            return;
-          }
-          window.location.href = redirectUrl;
-        },
-        onError: (error: any) => {
-          newWindow?.close();
-          const errorMessage =
-            error?.response?.data?.message ||
-            error?.message ||
-            "حدث خطأ في فتح الداشبورد";
-          toast.error(errorMessage);
-          console.error("Error opening dashboard:", error);
-        },
-      },
-    );
+    openDashboard(domainOnly || store.domain, dashboardUrl);
   };
 
   const handleOpenStorefront = () => {
@@ -338,7 +301,7 @@ const StoreCard = ({
                   type="button"
                   dir="ltr"
                   onClick={handleOpenDashboard}
-                  disabled={openStoreMutation.isPending}
+                  disabled={openingDashboard}
                   className="min-w-0 truncate text-xs text-brand-indigo transition-colors hover:text-brand-violet disabled:opacity-60 dark:text-muted dark:hover:text-brand-primary"
                 >
                   {hostOf(dashboardUrl)}
@@ -467,11 +430,11 @@ const StoreCard = ({
           {domainOnly && (
             <button
               onClick={handleOpenDashboard}
-              disabled={openStoreMutation.isPending}
+              disabled={openingDashboard}
               className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-l from-brand-violet to-brand-indigo px-3 py-2.5 text-sm font-bold text-white shadow-[0_14px_35px_-18px_rgba(79,96,249,0.95)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <LayoutDashboard size={16} />
-              {openStoreMutation.isPending ? "جاري الفتح..." : "لوحة التحكم"}
+              {openingDashboard ? "جاري الفتح..." : "لوحة التحكم"}
             </button>
           )}
 

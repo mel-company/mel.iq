@@ -87,6 +87,7 @@ import type { PlatformPaymentProvider } from "@/api/endpoints/platform-payment.e
 import PaymentProviderPicker, {
   paymentProviderLabel,
 } from "@/components/PaymentProviderPicker";
+import { useOpenStoreDashboard } from "@/hooks/useOpenStoreDashboard";
 
 type DomainPath = "subdomain" | "buy" | "owned";
 type ManageTab = "overview" | "domain" | "subscription" | "social";
@@ -911,6 +912,7 @@ function StoreManagement() {
   const params = useParams<{ storeId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { openDashboard, isPending: openingDashboard } = useOpenStoreDashboard();
 
   // التأكد من أن storeId موجود وصحيح (إزالة أي domain إذا كان موجوداً)
   const storeId = params.storeId?.split("/")[0] || params.storeId;
@@ -1692,7 +1694,13 @@ function StoreManagement() {
     ? getTimeRemaining(subscription.end_at)
     : null;
 
-  const quickLinks: { label: string; url: string; icon: IconComponent }[] = [];
+  const quickLinks: {
+    label: string;
+    url?: string;
+    icon: IconComponent;
+    /** Owner SSO into dash — never a bare /login link. */
+    onOpenDashboard?: boolean;
+  }[] = [];
   if (storeUrl) quickLinks.push({ label: "المتجر", url: storeUrl, icon: StoreIcon });
   if (platformUrl)
     quickLinks.push({ label: "منصة MEL", url: platformUrl, icon: Globe });
@@ -1701,6 +1709,7 @@ function StoreManagement() {
       label: "لوحة التحكم",
       url: dashboardUrl,
       icon: LayoutDashboard,
+      onOpenDashboard: true,
     });
 
   /** Path 3 (bring-your-own domain) — locked for this release. */
@@ -1857,15 +1866,17 @@ function StoreManagement() {
                 </a>
               )}
               {dashboardUrl && (
-                <a
-                  href={dashboardUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() =>
+                    openDashboard(platformSlug || store.domain, dashboardUrl)
+                  }
+                  disabled={openingDashboard}
                   className={btnPrimary}
                 >
                   <LayoutDashboard size={16} />
-                  الداشبورد
-                </a>
+                  {openingDashboard ? "جاري الفتح..." : "الداشبورد"}
+                </button>
               )}
             </div>
           </div>
@@ -1980,38 +1991,66 @@ function StoreManagement() {
                 <div className="space-y-6">
                   <SectionCard title="روابط سريعة" icon={ExternalLink}>
                     <div className="space-y-2.5">
-                      {quickLinks.map((link) => (
-                        <a
-                          key={link.label}
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`group flex items-center gap-3 rounded-2xl p-3 transition-colors ${inset} hover:border-brand-indigo/30 hover:bg-black/[0.04] dark:hover:border-white/20 dark:hover:bg-white/[0.06]`}
-                        >
-                          <span
-                            className={`flex size-9 shrink-0 items-center justify-center rounded-xl bg-black/[0.04] transition-colors group-hover:bg-gradient-to-b group-hover:from-brand-indigo group-hover:to-brand-violet group-hover:text-white dark:bg-white/[0.06] ${ink.body}`}
+                      {quickLinks.map((link) => {
+                        const className = `group flex w-full items-center gap-3 rounded-2xl p-3 text-right transition-colors ${inset} hover:border-brand-indigo/30 hover:bg-black/[0.04] dark:hover:border-white/20 dark:hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60`;
+                        const inner = (
+                          <>
+                            <span
+                              className={`flex size-9 shrink-0 items-center justify-center rounded-xl bg-black/[0.04] transition-colors group-hover:bg-gradient-to-b group-hover:from-brand-indigo group-hover:to-brand-violet group-hover:text-white dark:bg-white/[0.06] ${ink.body}`}
+                            >
+                              <link.icon size={16} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span
+                                className={`block text-sm font-bold ${ink.heading}`}
+                              >
+                                {link.label}
+                              </span>
+                              <span
+                                dir="ltr"
+                                className={`block truncate text-right text-xs ${ink.faint}`}
+                              >
+                                {link.url ? hostOf(link.url) : ""}
+                              </span>
+                            </span>
+                            <ExternalLink
+                              size={15}
+                              className={`shrink-0 ${ink.faint}`}
+                            />
+                          </>
+                        );
+
+                        if (link.onOpenDashboard) {
+                          return (
+                            <button
+                              key={link.label}
+                              type="button"
+                              disabled={openingDashboard}
+                              onClick={() =>
+                                openDashboard(
+                                  platformSlug || store.domain,
+                                  dashboardUrl,
+                                )
+                              }
+                              className={className}
+                            >
+                              {inner}
+                            </button>
+                          );
+                        }
+
+                        return (
+                          <a
+                            key={link.label}
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={className}
                           >
-                            <link.icon size={16} />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span
-                              className={`block text-sm font-bold ${ink.heading}`}
-                            >
-                              {link.label}
-                            </span>
-                            <span
-                              dir="ltr"
-                              className={`block truncate text-right text-xs ${ink.faint}`}
-                            >
-                              {hostOf(link.url)}
-                            </span>
-                          </span>
-                          <ExternalLink
-                            size={15}
-                            className={`shrink-0 ${ink.faint}`}
-                          />
-                        </a>
-                      ))}
+                            {inner}
+                          </a>
+                        );
+                      })}
                       {quickLinks.length === 0 && (
                         <p className={`text-sm ${ink.body}`}>
                           لا توجد روابط متاحة بعد
