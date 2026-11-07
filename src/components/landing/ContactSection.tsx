@@ -127,18 +127,18 @@ function ContactSection() {
           );
           setForm(EMPTY_FORM);
 
-          if (data?.chatUrl) {
+          const chatUrl = data?.chatUrl ?? undefined;
+          if (chatUrl) {
             toast.message("تم فتح محادثة التذكرة", {
               description: "احفظ الرابط لمتابعة الردود",
               action: {
                 label: "افتح المحادثة",
-                onClick: () =>
-                  window.open(data.chatUrl, "_blank", "noopener"),
+                onClick: () => window.open(chatUrl, "_blank", "noopener"),
               },
               duration: 12000,
             });
             window.setTimeout(() => {
-              window.location.href = data.chatUrl!;
+              window.location.href = chatUrl;
             }, 800);
           }
         },

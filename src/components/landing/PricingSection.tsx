@@ -2,6 +2,7 @@ import { ArrowUpLeft } from "../icons";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import SectionEyebrow from "./SectionEyebrow";
+import InstitutionRequestModal from "./InstitutionRequestModal";
 import { useFetchAllPlans } from "@/api/wrappers/plan.wrappers";
 
 type PlanCardModel = {
@@ -242,21 +243,28 @@ const GROW_PLAN: PlanCardModel = {
   featured: true,
 };
 
-/** Not on sale: described here, with a contact button. */
+/** Not on sale: described here; CTA opens the institutions sales form. */
 const enterprisePlan = (growName: string): PlanCardModel => ({
   id: "enterprise",
   name: "مؤسسي",
-  blurb: "للمشاريع الكبيرة والسلاسل متعددة الفروع بمتطلبات متقدمة.",
+  blurb:
+    "نصمّم ونبرمج منصتكم كاملة حسب احتياجكم — من الهوية والواجهة حتى التشغيل متعدد الفروع.",
   features: [
-    `كل مميزات ${growName}`,
-    "كود مخصص",
-    "ربط عبر واجهة API",
-    "ربط أنظمة ERP",
-    "تكاملات مخصصة حسب الطلب",
+    `كل مميزات باقة ${growName} بلا حدود`,
+    "تصميم واجهة وهوية بصرية خاصة بمؤسستكم",
+    "تطوير برمجي مخصص بالكامل لمتطلباتكم",
+    "بناء منصة/موقع متكامل بإشراف فريق MEL",
+    "إدارة متعددة الفروع والمخازن من لوحة واحدة",
+    "ربط أنظمة ERP والمحاسبة والمستودعات",
+    "واجهات API وتكاملات مخصصة حسب الطلب",
+    "صلاحيات وأدوار متقدمة لفرق العمل الكبيرة",
+    "دعم فني مخصص ومدير حساب خاص بكم",
+    "تدريب الفريق وإطلاق المشروع معكم خطوة بخطوة",
   ],
   price: null,
-  priceLabel: "اتصل بنا",
+  priceLabel: "حسب الطلب",
   contactOnly: true,
+  ctaLabel: "اطلب عرضاً",
 });
 
 /** The bullet marker: a dark plate with a small brand dot centred on it. */
@@ -275,14 +283,32 @@ function PlanCard({
   plan,
   delay = 0,
   className = "",
+  onContactRequest,
 }: {
   plan: PlanCardModel;
   delay?: number;
   className?: string;
+  /** Opens the institutions sales form instead of navigating to /contact. */
+  onContactRequest?: () => void;
 }) {
   const href = plan.href ?? (plan.contactOnly ? "/contact" : "/checkout");
   const ctaLabel =
-    plan.ctaLabel ?? (plan.contactOnly ? "تواصل معنا" : "ابدأ الآن");
+    plan.ctaLabel ?? (plan.contactOnly ? "اطلب عرضاً" : "ابدأ الآن");
+  const ctaClass = plan.featured
+    ? "relative inline-flex items-center rounded-full bg-gradient-to-b from-[#343754]/60 via-[#aab1ec]/60 to-[#343754]/60 p-px shadow-[0_0_16px_rgba(52,92,232,0.6)] transition-shadow hover:shadow-[0_0_24px_rgba(52,92,232,0.85)]"
+    : "relative inline-flex items-center rounded-full bg-gradient-to-b from-[#4d4d4d] via-white to-transparent p-px shadow-[0_0_16px_rgba(57,115,233,0.25)] transition-opacity hover:opacity-90";
+  const ctaInner = (
+    <span
+      className={`flex items-center gap-[13px] rounded-full px-7 py-2.5 text-base leading-6 text-frost ${
+        plan.featured
+          ? "bg-gradient-to-l from-[#4f60f9] to-[#7569ff]"
+          : "bg-ink-panel dark:bg-[#00031c]"
+      }`}
+    >
+      {ctaLabel}
+      <ArrowUpLeft size={13} />
+    </span>
+  );
 
   return (
     <div
@@ -291,16 +317,15 @@ function PlanCard({
       className={`${className} ${
         plan.featured
           ? // A thick gradient frame: the wash is the element's own background
-            // and the near-black ground is inset over it. Taller than its
-            // neighbours, which sit level with its foot.
-            "card-hover relative flex flex-col rounded-3xl bg-gradient-to-b from-[#463bbf] via-[#9c96e3] to-[#463bbf] p-1 lg:min-h-[810px]"
+            // and the near-black ground is inset over it.
+            "card-hover relative flex h-full flex-col rounded-3xl bg-gradient-to-b from-[#463bbf] via-[#9c96e3] to-[#463bbf] p-1"
           : // The side cards' 1px frame runs dark at the edges and lilac at
             // the middle.
-            "card-hover relative flex flex-col rounded-3xl bg-gradient-to-r from-[#1b1841] via-[#a68cf0] to-[#1b1841] p-px lg:min-h-[713px]"
+            "card-hover relative flex h-full flex-col rounded-3xl bg-gradient-to-r from-[#1b1841] via-[#a68cf0] to-[#1b1841] p-px"
       }`}
     >
       <div
-        className={`flex flex-1 flex-col gap-12 rounded-[20px] bg-ink-raised px-8 pt-8 dark:bg-[#06051e] ${
+        className={`flex min-h-0 flex-1 flex-col gap-12 rounded-[20px] bg-ink-raised px-8 pt-8 dark:bg-[#06051e] ${
           plan.featured ? "pb-10" : "pb-8"
         }`}
       >
@@ -368,25 +393,13 @@ function PlanCard({
             // Nothing to buy yet. The spacer keeps its price level with the
             // cards beside it, whose buttons sit where this one would.
             <span aria-hidden className="hidden h-[44px] lg:block" />
+          ) : plan.contactOnly && onContactRequest ? (
+            <button type="button" onClick={onContactRequest} className={ctaClass}>
+              {ctaInner}
+            </button>
           ) : (
-            <Link
-              to={href}
-              className={
-                plan.featured
-                  ? "relative inline-flex items-center rounded-full bg-gradient-to-b from-[#343754]/60 via-[#aab1ec]/60 to-[#343754]/60 p-px shadow-[0_0_16px_rgba(52,92,232,0.6)] transition-shadow hover:shadow-[0_0_24px_rgba(52,92,232,0.85)]"
-                  : "relative inline-flex items-center rounded-full bg-gradient-to-b from-[#4d4d4d] via-white to-transparent p-px shadow-[0_0_16px_rgba(57,115,233,0.25)] transition-opacity hover:opacity-90"
-              }
-            >
-              <span
-                className={`flex items-center gap-[13px] rounded-full px-7 py-2.5 text-base leading-6 text-frost ${
-                  plan.featured
-                    ? "bg-gradient-to-l from-[#4f60f9] to-[#7569ff]"
-                    : "bg-ink-panel dark:bg-[#00031c]"
-                }`}
-              >
-                {ctaLabel}
-                <ArrowUpLeft size={13} />
-              </span>
+            <Link to={href} className={ctaClass}>
+              {ctaInner}
             </Link>
           )}
         </div>
@@ -404,6 +417,7 @@ function PlanCard({
 function PricingSection() {
   const { data } = useFetchAllPlans();
   const [period, setPeriod] = useState<Period>("MONTHLY");
+  const [institutionOpen, setInstitutionOpen] = useState(false);
 
   const raw = Array.isArray(data)
     ? data
@@ -527,17 +541,25 @@ function PricingSection() {
           </div>
         </div>
 
-        <div className="grid w-full max-w-[1240px] gap-6 lg:grid-cols-3 lg:items-end lg:gap-3">
+        <div className="grid w-full max-w-[1240px] gap-6 lg:grid-cols-3 lg:items-stretch lg:gap-3">
           {ordered.map(({ plan, column }, i) => (
             <PlanCard
               key={plan.id}
               plan={plan}
               delay={i * 120}
-              className={`${column} lg:row-start-1`}
+              className={`${column} h-full lg:row-start-1`}
+              onContactRequest={
+                plan.contactOnly ? () => setInstitutionOpen(true) : undefined
+              }
             />
           ))}
         </div>
       </div>
+
+      <InstitutionRequestModal
+        open={institutionOpen}
+        onClose={() => setInstitutionOpen(false)}
+      />
     </section>
   );
 }

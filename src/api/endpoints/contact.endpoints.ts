@@ -15,7 +15,22 @@ export type ContactResult = {
   ok: boolean;
   message: string;
   /** Guest chat link for LANDING_PAGE tickets (when the API returns one). */
-  chatUrl?: string;
+  chatUrl?: string | null;
+};
+
+/**
+ * Structured sales lead from the Enterprise / «مؤسسي» pricing card.
+ * Phone is required — the sales team calls back.
+ */
+export type InstitutionPlanPayload = {
+  name: string;
+  email: string;
+  phone: string;
+  companyName: string;
+  jobTitle?: string;
+  companySize?: string;
+  message: string;
+  lpReference?: string;
 };
 
 /**
@@ -27,6 +42,16 @@ export const contactAPI = {
   submit: async (payload: ContactPayload): Promise<ContactResult> => {
     const { data } = await axiosInstance.post<ContactResult>(
       "/support-ticket/public/contact",
+      payload,
+    );
+    return data;
+  },
+
+  submitInstitutionPlan: async (
+    payload: InstitutionPlanPayload,
+  ): Promise<ContactResult> => {
+    const { data } = await axiosInstance.post<ContactResult>(
+      "/support-ticket/public/institution-plan-request",
       payload,
     );
     return data;

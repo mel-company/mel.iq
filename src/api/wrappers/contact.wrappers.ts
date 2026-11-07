@@ -3,6 +3,7 @@ import {
   contactAPI,
   type ContactPayload,
   type ContactResult,
+  type InstitutionPlanPayload,
 } from "../endpoints/contact.endpoints";
 
 /**
@@ -13,4 +14,9 @@ import {
 export const useSubmitContact = () =>
   useMutation<ContactResult, Error, ContactPayload>({
     mutationFn: (payload) => contactAPI.submit(payload),
+  });
+
+export const useSubmitInstitutionPlan = () =>
+  useMutation<ContactResult, Error, InstitutionPlanPayload>({
+    mutationFn: (payload) => contactAPI.submitInstitutionPlan(payload),
   });
