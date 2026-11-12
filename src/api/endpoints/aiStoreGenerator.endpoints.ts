@@ -83,6 +83,8 @@ export type GenerationEvent =
   | { type: "job"; id: string }
   /** The ordered steps this run will take, sent before any work starts. */
   | { type: "plan"; steps: PlannedStep[] }
+  /** How long the whole run should take, by route: a ready-made template or the full design. */
+  | { type: "estimate"; seconds: number; route?: "template" | "design" }
   | {
     type: "status";
     message: string;

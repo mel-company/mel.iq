@@ -119,6 +119,13 @@ interface GenerationProgressProps {
    */
   awaitingApproval?: boolean;
   /**
+   * How long the server expects this whole run to take, in seconds. A
+   * ready-made template is a few minutes shorter than the full design, so the
+   * phase budgets are scaled to it. Without it the budgets stay as measured
+   * for the full design.
+   */
+  estimateSeconds?: number;
+  /**
    * The run being resumed had already died — `RUNNING` with nothing behind it.
    *
    * Continuing it is a fresh build and a fresh charge, since the credit the
@@ -383,6 +390,7 @@ export default function GenerationProgress({
   storeName,
   initialElapsedSeconds = 0,
   etaKnown = true,
+  estimateSeconds,
   awaitingApproval = false,
   stalled = false,
   phase = "design",
@@ -643,20 +651,23 @@ export default function GenerationProgress({
 
   // Finished phases are full, later ones empty, and the running one fills
   // against its own budget from the moment it started.
+  const scale = estimateSeconds && estimateSeconds > 0 ? estimateSeconds / TOTAL_SECONDS : 1;
+  const budget = (seg: (typeof SEGMENTS)[number]) => seg.seconds * scale;
+  const total = TOTAL_SECONDS * scale;
   const percents = SEGMENTS.map((seg, index) =>
     index < segment
       ? 100
       : index > segment
         ? 0
-        : fillPercent(elapsed - segmentStart.current, seg.seconds),
+        : fillPercent(elapsed - segmentStart.current, budget(seg)),
   );
   // How much of the budget the bars say is spent. A phase that finished early
   // pulls the countdown down with it.
   const consumed = SEGMENTS.reduce(
-    (sum, seg, index) => sum + (seg.seconds * percents[index]) / 100,
+    (sum, seg, index) => sum + (budget(seg) * percents[index]) / 100,
     0,
   );
-  const byBars = TOTAL_SECONDS - consumed;
+  const byBars = total - consumed;
   /**
    * The countdown keeps moving while the run does.
    *
@@ -668,7 +679,7 @@ export default function GenerationProgress({
    * real time; only a question or a confirmation stops it, through `paused`.
    * A run that outlasts the whole budget falls through to the sentence below.
    */
-  const byClock = TOTAL_SECONDS - elapsed;
+  const byClock = total - elapsed;
   const remaining = Math.max(0, Math.ceil(Math.min(byBars, byClock)));
   /**
    * Below this the clock stops being useful and starts being a liability.
