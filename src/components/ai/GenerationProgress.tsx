@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import { WireframeRow } from "./StyleWireframes";
 import ModalPortal from "./ModalPortal";
 import {
   AlertCircle,
@@ -1482,6 +1483,10 @@ function QuestionStep({
   const palette =
     question.options.length > 0 &&
     question.options.every((option) => option.palette);
+  // A look question is answered by page sketches.
+  const wireframes =
+    question.options.length > 0 &&
+    question.options.every((option) => option.wireframe);
 
   return (
     <div className="mb-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:p-4">
@@ -1516,7 +1521,14 @@ function QuestionStep({
         <p className="mb-3 text-xs text-white/45">يمكنك اختيار أكثر من إجابة، ثم اضغط التالي. اتركها فارغة لاستخدام توصيتنا.</p>
       )}
 
-      {palette ? (
+      {wireframes ? (
+        <WireframeRow
+          options={question.options}
+          chosen={chosen}
+          onAnswer={onAnswer}
+          labelledBy={`question-heading-${index}`}
+        />
+      ) : palette ? (
         <PaletteRow
           options={question.options}
           chosen={chosen}

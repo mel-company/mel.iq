@@ -47,6 +47,10 @@ export interface QuestionOption {
   label: string;
   /** Pre-selected, so skipping the questions still answers them. */
   recommended?: boolean;
+  /** A look question: the page sketch this option is shown as. */
+  wireframe?: "simple" | "modern" | "vivid";
+  /** A short line under the option's label. */
+  hint?: string;
   /**
    * The colours this option stands for, when it is a palette.
    *
