@@ -163,9 +163,6 @@ export function WireframeRow({
               {option.label}
             </span>
             {option.hint && <span className="mt-0.5 block text-[10px] leading-tight text-white/40">{option.hint}</span>}
-            {option.recommended && (
-              <span className="mt-1 inline-block rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/45">موصى به</span>
-            )}
           </button>
         );
       })}
