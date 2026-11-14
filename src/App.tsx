@@ -4,6 +4,7 @@ import Navbar from "./components/Navbar";
 import WebMcpTools from "./components/WebMcpTools";
 import ScrollToTop from "./components/ScrollToTop";
 import JourneyTracker from "./components/JourneyTracker";
+import MetaPixelTracker from "./components/MetaPixelTracker";
 import { MarketingShell } from "./components/LandingNavbar";
 import Landing from "./pages/Landing";
 import { useAuth } from "./contexts/AuthContext";
@@ -69,6 +70,7 @@ function App() {
     <div className="min-h-screen bg-white dark:bg-black transition-colors duration-200">
       <ScrollToTop />
       <JourneyTracker />
+      <MetaPixelTracker />
       <WebMcpTools />
       <Toaster />
       <RouteErrorBoundary resetKey={pathname}>
