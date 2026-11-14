@@ -274,6 +274,8 @@ export default function PromptComposer() {
   );
   const [entries, setEntries] = useState<ProgressEntry[]>([]);
   const [steps, setSteps] = useState<PlannedStep[]>([]);
+  /** The server's estimate for this run, in seconds; null until it says. */
+  const [estimate, setEstimate] = useState<number | null>(null);
   const [activeStep, setActiveStep] = useState(0);
   const [storeName, setStoreName] = useState<string | undefined>(
     () => readActiveRun()?.storeName,
@@ -515,6 +517,7 @@ export default function PromptComposer() {
         setErrorCode(null);
         setSuccess(null);
         setSteps([]);
+        setEstimate(null);
         setActiveStep(0);
         setEntries([
           { message: "جاري متابعة إنشاء متجرك من حيث توقفت…", done: false },
@@ -919,6 +922,7 @@ export default function PromptComposer() {
     setRefunded(false);
     setEntries([]);
     setSteps([]);
+    setEstimate(null);
     stepsRef.current = [];
     setActiveStep(0);
     setStoreName(undefined);
@@ -1034,6 +1038,9 @@ export default function PromptComposer() {
               case "plan":
                 stepsRef.current = event.steps;
                 setSteps(event.steps);
+                break;
+              case "estimate":
+                setEstimate(event.seconds);
                 break;
               case "status":
                 addStatus(event.message);
@@ -1175,6 +1182,7 @@ export default function PromptComposer() {
     // bars read the running step's key out of it. Cleared so the build's own
     // plan is what they follow.
     setSteps([]);
+    setEstimate(null);
     stepsRef.current = [];
     setActiveStep(0);
     addStatus("جاري بناء المتجر...");
@@ -1220,6 +1228,9 @@ export default function PromptComposer() {
             case "plan":
               stepsRef.current = event.steps;
               setSteps(event.steps);
+              break;
+            case "estimate":
+              setEstimate(event.seconds);
               break;
             case "status":
               addStatus(event.message);
@@ -1472,6 +1483,7 @@ export default function PromptComposer() {
     setPhase("idle");
     setEntries([]);
     setSteps([]);
+    setEstimate(null);
     stepsRef.current = [];
     setActiveStep(0);
     setStoreName(undefined);
@@ -1535,6 +1547,7 @@ export default function PromptComposer() {
           activeStep={activeStep}
           initialElapsedSeconds={resumed?.elapsed ?? 0}
           etaKnown={!resumed || resumed.etaKnown}
+          estimateSeconds={estimate ?? undefined}
           storeName={storeName}
           phase={mascotPhase}
           error={error}

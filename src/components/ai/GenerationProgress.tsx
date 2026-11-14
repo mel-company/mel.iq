@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import { WireframeRow } from "./StyleWireframes";
 import ModalPortal from "./ModalPortal";
 import {
   AlertCircle,
@@ -118,6 +119,13 @@ interface GenerationProgressProps {
    * underway and puts the decision in front of the merchant instead.
    */
   awaitingApproval?: boolean;
+  /**
+   * How long the server expects this whole run to take, in seconds. A
+   * ready-made template is a few minutes shorter than the full design, so the
+   * phase budgets are scaled to it. Without it the budgets stay as measured
+   * for the full design.
+   */
+  estimateSeconds?: number;
   /**
    * The run being resumed had already died — `RUNNING` with nothing behind it.
    *
@@ -383,6 +391,7 @@ export default function GenerationProgress({
   storeName,
   initialElapsedSeconds = 0,
   etaKnown = true,
+  estimateSeconds,
   awaitingApproval = false,
   stalled = false,
   phase = "design",
@@ -643,20 +652,23 @@ export default function GenerationProgress({
 
   // Finished phases are full, later ones empty, and the running one fills
   // against its own budget from the moment it started.
+  const scale = estimateSeconds && estimateSeconds > 0 ? estimateSeconds / TOTAL_SECONDS : 1;
+  const budget = (seg: (typeof SEGMENTS)[number]) => seg.seconds * scale;
+  const total = TOTAL_SECONDS * scale;
   const percents = SEGMENTS.map((seg, index) =>
     index < segment
       ? 100
       : index > segment
         ? 0
-        : fillPercent(elapsed - segmentStart.current, seg.seconds),
+        : fillPercent(elapsed - segmentStart.current, budget(seg)),
   );
   // How much of the budget the bars say is spent. A phase that finished early
   // pulls the countdown down with it.
   const consumed = SEGMENTS.reduce(
-    (sum, seg, index) => sum + (seg.seconds * percents[index]) / 100,
+    (sum, seg, index) => sum + (budget(seg) * percents[index]) / 100,
     0,
   );
-  const byBars = TOTAL_SECONDS - consumed;
+  const byBars = total - consumed;
   /**
    * The countdown keeps moving while the run does.
    *
@@ -668,7 +680,7 @@ export default function GenerationProgress({
    * real time; only a question or a confirmation stops it, through `paused`.
    * A run that outlasts the whole budget falls through to the sentence below.
    */
-  const byClock = TOTAL_SECONDS - elapsed;
+  const byClock = total - elapsed;
   const remaining = Math.max(0, Math.ceil(Math.min(byBars, byClock)));
   /**
    * Below this the clock stops being useful and starts being a liability.
@@ -1471,6 +1483,10 @@ function QuestionStep({
   const palette =
     question.options.length > 0 &&
     question.options.every((option) => option.palette);
+  // A look question is answered by page sketches.
+  const wireframes =
+    question.options.length > 0 &&
+    question.options.every((option) => option.wireframe);
 
   return (
     <div className="mb-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 sm:p-4">
@@ -1505,7 +1521,14 @@ function QuestionStep({
         <p className="mb-3 text-xs text-white/45">يمكنك اختيار أكثر من إجابة، ثم اضغط التالي. اتركها فارغة لاستخدام توصيتنا.</p>
       )}
 
-      {palette ? (
+      {wireframes ? (
+        <WireframeRow
+          options={question.options}
+          chosen={chosen}
+          onAnswer={onAnswer}
+          labelledBy={`question-heading-${index}`}
+        />
+      ) : palette ? (
         <PaletteRow
           options={question.options}
           chosen={chosen}

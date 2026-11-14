@@ -47,6 +47,10 @@ export interface QuestionOption {
   label: string;
   /** Pre-selected, so skipping the questions still answers them. */
   recommended?: boolean;
+  /** A look question: the page sketch this option is shown as. */
+  wireframe?: "simple" | "modern" | "vivid";
+  /** A short line under the option's label. */
+  hint?: string;
   /**
    * The colours this option stands for, when it is a palette.
    *
@@ -83,6 +87,8 @@ export type GenerationEvent =
   | { type: "job"; id: string }
   /** The ordered steps this run will take, sent before any work starts. */
   | { type: "plan"; steps: PlannedStep[] }
+  /** How long the whole run should take, by route: a ready-made template or the full design. */
+  | { type: "estimate"; seconds: number; route?: "template" | "design" }
   | {
     type: "status";
     message: string;
