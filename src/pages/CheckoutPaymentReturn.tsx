@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { usePlatformPaymentStatus } from "@/api/wrappers/platform-payment.wrapper";
+import { trackPurchase } from "@/utils/metaPixel";
 
 const CHECKOUT_DRAFT_KEY = "mel_checkout_draft";
 const RENEWAL_RETURN_KEY = "mel_renewal_return";
@@ -16,6 +17,7 @@ export default function CheckoutPaymentReturn() {
       ? sessionStorage.getItem(LAST_PAYMENT_ID_KEY)
       : null;
   const paymentId = paymentIdFromQuery || paymentIdFromStorage;
+  const handledRef = useRef<string | null>(null);
 
   const { data, isLoading, isError } = usePlatformPaymentStatus(
     paymentId,
@@ -59,6 +61,10 @@ export default function CheckoutPaymentReturn() {
       return;
     }
 
+    // Payment status polling can re-render; only settle the return once.
+    if (handledRef.current === paymentId) return;
+    handledRef.current = paymentId;
+
     const renewalStoreId =
       paymentStoreId || renewalReturn?.storeId || undefined;
     const isRenewal =
@@ -82,6 +88,20 @@ export default function CheckoutPaymentReturn() {
         },
       });
       return;
+    }
+
+    // Confirmed gateway payment with real money → Meta Purchase (CAPI + pixel).
+    const paidAmount = Number(data?.amount);
+    if (Number.isFinite(paidAmount) && paidAmount > 0) {
+      trackPurchase({
+        eventId: `purchase_${paymentId}`,
+        paymentId: String(paymentId),
+        value: paidAmount,
+        currency: data?.currency || "IQD",
+        contentName: draft?.plan?.name || draft?.domain || paymentType || undefined,
+        email: draft?.email || undefined,
+        phone: draft?.phone || undefined,
+      });
     }
 
     toast.success("تم الدفع بنجاح");
@@ -109,6 +129,8 @@ export default function CheckoutPaymentReturn() {
     navigate,
     draft,
     renewalReturn,
+    data?.amount,
+    data?.currency,
   ]);
 
   return (

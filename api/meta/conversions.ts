@@ -4,11 +4,11 @@
  * Env (Vercel / server):
  *   META_PIXEL_ID          — default 1062862283473154
  *   META_ACCESS_TOKEN      — required (Events Manager → Settings → Generate access token)
- *   META_TEST_EVENT_CODE   — optional; set TEST72414 while validating in Test Events
+ *   META_TEST_EVENT_CODE   — optional; set while validating in Test Events
  */
 
 const DEFAULT_PIXEL_ID = "1062862283473154";
-const ALLOWED_EVENTS = new Set(["CompleteRegistration"]);
+const ALLOWED_EVENTS = new Set(["CompleteRegistration", "Purchase"]);
 
 type Body = {
   eventName?: string;
@@ -18,6 +18,8 @@ type Body = {
   email?: string;
   phone?: string;
   paymentId?: string;
+  value?: number | string;
+  currency?: string;
 };
 
 async function sha256Hex(value: string): Promise<string> {
@@ -86,6 +88,16 @@ export default async function handler(request: Request) {
     return json({ ok: false, error: "invalid_event" }, 400);
   }
 
+  const valueNum =
+    body.value === undefined || body.value === null || body.value === ""
+      ? undefined
+      : Number(body.value);
+  if (eventName === "Purchase") {
+    if (!Number.isFinite(valueNum) || (valueNum as number) <= 0) {
+      return json({ ok: false, error: "purchase_requires_positive_value" }, 400);
+    }
+  }
+
   const userData: Record<string, unknown> = {
     client_user_agent: request.headers.get("user-agent") || undefined,
     client_ip_address: clientIp(request),
@@ -99,6 +111,30 @@ export default async function handler(request: Request) {
     if (ph) userData.ph = [await sha256Hex(ph)];
   }
 
+  // Meta rejects events with no matchable customer info.
+  if (!userData.em && !userData.ph && !userData.client_ip_address) {
+    return json(
+      {
+        ok: false,
+        error: "insufficient_user_data",
+        hint: "Provide email or phone, or call from a request with a client IP.",
+      },
+      400,
+    );
+  }
+
+  const currency =
+    (body.currency || "IQD").trim().toUpperCase() || "IQD";
+
+  const customData: Record<string, unknown> = {
+    content_name: body.storeSlug || undefined,
+    order_id: body.paymentId || undefined,
+  };
+  if (eventName === "Purchase") {
+    customData.value = valueNum;
+    customData.currency = currency;
+  }
+
   const event: Record<string, unknown> = {
     event_name: eventName,
     event_time: Math.floor(Date.now() / 1000),
@@ -107,15 +143,11 @@ export default async function handler(request: Request) {
     event_source_url:
       body.eventSourceUrl?.trim() || "https://www.mel.iq/checkout",
     user_data: userData,
-    custom_data: {
-      content_name: body.storeSlug || undefined,
-      order_id: body.paymentId || undefined,
-    },
+    custom_data: customData,
   };
 
   const payload: Record<string, unknown> = {
     data: [event],
-    // Partner agent string helps Meta attribute server events from this app.
     partner_agent: "meli-web-capi-1.0",
   };
   if (testEventCode) {
@@ -133,15 +165,20 @@ export default async function handler(request: Request) {
     });
     metaStatus = metaRes.status;
     metaBody = await metaRes.json().catch(async () => metaRes.text());
-    return json({
-      ok: metaRes.ok,
-      pixelId,
-      eventName,
-      eventId,
-      testEventCode: testEventCode || null,
-      metaStatus,
-      meta: metaBody,
-    }, metaRes.ok ? 200 : 502);
+    return json(
+      {
+        ok: metaRes.ok,
+        pixelId,
+        eventName,
+        eventId,
+        value: valueNum ?? null,
+        currency: eventName === "Purchase" ? currency : null,
+        testEventCode: testEventCode || null,
+        metaStatus,
+        meta: metaBody,
+      },
+      metaRes.ok ? 200 : 502,
+    );
   } catch (error) {
     return json(
       {

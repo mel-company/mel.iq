@@ -1,9 +1,6 @@
 /**
  * Meta Pixel helpers. Base snippet (init + first PageView) lives in index.html.
- * SPA PageViews and conversion events go through here.
- *
- * CompleteRegistration is dual-sent: browser pixel + Conversions API (CAPI)
- * with the same event_id so Meta deduplicates.
+ * Conversion events dual-send: browser pixel + Conversions API (same event_id).
  */
 
 declare global {
@@ -14,20 +11,31 @@ declare global {
 
 export const META_PIXEL_ID = "1062862283473154";
 
-const COMPLETE_REGISTRATION_KEY = "mel_fb_complete_registration";
+const SENT_KEYS_STORAGE = "mel_fb_sent_events";
 
-export type CompleteRegistrationPayload = {
-  /** Stable id shared with CAPI for dedup (store slug / payment id). */
-  eventId: string;
-  storeSlug: string;
+export type MetaUserHints = {
   email?: string | null;
   phone?: string | null;
+};
+
+export type CompleteRegistrationPayload = MetaUserHints & {
+  eventId: string;
+  storeSlug: string;
   paymentId?: string | null;
+};
+
+export type PurchasePayload = MetaUserHints & {
+  /** Prefer payment id so retries/dedup stay stable. */
+  eventId: string;
+  paymentId: string;
+  value: number;
+  currency: string;
+  contentName?: string | null;
 };
 
 function readSentKeys(): Set<string> {
   try {
-    const raw = window.localStorage.getItem(COMPLETE_REGISTRATION_KEY);
+    const raw = window.localStorage.getItem(SENT_KEYS_STORAGE);
     if (!raw) return new Set();
     const parsed = JSON.parse(raw) as unknown;
     return Array.isArray(parsed)
@@ -42,13 +50,19 @@ function markKeySent(key: string): void {
   try {
     const sent = readSentKeys();
     sent.add(key);
-    window.localStorage.setItem(
-      COMPLETE_REGISTRATION_KEY,
-      JSON.stringify([...sent]),
-    );
+    window.localStorage.setItem(SENT_KEYS_STORAGE, JSON.stringify([...sent]));
   } catch {
     // Private mode / quota — still fire once this session via in-memory only.
   }
+}
+
+function claimOnce(key: string): boolean {
+  const normalized = key.trim();
+  if (!normalized) return false;
+  const sent = readSentKeys();
+  if (sent.has(normalized)) return false;
+  markKeySent(normalized);
+  return true;
 }
 
 /** SPA navigations (initial PageView is already sent from index.html). */
@@ -56,21 +70,49 @@ export function trackMetaPageView(): void {
   window.fbq?.("track", "PageView");
 }
 
+type CapiBody = {
+  eventName: string;
+  eventId: string;
+  eventSourceUrl?: string;
+  storeSlug?: string;
+  email?: string;
+  phone?: string;
+  paymentId?: string;
+  value?: number;
+  currency?: string;
+};
+
+async function sendCapi(eventLabel: string, body: CapiBody): Promise<void> {
+  try {
+    const res = await fetch("/api/meta/conversions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        ...body,
+        eventSourceUrl: body.eventSourceUrl || window.location.href,
+      }),
+    });
+    const responseBody = await res.json().catch(() => null);
+    console.info(`[meta] ${eventLabel} CAPI`, {
+      ok: res.ok,
+      status: res.status,
+      body: responseBody,
+    });
+  } catch (error) {
+    console.warn(`[meta] ${eventLabel} CAPI failed`, error);
+  }
+}
+
 /**
- * Merchant completed checkout payment (or confirmed 0 IQD intro) and the store
- * was created successfully. Once per store. Never on signup click / OTP / revisit.
+ * Store created after checkout (paid or 0 IQD intro). Once per store.
  */
 export function trackCompleteRegistration(
   payload: CompleteRegistrationPayload,
 ): void {
   const key = payload.eventId.trim() || payload.storeSlug.trim();
-  if (!key) return;
+  if (!claimOnce(key)) return;
 
-  const sent = readSentKeys();
-  if (sent.has(key)) return;
-  markKeySent(key);
-
-  // 1) Browser pixel — visible in Network as facebook.com/tr/ and in Test Events.
   if (window.fbq) {
     window.fbq(
       "track",
@@ -80,38 +122,48 @@ export function trackCompleteRegistration(
     );
   }
 
-  // 2) Conversions API (server) — survives ad blockers; same event_id for dedup.
-  void sendCompleteRegistrationCapi(payload, key);
+  void sendCapi("CompleteRegistration", {
+    eventName: "CompleteRegistration",
+    eventId: key,
+    storeSlug: payload.storeSlug,
+    email: payload.email || undefined,
+    phone: payload.phone || undefined,
+    paymentId: payload.paymentId || undefined,
+  });
 }
 
-async function sendCompleteRegistrationCapi(
-  payload: CompleteRegistrationPayload,
-  eventId: string,
-): Promise<void> {
-  try {
-    const res = await fetch("/api/meta/conversions", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({
-        eventName: "CompleteRegistration",
-        eventId,
-        eventSourceUrl: window.location.href,
-        storeSlug: payload.storeSlug,
-        email: payload.email || undefined,
-        phone: payload.phone || undefined,
-        paymentId: payload.paymentId || undefined,
-      }),
-    });
-    const body = await res.json().catch(() => null);
-    // Intentionally logged so Test Events debugging can inspect Meta's reply
-    // from the browser Network / Console without opening server logs.
-    console.info("[meta] CompleteRegistration CAPI", {
-      ok: res.ok,
-      status: res.status,
-      body,
-    });
-  } catch (error) {
-    console.warn("[meta] CompleteRegistration CAPI failed", error);
+/**
+ * Real money payment confirmed (`status === PAID` and amount > 0).
+ * Once per payment id. Includes value + currency for Meta optimization.
+ */
+export function trackPurchase(payload: PurchasePayload): void {
+  const value = Number(payload.value);
+  const currency = (payload.currency || "IQD").trim().toUpperCase() || "IQD";
+  const paymentId = String(payload.paymentId || "").trim();
+  const key = payload.eventId.trim() || (paymentId ? `purchase_${paymentId}` : "");
+
+  if (!paymentId || !Number.isFinite(value) || value <= 0) return;
+  if (!claimOnce(key)) return;
+
+  const customData = {
+    value,
+    currency,
+    content_name: payload.contentName || undefined,
+    order_id: paymentId,
+  };
+
+  if (window.fbq) {
+    window.fbq("track", "Purchase", customData, { eventID: key });
   }
+
+  void sendCapi("Purchase", {
+    eventName: "Purchase",
+    eventId: key,
+    email: payload.email || undefined,
+    phone: payload.phone || undefined,
+    paymentId,
+    value,
+    currency,
+    storeSlug: payload.contentName || undefined,
+  });
 }

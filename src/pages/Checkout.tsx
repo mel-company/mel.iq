@@ -37,7 +37,10 @@ import {
   subdomainCandidates,
 } from "@/utils/subdomainSuggest";
 import { storeAPI } from "@/api/endpoints/store.endpoints";
-import { trackCompleteRegistration } from "@/utils/metaPixel";
+import {
+  trackCompleteRegistration,
+  trackPurchase,
+} from "@/utils/metaPixel";
 import { Loader2, Upload, X } from "@/components/icons";
 import CheckoutStepper from "@/components/checkout/CheckoutStepper";
 import CheckoutShell from "@/components/checkout/CheckoutShell";
@@ -777,6 +780,19 @@ function Checkout() {
             setPaymentCompleted(true);
             if (paymentId) {
               setFormData((prev) => ({ ...prev, paymentId: String(paymentId) }));
+            }
+            // Real money only — 0 IQD intro is not a Purchase.
+            const paidAmount = Number(data?.amount);
+            if (paymentId && Number.isFinite(paidAmount) && paidAmount > 0) {
+              trackPurchase({
+                eventId: `purchase_${paymentId}`,
+                paymentId: String(paymentId),
+                value: paidAmount,
+                currency: data?.currency || "IQD",
+                contentName: formData.plan?.name || formData.domain || undefined,
+                email: formData.email || account?.email || undefined,
+                phone: formData.phone || account?.phone || undefined,
+              });
             }
             /**
              * Says which months the quote covered rather than naming the offer,

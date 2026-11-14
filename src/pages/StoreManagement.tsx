@@ -33,6 +33,7 @@ import {
   quoteExplanation,
   quoteNextCharge,
 } from "@/utils/subscription-quote";
+import { trackPurchase } from "@/utils/metaPixel";
 import {
   useFetchAllPlans,
   useFetchStorePlans,
@@ -954,6 +955,24 @@ function StoreManagement() {
     const isChangePlan = Boolean(sessionStorage.getItem(CHANGE_PLAN_RETURN_KEY));
 
     if (returnStatus === "PAID") {
+      const paidAmount = Number(returnPayment?.amount);
+      if (
+        returnPaymentId &&
+        Number.isFinite(paidAmount) &&
+        paidAmount > 0
+      ) {
+        trackPurchase({
+          eventId: `purchase_${returnPaymentId}`,
+          paymentId: String(returnPaymentId),
+          value: paidAmount,
+          currency: returnPayment?.currency || "IQD",
+          contentName: isDomainPurchase
+            ? domainReturn?.domain || "domain"
+            : isChangePlan
+              ? "change_plan"
+              : "renewal",
+        });
+      }
       if (isDomainPurchase) {
         toast.success("تم الدفع بنجاح! سيتم تسجيل الدومين وربطه بمتجرك.");
         void refetchStores();
@@ -987,6 +1006,8 @@ function StoreManagement() {
   }, [
     returnPaymentId,
     returnStatus,
+    returnPayment?.amount,
+    returnPayment?.currency,
     searchParams,
     setSearchParams,
     refetchSubscriptions,
@@ -1239,6 +1260,16 @@ function StoreManagement() {
              */
             if (data?.status === "PAID") {
               sessionStorage.removeItem(RENEWAL_RETURN_KEY);
+              const paidAmount = Number(data?.amount);
+              if (paymentId && Number.isFinite(paidAmount) && paidAmount > 0) {
+                trackPurchase({
+                  eventId: `purchase_${paymentId}`,
+                  paymentId: String(paymentId),
+                  value: paidAmount,
+                  currency: data?.currency || "IQD",
+                  contentName: "renewal",
+                });
+              }
               toast.success(
                 Number(data?.amount) > 0
                   ? "تم الدفع بنجاح وتم تجديد الاشتراك"
@@ -1432,6 +1463,16 @@ function StoreManagement() {
            */
           if (data?.status === "PAID") {
             sessionStorage.removeItem(CHANGE_PLAN_RETURN_KEY);
+            const paidAmount = Number(data?.amount);
+            if (paymentId && Number.isFinite(paidAmount) && paidAmount > 0) {
+              trackPurchase({
+                eventId: `purchase_${paymentId}`,
+                paymentId: String(paymentId),
+                value: paidAmount,
+                currency: data?.currency || "IQD",
+                contentName: "change_plan",
+              });
+            }
             toast.success(
               Number(data?.amount) > 0
                 ? "تم الدفع بنجاح وتمت ترقية الخطة"
