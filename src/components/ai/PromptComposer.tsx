@@ -91,6 +91,19 @@ const answerable = (questions: unknown): DesignQuestion[] =>
       question.options.length > 0,
   );
 
+/** The question the server asks first, whose answer narrows the template pick. */
+const LOOK_QUESTION_ID = "store-style";
+
+/** Where to resume: the first question with no answer yet, or past the end. */
+const firstUnanswered = (questions: DesignQuestion[], answers: DesignAnswers): number => {
+  const index = questions.findIndex((question) => !answers[question.id]?.length);
+  return index === -1 ? questions.length : index;
+};
+
+/** True when `next` asks something `current` does not. */
+const asksMore = (current: DesignQuestion[], next: DesignQuestion[]): boolean =>
+  next.some((question) => !current.some((known) => known.id === question.id));
+
 const MAX_IMAGES = 3;
 /**
  * Brand-kit pages accepted.
@@ -382,6 +395,8 @@ export default function PromptComposer() {
   const questionsRef = useRef<DesignQuestion[]>([]);
   questionsRef.current = questions;
   const designResumingRef = useRef(false);
+  /** The design being decided, so the look answer can reach it while it waits. */
+  const designJobRef = useRef<string | null>(null);
   designResumingRef.current = designResuming;
   const [visitedQuestions, setVisitedQuestions] = useState<Set<string>>(
     () => new Set(),
@@ -566,8 +581,15 @@ export default function PromptComposer() {
         }
 
         if (data.designing) {
-          // Still deciding the design. Nothing to ask yet beyond what the
-          // merchant may already be answering, so keep following it.
+          // Still deciding the design. It may be waiting on the look, which
+          // is on the row for exactly this: put it up if nothing is yet.
+          designJobRef.current = generationId;
+          const asked = answerable(data.questions);
+          if (!questionsRef.current.length && asked.length) {
+            setQuestions(asked);
+            setQuestionIndex(firstUnanswered(asked, answersRef.current));
+            setQuestionsReady(true);
+          }
           setDesignResuming(true);
           return;
         }
@@ -612,10 +634,12 @@ export default function PromptComposer() {
           // is parked for the build, the questions the merchant may already be
           // answering stay as they are, and the confirmation they may already
           // have given still counts.
-          if (!questionsRef.current.length) {
-            const asked = answerable(data.questions);
+          // Questions already up stay as they are, unless the design asked
+          // more since (the colours, after the look it was waiting on).
+          const asked = answerable(data.questions);
+          if (!questionsRef.current.length || asksMore(questionsRef.current, asked)) {
             setQuestions(asked);
-            setQuestionIndex(0);
+            setQuestionIndex(firstUnanswered(asked, answersRef.current));
           }
           setQuestionsReady(true);
           if (data.storeName) setStoreName(data.storeName);
@@ -1032,6 +1056,7 @@ export default function PromptComposer() {
             referenceImages,
             figmaUrl: figmaUrl ?? undefined,
             figmaToken: localStorage.getItem("figma_token") ?? undefined,
+            lookFirst: true,
           },
           (event: GenerationEvent) => {
             switch (event.type) {
@@ -1056,7 +1081,13 @@ export default function PromptComposer() {
                 setStoreName(event.storeName);
                 break;
               case "questions": {
-                setQuestions(answerable(event.questions));
+                // Asked in two goes on the template route: the look alone
+                // first, then the look again with the colours once a template
+                // in that look is picked. The second keeps what was answered
+                // and opens on the first question still open.
+                const asked = answerable(event.questions);
+                const resumeAt = firstUnanswered(asked, answersRef.current);
+                setQuestions(asked);
                 setQuestionsReady(true);
                 addStatus("جهزنا أسئلة قصيرة لتخصيص تصميم متجرك");
                 // Deliberately unanswered. Pre-seeding the recommendations put a
@@ -1066,13 +1097,14 @@ export default function PromptComposer() {
                 // reference. Leaving this empty keeps the step optional without
                 // claiming an answer: the server falls back to `defaultAnswers`
                 // and weighs it as a recommendation instead of a decision.
-                setQuestionIndex(0);
+                setQuestionIndex(resumeAt);
                 break;
               }
               case "job":
                 // Recorded now so a dropped stream, a reload or a closed tab
                 // can find this design again while it is still being decided.
                 jobId = event.id;
+                designJobRef.current = event.id;
                 writeActiveRun({
                   id: event.id,
                   startedAt: Date.now(),
@@ -1352,6 +1384,13 @@ export default function PromptComposer() {
     const merged = { ...answersRef.current, [question.id]: next };
     answersRef.current = merged;
     setAnswers(merged);
+
+    // The design may be waiting on this one to pick a template; tell it now
+    // rather than with the build. A failed call only loses the narrowing: the
+    // answer still goes with the build, which re-picks in that look.
+    if (question.id === LOOK_QUESTION_ID && designJobRef.current && next[0]) {
+      void aiStoreGeneratorAPI.chooseLook(designJobRef.current, next[0]).catch(() => undefined);
+    }
 
     if (autoAdvance) {
       setVisitedQuestions((previous) => new Set(previous).add(question.id));
