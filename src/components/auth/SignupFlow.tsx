@@ -25,8 +25,6 @@ import {
   BackIconButton,
   TextInput,
 } from "@/components/checkout/fields";
-import { trackCompleteRegistration } from "@/utils/metaPixel";
-
 /**
  * The one way an account is created: the create-account page's form and code
  * step (`/checkout`).
@@ -258,10 +256,6 @@ export default function SignupFlow({
       }
       setOtpVerified(true);
       login(token, result?.username || fields.name || codePhone, result?.refreshToken);
-      // New merchant only: after OTP confirms the account, never on login or button press.
-      if (!existingAccount) {
-        trackCompleteRegistration(codePhone);
-      }
       toast.success(existingAccount ? "تم تسجيل الدخول" : createdMessage);
       onAuthenticated({
         existingAccount,

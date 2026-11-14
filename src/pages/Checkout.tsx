@@ -37,6 +37,7 @@ import {
   subdomainCandidates,
 } from "@/utils/subdomainSuggest";
 import { storeAPI } from "@/api/endpoints/store.endpoints";
+import { trackCompleteRegistration } from "@/utils/metaPixel";
 import { Loader2, Upload, X } from "@/components/icons";
 import CheckoutStepper from "@/components/checkout/CheckoutStepper";
 import CheckoutShell from "@/components/checkout/CheckoutShell";
@@ -436,6 +437,15 @@ function Checkout() {
     sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
     seedPromptDraft(formData.businessType, formData.governorate);
     setCreatedStore({ slug, name });
+    // Conversion: payment already confirmed (or 0 IQD intro PAID) AND store created.
+    // Dual-send browser pixel + CAPI; once per store (localStorage + event_id).
+    trackCompleteRegistration({
+      eventId: `complete_reg_${slug}_${formData.paymentId || "intro"}`,
+      storeSlug: slug,
+      email: formData.email || account?.email || undefined,
+      phone: formData.phone || account?.phone || undefined,
+      paymentId: formData.paymentId || undefined,
+    });
     if (hasPromptPending()) {
       navigate("/", { replace: true, state: FOCUS_PROMPT_STATE });
       return;
