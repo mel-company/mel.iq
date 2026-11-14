@@ -25,6 +25,7 @@ import {
   BackIconButton,
   TextInput,
 } from "@/components/checkout/fields";
+import { trackCompleteRegistration } from "@/utils/metaPixel";
 
 /**
  * The one way an account is created: the create-account page's form and code
@@ -111,9 +112,12 @@ export default function SignupFlow({
     (fields.name.trim().length >= 2
       ? ""
       : "يرجى إدخال الاسم الكامل (حرفان على الأقل).");
-  const emailError = EMAIL_RE.test(fields.email.trim())
-    ? ""
-    : "يرجى إدخال بريد إلكتروني صالح.";
+  // Email is optional: only validate format when the merchant typed something.
+  const emailTrimmed = fields.email.trim();
+  const emailError =
+    !emailTrimmed || EMAIL_RE.test(emailTrimmed)
+      ? ""
+      : "يرجى إدخال بريد إلكتروني صالح.";
   const phoneError = phoneTakenError || iqPhoneError(fields.phone);
   const termsError = acceptedTerms
     ? ""
@@ -194,7 +198,7 @@ export default function SignupFlow({
       const data = await authAPI.register({
         phone: phoneE164,
         name: fields.name.trim(),
-        email: fields.email.trim(),
+        ...(emailTrimmed ? { email: emailTrimmed } : {}),
       });
       if (data?.message) toast.success(data.message);
       goToCode(phoneE164, false);
@@ -254,6 +258,10 @@ export default function SignupFlow({
       }
       setOtpVerified(true);
       login(token, result?.username || fields.name || codePhone, result?.refreshToken);
+      // New merchant only: after OTP confirms the account, never on login or button press.
+      if (!existingAccount) {
+        trackCompleteRegistration(codePhone);
+      }
       toast.success(existingAccount ? "تم تسجيل الدخول" : createdMessage);
       onAuthenticated({
         existingAccount,
@@ -436,7 +444,12 @@ export default function SignupFlow({
               state={stateFor("name", nameError)}
             />
           </Field>
-          <Field label="البريد الإلكتروني" htmlFor="email" error={errorFor("email", emailError)}>
+          <Field
+            label="البريد الإلكتروني (اختياري)"
+            htmlFor="email"
+            hint="مو إجباري — تقدر تضيفه لاحقاً من الإعدادات"
+            error={errorFor("email", emailError)}
+          >
             <TextInput
               id="email"
               name="email"
@@ -445,10 +458,15 @@ export default function SignupFlow({
               value={fields.email}
               onChange={setField("email")}
               onBlur={blurHandler("email", fields.email)}
-              required
               autoComplete="email"
               placeholder="you@store.iq"
-              state={stateFor("email", emailError)}
+              state={
+                emailTrimmed
+                  ? stateFor("email", emailError)
+                  : errorFor("email", emailError)
+                    ? "error"
+                    : "default"
+              }
             />
           </Field>
         </div>

@@ -1,11 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-
-declare global {
-  interface Window {
-    fbq?: (...args: unknown[]) => void;
-  }
-}
+import { trackMetaPageView } from "@/utils/metaPixel";
 
 /** Fires Meta Pixel PageView on SPA navigations (initial load is in index.html). */
 function MetaPixelTracker() {
@@ -17,7 +12,7 @@ function MetaPixelTracker() {
       isFirst.current = false;
       return;
     }
-    window.fbq?.("track", "PageView");
+    trackMetaPageView();
   }, [pathname, search]);
 
   return null;
