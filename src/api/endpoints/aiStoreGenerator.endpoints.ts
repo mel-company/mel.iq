@@ -179,6 +179,12 @@ export interface GenerationHistoryItem {
 
 export interface GenerateParams {
   prompt: string;
+  /**
+   * Design only: ask the look (simple, modern, vivid) before a ready-made
+   * template is picked, and pick only among that look's templates. The answer
+   * goes to `chooseLook`.
+   */
+  lookFirst?: boolean;
   referenceImages?: string[];
   figmaUrl?: string;
   figmaToken?: string;
@@ -451,6 +457,16 @@ export const aiStoreGeneratorAPI = {
     signal?: AbortSignal,
   ): Promise<void> =>
     streamPost("/ai-agent/store-generator/design", params, onEvent, signal),
+
+  /**
+   * The look the merchant tapped, while the design waits for it.
+   *
+   * Ignored by the server once the design has moved on; the answer then still
+   * travels with the build.
+   */
+  chooseLook: async (id: string, look: string): Promise<void> => {
+    await axiosInstance.post(`/ai-agent/store-generator/${id}/look`, { look });
+  },
 
   /** Fresh handoff link for a past generation. */
   openGeneration: async (id: string): Promise<{ redirectUrl: string }> => {
