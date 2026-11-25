@@ -11,7 +11,7 @@ import { ArrowRightIcon } from "../icons";
  * and no footer. A home link stays so the merchant can leave without the
  * browser back button.
  */
-function AuthShell({ children }: { children: ReactNode }) {
+function AuthShell({ children, homeLink = true }: { children: ReactNode; homeLink?: boolean }) {
   return (
     <div className="relative min-h-screen overflow-hidden bg-ink font-setar text-white">
       <div
@@ -31,13 +31,15 @@ function AuthShell({ children }: { children: ReactNode }) {
         className="pointer-events-none absolute -top-[383px] end-[-120px] size-[759px] glow [--glow:#1b5c8f38] [--glow-spread:360px]"
       />
 
-      <Link
-        to="/"
-        className="absolute top-5 start-5 z-10 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-muted transition-colors hover:bg-white/10 hover:text-frost sm:top-8 sm:start-8"
-      >
-        <ArrowRightIcon size={16} />
-        الرئيسية
-      </Link>
+      {homeLink && (
+        <Link
+          to="/"
+          className="absolute top-5 start-5 z-10 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-muted transition-colors hover:bg-white/10 hover:text-frost sm:top-8 sm:start-8"
+        >
+          <ArrowRightIcon size={16} />
+          الرئيسية
+        </Link>
+      )}
 
       <div className="relative flex min-h-screen items-center justify-center px-4 py-10 sm:px-6">
         {children}

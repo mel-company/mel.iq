@@ -5,12 +5,13 @@ import OtpInputs from "@/components/auth/OtpInputs";
 import { IQ_LOCAL_PHONE_LENGTH, iqPhoneError, toIqE164, toLocalDigits } from "@/utils/phone";
 
 /**
- * Sign in with Mel, for shoppers: the page every Mel store sends a shopper to
- * when they have no Mel session yet (`/shopper/auth/bounce`).
+ * Sign in with Mel, for shoppers: the page every Mel store opens in a pop-up
+ * (through `/shopper/auth/bounce`) when the shopper has no Mel session yet.
  *
  * Phone, then the code on WhatsApp, then a name the first time. Signing in
  * sets the Mel cookie on `.mel.iq`; the page then goes back through
- * `auth/bounce`, which hands the store a one-time ticket. The page never
+ * `auth/bounce`, which hands the store a one-time ticket; the store's pop-up
+ * passes it to the page that opened it and closes. The page never
  * redirects anywhere else: the API checks that `return` belongs to `store`.
  */
 
@@ -116,7 +117,8 @@ export default function ShopperSignIn() {
     (error ? "border-[#ff5252]" : "border-field-line focus-within:border-brand-primary");
 
   return (
-    <AuthShell>
+    // A store opens this in a pop-up: no way off to Mel's home from here.
+    <AuthShell homeLink={false}>
       <div className="w-full max-w-[460px] rounded-[32px] bg-ink-raised p-6 text-right sm:p-9">
         <div className="flex flex-col items-start gap-[22px]">
           <span
