@@ -35,7 +35,9 @@ async function call<T>(path: string, body: unknown, init: { method?: string; tok
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = Array.isArray(data?.message) ? data.message[0] : data?.message;
-    throw new Error(typeof message === "string" && message ? message : "حدث خطأ، حاول مرة أخرى");
+    // Validation messages come back in English (e.g. a prefix the server does not take): say it in Arabic.
+    const readable = typeof message === "string" && /[\u0600-\u06FF]/.test(message) ? message : null;
+    throw new Error(readable ?? (response.status === 429 ? "محاولات كثيرة، حاول بعد قليل" : response.status === 400 && path === "/auth/code" ? "رقم غير مدعوم. أدخل رقم موبايل عراقي يبدأ بـ 075 أو 077 أو 078." : "حدث خطأ، حاول مرة أخرى"));
   }
   return data as T;
 }
