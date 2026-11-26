@@ -29,6 +29,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const StoreManagement = lazy(() => import("./pages/StoreManagement"));
 const DomainConnectDone = lazy(() => import("./pages/DomainConnectDone"));
 const OTPVerification = lazy(() => import("./pages/Otp"));
+const ShopperSignIn = lazy(() => import("./pages/ShopperSignIn"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AuthRedirectError = lazy(() => import("./pages/AuthRedirectError"));
 const PublicTicketChat = lazy(() => import("./pages/PublicTicketChat"));
@@ -79,6 +80,7 @@ function App() {
           {/* No navbar on the auth screens: the frames are standalone, and a
               half-finished sign-in is not somewhere to offer more navigation. */}
           <Route path="/login" element={<Login />} />
+          <Route path="/account/signin" element={<ShopperSignIn />} />
           <Route
             path="/otp"
             element={
